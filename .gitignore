@@ -1,36 +1,33 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# next.js
+# dependencies and builds
+/node_modules/
+/.pnp/
+.pnp.*
 /.next/
 /out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# local env files
-.env*.local
-.env
-
-# vercel
-.vercel
-
-# typescript
+/build/
+/coverage/
 *.tsbuildinfo
-next-env.d.ts
+
+# local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+/.vercel/
+
+# private Relay data and worker output
+/.relay/
+/.relay-data/
+/relay-data/
+*.relay-task.json
+*.relay-result.json
+*.log
+
+# database exports
+*.dump
+*.sql.gz
+
+# editors and operating systems
+.DS_Store
+.idea/
+.vscode/

@@ -1,25 +1,27 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { ArrowRight, Mail } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, LogIn } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export function SignIn() {
-  const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function signInWithGitHub() {
     setBusy(true);
     setMessage("");
+
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
+
+    if (!error) return;
+
     setBusy(false);
-    setMessage(error ? error.message : "Check your inbox for a secure sign-in link.");
+    setMessage(error.message);
   }
 
   return (
@@ -34,17 +36,13 @@ export function SignIn() {
         </p>
       </section>
       <section className="auth-card">
-        <div className="auth-icon"><Mail size={22} /></div>
+        <div className="auth-icon"><LogIn size={22} /></div>
         <h2>Sign in to your Relay</h2>
-        <p>We’ll email you a one-time link. No password to remember.</p>
-        <form onSubmit={submit}>
-          <label htmlFor="email">Email address</label>
-          <input id="email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
-          <button className="primary-button" disabled={busy}>
-            {busy ? "Sending…" : "Send sign-in link"}<ArrowRight size={18} />
-          </button>
-        </form>
-        {message && <p className="form-message" role="status">{message}</p>}
+        <p>Use your GitHub account to securely access your tasks.</p>
+        <button className="primary-button" type="button" disabled={busy} onClick={signInWithGitHub}>
+          <LogIn size={18} />{busy ? "Redirecting…" : "Continue with GitHub"}<ArrowRight size={18} />
+        </button>
+        {message && <p className="form-message" role="alert">{message}</p>}
         <p className="privacy-note">Your tasks live in your private database, not this public repository.</p>
       </section>
     </main>

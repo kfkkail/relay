@@ -2,7 +2,7 @@
 
 ## First vertical slice
 
-1. Establish a mobile-first Next.js App Router PWA with passwordless sign-in.
+1. Establish a mobile-first Next.js App Router PWA with GitHub OAuth sign-in.
 2. Persist tasks, runs, events, and workers in Supabase Postgres with row-level
    security and a one-active-run-per-task database constraint.
 3. Support creating and editing Markdown task instructions, then queueing a run.
@@ -21,7 +21,7 @@
 - **Web:** Next.js 16 App Router, React 19, installable web manifest, and a
   conservative service worker that never caches authenticated pages or API
   responses.
-- **Data and auth:** Supabase Postgres plus Supabase passwordless email auth.
+- **Data and auth:** Supabase Postgres plus Supabase GitHub OAuth.
   This is the smallest choice that supplies cloud persistence, identity, and
   per-user row isolation without a second authentication vendor.
 - **Worker connection:** authenticated HTTPS polling from the laptop to the
@@ -41,5 +41,5 @@ native iOS, and elaborate boards are outside this increment.
 
 There are no product decisions blocking the scaffold. Before a deployed copy
 can process real tasks, its owner must provide a Supabase project, configure the
-documented environment values, and choose the email address used for sign-in.
+documented environment values, and configure a GitHub OAuth App for sign-in.
 Those are deployment inputs rather than code-design decisions.

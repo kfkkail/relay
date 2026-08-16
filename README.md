@@ -8,7 +8,7 @@ follow-up task.
 This repository contains the first vertical slice:
 
 - Next.js App Router PWA
-- Supabase Postgres persistence and passwordless authentication
+- Supabase Postgres persistence and GitHub OAuth authentication
 - one active run per task
 - outbound polling by a separate local worker
 - Markdown results, feedback, acceptance, and follow-up task lineage

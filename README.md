@@ -16,15 +16,56 @@ This repository contains the first vertical slice:
 
 ## Local setup
 
+Relay requires Node.js 22 or newer. After cloning the repository, run the guided
+setup:
+
+```bash
+npm run setup
+```
+
+The command checks Node.js, installs the locked dependencies, and creates the
+owner-readable-only environment files you select. Configure the web application
+first, then configure the worker after Relay is running and can create its
+token:
+
+```bash
+npm run setup -- --mode web
+npm run setup -- --mode worker --install-service
+```
+
+The remaining cloud steps require your authorization:
+
 1. Create a Supabase project and run [`supabase/migrations/0001_initial.sql`](supabase/migrations/0001_initial.sql).
-2. Copy `.env.example` to `.env.local` and replace the placeholder values.
-3. Run `npm install`, then `npm run dev`.
-4. Sign in, create a worker token in **Worker setup**, and keep the token somewhere secure.
-5. On the laptop, set the worker-only environment variables shown in `.env.example`, then run `npm run worker`.
+2. Run `npm run dev`, or deploy the repository to Vercel using the three web
+   values written to `.env.local`.
+3. Add the deployed URL and `/auth/callback` URL to the Supabase Auth redirect
+   URL allowlist.
+4. Sign in, create a token in **Worker setup**, and run the worker setup command.
 
 The web application and worker can use separate environment files or shell
 sessions. Never put a real worker token, API key, task export, log, or database
 dump in this repository.
+
+## MacBook and Raspberry Pi workers
+
+Test the configured worker in the foreground with:
+
+```bash
+node --env-file=.env.worker worker/index.mjs
+```
+
+Install it as a background service that restarts automatically:
+
+```bash
+npm run worker:service:install
+npm run worker:service:status
+```
+
+This installs a per-user LaunchAgent on macOS or a per-user systemd service on
+Linux, including 64-bit Raspberry Pi OS. On a headless Raspberry Pi, the setup
+prints the one optional administrator command needed to start the user service
+at boot before login. Remove the service without deleting its configuration or
+logs with `npm run worker:service:uninstall`.
 
 ## Deployment
 
@@ -35,11 +76,13 @@ Relay does not call Vercel APIs directly.
 ## Commands
 
 ```bash
+npm run setup
 npm run dev
 npm run lint
 npm run test
 npm run build
 npm run worker
+npm run worker:service:install
 ```
 
 See [`docs/implementation-plan.md`](docs/implementation-plan.md) for scope and

@@ -8,8 +8,9 @@
 3. Support creating and editing Markdown task instructions, then queueing a run.
 4. Let a local laptop worker authenticate with a revocable token and poll
    outbound for queued runs. Offline workers simply leave runs queued.
-5. Run a text-only agent with no tools, shell, repository, or filesystem access;
-   return a Markdown result through the worker API.
+5. Run a text-only agent through either the OpenAI API or a locally authenticated
+   Codex CLI with a deny-by-default permission profile; return a Markdown result
+   through the worker API.
 6. Let the user review the result, add written feedback, queue another attempt,
    accept a result, and draft an editable child task from accepted output.
 7. Preserve a concise event audit trail without modeling a chat transcript.
@@ -26,9 +27,12 @@
   per-user row isolation without a second authentication vendor.
 - **Worker connection:** authenticated HTTPS polling from the laptop to the
   deployed Next.js worker routes. The laptop exposes no inbound port.
-- **Agent adapter:** OpenAI Responses API, text output only and no tools. A later
-  slice can add repository work behind an explicit repository allowlist and
-  richer result artifacts.
+- **Agent adapter:** selectable OpenAI Responses API or Codex CLI. The API path
+  declares no tools. The Codex path disables web search and user configuration,
+  removes worker secrets from its environment, and restricts local commands to
+  minimal runtime files plus an empty temporary workspace. A later slice can
+  add repository work behind an explicit repository allowlist and richer result
+  artifacts.
 - **Deployments:** Vercel's GitHub integration only. No Vercel API dependency.
 
 ## Deliberately deferred

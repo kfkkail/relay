@@ -6,12 +6,29 @@ port, so an offline laptop simply leaves runs in the queue.
 ## Run it
 
 Create a worker token in Relay's **Worker setup** panel, then set the worker-only
-values listed in `.env.example` in your local shell or secret manager. Start the
-poller with:
+values listed in `.env.example` in your local shell or secret manager. The
+guided setup writes them to a gitignored, owner-readable-only `.env.worker`
+file:
 
 ```bash
-npm run worker
+npm run setup -- --mode worker
 ```
+
+Start the poller in the foreground with:
+
+```bash
+node --env-file=.env.worker worker/index.mjs
+```
+
+Or install and start the native background service on macOS or Linux (including
+Raspberry Pi OS):
+
+```bash
+npm run worker:service:install
+```
+
+`npm run worker` remains available when the required values are already
+exported into the current shell or supplied by another secret manager.
 
 The initial adapter calls the OpenAI Responses API with text input and text
 output. It declares no tools and has no Relay code path for shell, filesystem,

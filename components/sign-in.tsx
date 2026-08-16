@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowRight, LogIn } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
-export function SignIn() {
+export function SignIn({ privateMessage = false }: { privateMessage?: boolean }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -39,6 +39,7 @@ export function SignIn() {
         <div className="auth-icon"><LogIn size={22} /></div>
         <h2>Sign in to your Relay</h2>
         <p>Use your GitHub account to securely access your tasks.</p>
+        {privateMessage && <p className="form-message" role="alert">This is a private Relay deployment. That GitHub account is not authorized.</p>}
         <button className="primary-button" type="button" disabled={busy} onClick={signInWithGitHub}>
           <LogIn size={18} />{busy ? "Redirecting…" : "Continue with GitHub"}<ArrowRight size={18} />
         </button>

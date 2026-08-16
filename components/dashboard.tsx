@@ -11,6 +11,7 @@ import {
   Copy,
   Laptop,
   LogOut,
+  Pencil,
   Plus,
   RefreshCw,
   Send,
@@ -41,6 +42,8 @@ export function Dashboard({
   const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editInstructions, setEditInstructions] = useState("");
   const [workerOpen, setWorkerOpen] = useState(false);
   const [workerToken, setWorkerToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -98,6 +101,25 @@ export function Dashboard({
     await runAction(async () => {
       await requestJson(`/api/tasks/${taskId}/queue`, { method: "POST" });
       await refreshTasks();
+    });
+  }
+
+  function startEditing(task: Task) {
+    setEditingTask(task);
+    setEditInstructions(task.instructions);
+  }
+
+  async function updateTask(event: FormEvent) {
+    event.preventDefault();
+    if (!editingTask) return;
+    await runAction(async () => {
+      const body = await requestJson(`/api/tasks/${editingTask.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ instructions: editInstructions }),
+      });
+      setTasks((current) => current.map((task) => task.id === body.task.id ? body.task : task));
+      setEditingTask(null);
+      setEditInstructions("");
     });
   }
 
@@ -201,6 +223,7 @@ export function Dashboard({
               onFeedback={(feedback) => sendFeedback(selected.id, feedback)}
               onAccept={() => acceptTask(selected.id)}
               onFollowUp={() => startFollowUp(selected)}
+              onEdit={() => startEditing(selected)}
             />
           ) : (
             <div className="detail-placeholder"><CircleDot size={30} /><h2>Select a task</h2><p>Its durable context and run results will appear here.</p></div>
@@ -226,6 +249,20 @@ export function Dashboard({
         </div>
       )}
 
+      {editingTask && (
+        <div className="modal-backdrop" onMouseDown={() => setEditingTask(null)}>
+          <section className="sheet composer" role="dialog" aria-modal="true" aria-labelledby="edit-task-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="sheet-heading"><div><p className="eyebrow">Task document</p><h2 id="edit-task-title">Edit Markdown</h2></div><button className="icon-button" onClick={() => setEditingTask(null)} aria-label="Cancel editing"><X size={20} /></button></div>
+            <form onSubmit={updateTask}>
+              <label htmlFor="edit-task-instructions">Markdown instructions and context</label>
+              <textarea id="edit-task-instructions" value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} required maxLength={100000} rows={14} autoFocus />
+              <div className="composer-hint"><span>Markdown supported</span><span>{editInstructions.length.toLocaleString()} characters</span></div>
+              <div className="edit-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingTask(null)}>Cancel</button><button className="primary-button" disabled={busy || !editInstructions.trim()}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button></div>
+            </form>
+          </section>
+        </div>
+      )}
+
       {workerOpen && (
         <div className="modal-backdrop" onMouseDown={() => setWorkerOpen(false)}>
           <section className="sheet worker-sheet" role="dialog" aria-modal="true" aria-labelledby="worker-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -245,7 +282,7 @@ export function Dashboard({
   );
 }
 
-function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollowUp }: {
+function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollowUp, onEdit }: {
   task: Task;
   busy: boolean;
   onBack: () => void;
@@ -253,6 +290,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
   onFeedback: (feedback: string) => void;
   onAccept: () => void;
   onFollowUp: () => void;
+  onEdit: () => void;
 }) {
   const [feedback, setFeedback] = useState("");
   const latest = latestCompletedRun(task.runs);
@@ -266,7 +304,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
         {(task.status === "inbox" || (task.status === "waiting" && !latest)) && <button className="primary-button compact" disabled={busy} onClick={onQueue}><Send size={17} />Queue run</button>}
       </div>
 
-      <section className="document-section"><div className="section-label"><span>Task document</span><span>Markdown</span></div><div className="markdown"><ReactMarkdown>{task.instructions}</ReactMarkdown></div></section>
+      <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown>{task.instructions}</ReactMarkdown></div></section>
 
       {active && <section className="run-status-card"><div className="run-spinner"><RefreshCw size={22} /></div><div><p className="eyebrow">Attempt {active.attempt}</p><h2>{active.status === "queued" ? "Waiting for your laptop" : "Worker is on it"}</h2><p>{active.status === "queued" ? "This run stays safely queued while your worker is offline." : "The result will appear here when the worker finishes."}</p></div></section>}
 

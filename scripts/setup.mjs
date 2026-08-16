@@ -1,10 +1,11 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
+import { accessSync, constants } from "node:fs";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = parseArgs(process.argv.slice(2));
@@ -39,7 +40,7 @@ if (!args.skipInstall) {
 }
 
 if (mode === "web" || mode === "both") await configureWeb();
-if (mode === "worker" || mode === "both") await configureWorker();
+const workerBackend = mode === "worker" || mode === "both" ? await configureWorker() : undefined;
 
 if ((mode === "worker" || mode === "both") && args.installService) {
   if (args.dryRun) {
@@ -49,7 +50,7 @@ if ((mode === "worker" || mode === "both") && args.installService) {
   }
 }
 
-printNextSteps(mode);
+printNextSteps(mode, workerBackend);
 
 async function configureWeb() {
   const target = join(root, ".env.local");
@@ -84,6 +85,7 @@ async function configureWorker() {
   console.log("\nWorker settings (.env.worker)");
   console.log("Create the worker token inside Relay after the web application is running.\n");
 
+  const backend = await chooseWorkerBackend(existing);
   const values = {
     RELAY_URL: await askValue("Deployed Relay URL", {
       name: "RELAY_URL",
@@ -95,29 +97,70 @@ async function configureWorker() {
       existing,
       secret: true,
     }),
-    OPENAI_API_KEY: await askValue("OpenAI API key", {
+    RELAY_WORKER_BACKEND: backend,
+  };
+
+  if (backend === "codex") {
+    values.RELAY_CODEX_PATH = await askValue("Codex CLI path", {
+      name: "RELAY_CODEX_PATH",
+      existing,
+      fallback: findExecutable("codex"),
+      validate: validateCodexPath,
+    });
+    values.RELAY_CODEX_MODEL = await askOptionalValue("Codex model (blank uses your CLI default)", {
+      name: "RELAY_CODEX_MODEL",
+      existing,
+    });
+    values.RELAY_CODEX_TIMEOUT_MS = await askValue("Codex timeout in milliseconds", {
+      name: "RELAY_CODEX_TIMEOUT_MS",
+      existing,
+      fallback: "900000",
+      validate: validateMilliseconds,
+    });
+  } else {
+    values.OPENAI_API_KEY = await askValue("OpenAI API key", {
       name: "OPENAI_API_KEY",
       existing,
       secret: true,
-    }),
-    OPENAI_MODEL: await askValue("OpenAI model", {
+    });
+    values.OPENAI_MODEL = await askValue("OpenAI model", {
       name: "OPENAI_MODEL",
       existing,
       fallback: "gpt-5.6-sol",
-    }),
+    });
+  }
+
+  Object.assign(values, {
     RELAY_POLL_INTERVAL_MS: await askValue("Polling interval in milliseconds", {
       name: "RELAY_POLL_INTERVAL_MS",
       existing,
       fallback: "5000",
-      validate(value) {
-        return /^\d+$/.test(value) && Number(value) >= 1000
-          ? null
-          : "Enter an integer of at least 1000 milliseconds.";
-      },
+      validate: validateMilliseconds,
     }),
-  };
+  });
 
   await saveEnv(target, values);
+  return backend;
+}
+
+async function chooseWorkerBackend(existing) {
+  const current = (process.env.RELAY_WORKER_BACKEND || existing.RELAY_WORKER_BACKEND ||
+    (existing.OPENAI_API_KEY ? "openai" : "codex")).toLowerCase();
+  if (!new Set(["codex", "openai"]).has(current)) {
+    fail("RELAY_WORKER_BACKEND must be either codex or openai.");
+  }
+  if (args.yes) return current;
+
+  console.log("Worker backend:");
+  console.log("  1. Codex CLI (uses your ChatGPT/Codex login)");
+  console.log("  2. OpenAI API (uses API billing)\n");
+  const defaultChoice = current === "openai" ? "2" : "1";
+  while (true) {
+    const answer = (await question(`Choose 1 or 2 [${defaultChoice}]: `)).trim() || defaultChoice;
+    if (answer === "1") return "codex";
+    if (answer === "2") return "openai";
+    console.log("Please choose 1 or 2.");
+  }
 }
 
 async function askValue(label, options) {
@@ -145,6 +188,14 @@ async function askValue(label, options) {
     }
     return value;
   }
+}
+
+async function askOptionalValue(label, options) {
+  const current = process.env[options.name] ?? options.existing[options.name] ?? "";
+  if (args.yes) return current;
+  const suffix = current ? ` [${current}]` : "";
+  const answer = await question(`${label}${suffix}: `);
+  return answer.trim() || current;
 }
 
 async function saveEnv(target, values) {
@@ -257,12 +308,44 @@ function validateHttpUrl(value) {
   }
 }
 
+function validateMilliseconds(value) {
+  return /^\d+$/.test(value) && Number(value) >= 1000
+    ? null
+    : "Enter an integer of at least 1000 milliseconds.";
+}
+
+function validateCodexPath(value) {
+  const result = spawnSync(value, ["--version"], { encoding: "utf8" });
+  if (result.error || result.status !== 0) {
+    return "Codex CLI was not found there. Install Codex or enter its executable path.";
+  }
+  const version = `${result.stdout || ""} ${result.stderr || ""}`.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!version || Number(version[1]) === 0 && Number(version[2]) < 138) {
+    return "Relay requires Codex CLI 0.138.0 or newer for restricted permission profiles.";
+  }
+  return null;
+}
+
+function findExecutable(name) {
+  if (isAbsolute(name)) return name;
+  for (const directory of (process.env.PATH || "").split(delimiter).filter(Boolean)) {
+    const candidate = join(directory, name);
+    try {
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Try the next PATH entry.
+    }
+  }
+  return name;
+}
+
 function run(command, commandArgs, errorMessage) {
   const result = spawnSync(command, commandArgs, { cwd: root, stdio: "inherit" });
   if (result.error || result.status !== 0) fail(errorMessage);
 }
 
-function printNextSteps(selectedMode) {
+function printNextSteps(selectedMode, selectedBackend) {
   console.log("\nSetup files are ready.\n");
   if (selectedMode === "web" || selectedMode === "both") {
     console.log("Web next steps:");
@@ -272,6 +355,9 @@ function printNextSteps(selectedMode) {
   }
   if (selectedMode === "worker" || selectedMode === "both") {
     console.log("Worker next steps:");
+    if (selectedBackend === "codex") {
+      console.log("  • Run codex login (or codex login --device-auth on a headless Pi)");
+    }
     console.log("  • Test in the foreground: node --env-file=.env.worker worker/index.mjs");
     if (!args.installService) console.log("  • Run continuously: npm run worker:service:install");
     console.log("");

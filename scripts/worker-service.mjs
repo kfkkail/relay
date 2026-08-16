@@ -134,7 +134,20 @@ async function validateWorkerEnv() {
     if (error?.code === "ENOENT") fail(".env.worker does not exist. Run npm run setup -- --mode worker first.");
     throw error;
   }
-  for (const name of ["RELAY_URL", "RELAY_WORKER_TOKEN", "OPENAI_API_KEY"]) {
+  const env = Object.fromEntries(contents
+    .split(/\r?\n/)
+    .filter((line) => line && !line.trimStart().startsWith("#") && line.includes("="))
+    .map((line) => {
+      const index = line.indexOf("=");
+      return [line.slice(0, index).trim(), line.slice(index + 1).trim().replace(/^(["'])(.*)\1$/, "$2")];
+    }));
+  const backend = (env.RELAY_WORKER_BACKEND || "openai").toLowerCase();
+  const required = ["RELAY_URL", "RELAY_WORKER_TOKEN"];
+  if (backend === "openai") required.push("OPENAI_API_KEY");
+  else if (backend === "codex") required.push("RELAY_CODEX_PATH");
+  else fail("RELAY_WORKER_BACKEND must be either codex or openai.");
+
+  for (const name of required) {
     if (!new RegExp(`^${name}=.+$`, "m").test(contents)) fail(`${name} is missing from .env.worker.`);
   }
 }

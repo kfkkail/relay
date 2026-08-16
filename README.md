@@ -12,7 +12,7 @@ This repository contains the first vertical slice:
 - one active run per task
 - outbound polling by a separate local worker
 - Markdown results, feedback, acceptance, and follow-up task lineage
-- a text-only OpenAI worker adapter with no tools, shell, or repository access
+- selectable Codex CLI and OpenAI API worker backends
 
 ## Local setup
 
@@ -32,6 +32,10 @@ token:
 npm run setup -- --mode web
 npm run setup -- --mode worker --install-service
 ```
+
+Worker setup recommends Codex CLI, which reuses `codex login` and does not need
+an OpenAI API key. The direct OpenAI API backend remains available for
+usage-based API billing.
 
 The remaining cloud steps require your authorization:
 

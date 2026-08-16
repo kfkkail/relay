@@ -1,17 +1,15 @@
-import OpenAI from "openai";
+import { createTaskRunner } from "./task-runner.mjs";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
-const apiKey = required("OPENAI_API_KEY");
-const model = process.env.OPENAI_MODEL || "gpt-5.6-sol";
 const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
-const openai = new OpenAI({ apiKey });
+const taskRunner = createTaskRunner();
 
 let stopping = false;
 process.on("SIGINT", () => (stopping = true));
 process.on("SIGTERM", () => (stopping = true));
 
-console.log(`Relay worker started; polling ${new URL(relayUrl).origin}`);
+console.log(`Relay worker started with ${taskRunner.backend}; polling ${new URL(relayUrl).origin}`);
 
 while (!stopping) {
   let claimed;
@@ -39,18 +37,11 @@ while (!stopping) {
       .filter(Boolean)
       .join("\n\n");
 
-    const response = await openai.responses.create({
-      model,
-      instructions:
-        "Complete the task using only the supplied context. Return a concise, useful Markdown result. " +
-        "You have no tools, filesystem, shell, browser, email, calendar, or GitHub access. " +
-        "State any limitation instead of claiming an action you could not perform.",
-      input,
-    });
+    const resultMarkdown = await taskRunner.run(input);
 
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
-      body: JSON.stringify({ resultMarkdown: response.output_text, artifacts: [] }),
+      body: JSON.stringify({ resultMarkdown, artifacts: [] }),
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {

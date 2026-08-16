@@ -2,19 +2,27 @@ import { Dashboard } from "@/components/dashboard";
 import { SetupPanel } from "@/components/setup-panel";
 import { SignIn } from "@/components/sign-in";
 import { hasPublicSupabaseConfig } from "@/lib/env";
+import { isRelayOwner } from "@/lib/http";
 import { createClient } from "@/lib/supabase/server";
 import type { Task, Worker } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ authError?: string }>;
+}) {
   if (!hasPublicSupabaseConfig()) return <SetupPanel />;
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return <SignIn />;
+  if (!user || !isRelayOwner(user)) {
+    const { authError } = await searchParams;
+    return <SignIn privateMessage={authError === "private"} />;
+  }
 
   const [{ data: tasks }, { data: workers }] = await Promise.all([
     supabase

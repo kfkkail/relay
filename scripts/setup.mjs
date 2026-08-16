@@ -74,6 +74,11 @@ async function configureWeb() {
       existing,
       secret: true,
     }),
+    RELAY_OWNER_GITHUB_ID: await askValue("Owner GitHub numeric user ID", {
+      name: "RELAY_OWNER_GITHUB_ID",
+      existing,
+      validate: validateGitHubId,
+    }),
   };
 
   await saveEnv(target, values);
@@ -323,6 +328,10 @@ function validateMilliseconds(value) {
   return /^\d+$/.test(value) && Number(value) >= 1000
     ? null
     : "Enter an integer of at least 1000 milliseconds.";
+}
+
+function validateGitHubId(value) {
+  return /^\d+$/.test(value) ? null : "Enter the numeric GitHub user ID.";
 }
 
 function validateDirectory(value) {

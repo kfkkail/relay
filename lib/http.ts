@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import type { User } from "@supabase/supabase-js";
+import { requireOwnerGitHubId } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
 
 export class ApiError extends Error {
@@ -17,7 +19,16 @@ export async function requireUser() {
     error,
   } = await supabase.auth.getUser();
   if (error || !user) throw new ApiError("Sign in required.", 401);
+  if (!isRelayOwner(user)) throw new ApiError("This Relay deployment is private.", 403);
   return { supabase, user };
+}
+
+export function isRelayOwner(user: User) {
+  const ownerGitHubId = requireOwnerGitHubId();
+  return user.identities?.some((identity) =>
+    identity.provider === "github" &&
+    String(identity.identity_data?.provider_id ?? identity.id) === ownerGitHubId
+  ) ?? false;
 }
 
 export function apiErrorResponse(error: unknown) {

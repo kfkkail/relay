@@ -22,3 +22,11 @@ export function requireServerSupabaseConfig() {
   }
   return { url, secretKey };
 }
+
+export function requireOwnerGitHubId() {
+  const ownerGitHubId = process.env.RELAY_OWNER_GITHUB_ID;
+  if (!ownerGitHubId || !/^\d+$/.test(ownerGitHubId)) {
+    throw new Error("RELAY_OWNER_GITHUB_ID must be configured as a numeric GitHub user ID.");
+  }
+  return ownerGitHubId;
+}

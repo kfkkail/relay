@@ -43,6 +43,13 @@ backend remains available for usage-based API billing.
 The remaining cloud steps require your authorization:
 
 1. Create a Supabase project and run [`supabase/migrations/0001_initial.sql`](supabase/migrations/0001_initial.sql).
+   Then run [`supabase/migrations/0002_owner_lockdown.sql`](supabase/migrations/0002_owner_lockdown.sql),
+   then store the owner's numeric GitHub ID without committing it:
+   `insert into relay_private.configuration (owner_github_id) values ('<github-id>');`.
+   After that owner account has signed in at least once, open **Authentication → Hooks**
+   in Supabase and configure **Before User Created** to use the Postgres function
+   `public.deny_new_relay_accounts`. This prevents any additional Auth accounts
+   from being created.
 2. Run `npm run dev`, or deploy the repository to Vercel using the three web
    values written to `.env.local`.
 3. Add the deployed URL and `/auth/callback` URL to the Supabase Auth redirect

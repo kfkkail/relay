@@ -13,18 +13,47 @@ owner-readable-only `.env.worker` file:
 npm run setup -- --mode worker
 ```
 
-The recommended backend is Codex CLI. It reuses a local ChatGPT/Codex login, so
-it does not require an OpenAI API key or API billing balance:
+The recommended backend is Codex CLI in Docker. It reuses a local ChatGPT/Codex
+login, so it does not require an OpenAI API key or API billing balance. Install
+and start Docker first, then authenticate Codex on the host:
 
 ```bash
 codex login
 codex login status
 ```
 
-On a headless Raspberry Pi, use `codex login --device-auth`. Relay requires
-Codex CLI 0.138.0 or newer and records its absolute executable path so the
-background service can find it. An optional `RELAY_CODEX_MODEL` overrides the
-CLI default.
+On a headless Raspberry Pi, use `codex login --device-auth`. Guided setup checks
+the Docker service, records the absolute authentication file and allowed
+workspace, and builds the pinned worker image. You can rebuild it explicitly:
+
+```bash
+npm run worker:image:build
+```
+
+The included image contains Codex CLI, Git, GitHub CLI, Node.js, Python, common
+build tools, and command-line utilities. A custom image can extend it with a
+repository-specific toolchain and be selected with `RELAY_CODEX_IMAGE`. An
+optional `RELAY_CODEX_MODEL` overrides the CLI default.
+
+For authenticated Actions, pushes, and pull requests, create a fine-grained,
+revocable GitHub token limited to the repositories and permissions Relay needs.
+Enter it during guided setup or set it in `.env.worker`:
+
+```bash
+RELAY_GITHUB_TOKEN=github_pat_your-fine-grained-token
+```
+
+For a worker that can ship normal repository changes, select only the intended
+repositories and grant **Contents: read/write** and **Pull requests:
+read/write**. Add **Actions: read/write** for workflow logs, dispatches, and
+reruns. Add **Workflows: read/write** only when Relay should be able to change
+files under `.github/workflows`. Do not grant repository administration or
+organization permissions. GitHub maintains the full
+[fine-grained permission reference](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens).
+
+Relay passes that value as `GH_TOKEN`; it never extracts the user's existing
+GitHub Keychain credential. Setup also records Git commit name and email without
+mounting the host Git configuration.
 
 The OpenAI Responses API remains available by choosing it during setup or by
 setting `RELAY_WORKER_BACKEND=openai`; that backend still requires
@@ -46,13 +75,25 @@ npm run worker:service:install
 `npm run worker` remains available when the required values are already
 exported into the current shell or supplied by another secret manager.
 
-The API backend is text-only and declares no tools. The Codex backend runs each
-task ephemerally in a new temporary directory with a custom least-privilege
-permission profile: filesystem reads are denied outside Codex's minimal runtime
-files and the empty task directory, writes and command network access are
-disabled, web search and user configuration are disabled, and approvals are
-never granted. Relay and API credentials are removed from the child process
-environment. The temporary directory is deleted after every run.
+The API backend is text-only and declares no tools. The Codex backend uses a
+disposable container as the security boundary. The host mounts only the
+configured workspace read-write and the Codex authentication file read-only. It
+does not mount the host root, home directory, Docker socket, or unrelated
+repositories and secrets. The container receives normal command network access
+and a writable ephemeral filesystem, so package managers and developer tools
+work without a second filesystem sandbox fighting them. Its process runs as the
+host user's numeric ID with Linux capabilities removed, which preserves
+workspace file ownership.
+
+Inside that externally isolated environment Relay starts `codex exec` with
+`danger-full-access`, as recommended by the
+[official Codex documentation](https://learn.chatgpt.com/docs/non-interactive-mode)
+for a controlled container. This is full access to the disposable container,
+never full access to the host. The only durable writable host path remains the
+configured workspace. Web search and user configuration are disabled, and
+approvals are never interactive. Relay and API credentials are removed from the
+container runtime environment. The explicitly configured GitHub token is the
+only task credential forwarded beyond the read-only Codex login.
 
 Only the run ID, status, and bounded error category are written to stdout;
 task instructions, results, credentials, model responses, and raw Codex
@@ -68,6 +109,6 @@ All endpoints use `Authorization: Bearer <worker token>`.
   structured artifacts.
 - `POST /api/worker/runs/:id/fail` records a bounded error message.
 
-A later software-work adapter can return `branch`, `commit`, `pull_request`, and
-`check` artifacts. It must add an explicit local repository allowlist before it
-receives any filesystem or process capability.
+Software tasks can edit repositories and use GitHub from the mounted workspace
+today. Structured `branch`, `commit`, `pull_request`, and `check` artifacts
+remain future work; current tasks return those details in Markdown.

@@ -15,6 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker": "node worker/index.mjs",
+    "worker:image:build": "node scripts/build-worker-image.mjs",
     "worker:service:install": "node scripts/worker-service.mjs install",
     "worker:service:status": "node scripts/worker-service.mjs status",
     "worker:service:uninstall": "node scripts/worker-service.mjs uninstall"

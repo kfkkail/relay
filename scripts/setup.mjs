@@ -1,6 +1,7 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
@@ -101,11 +102,43 @@ async function configureWorker() {
   };
 
   if (backend === "codex") {
-    values.RELAY_CODEX_PATH = await askValue("Codex CLI path", {
-      name: "RELAY_CODEX_PATH",
+    values.RELAY_CONTAINER_RUNTIME = await askValue("Container runtime path", {
+      name: "RELAY_CONTAINER_RUNTIME",
       existing,
-      fallback: findExecutable("codex"),
-      validate: validateCodexPath,
+      fallback: findExecutable("docker"),
+      validate: validateContainerRuntime,
+    });
+    values.RELAY_CODEX_IMAGE = await askValue("Codex worker image", {
+      name: "RELAY_CODEX_IMAGE",
+      existing,
+      fallback: "relay-codex-worker:local",
+    });
+    values.RELAY_CODEX_AUTH_FILE = await askValue("Codex authentication file", {
+      name: "RELAY_CODEX_AUTH_FILE",
+      existing,
+      fallback: join(homedir(), ".codex/auth.json"),
+      validate: validateFile,
+    });
+    values.RELAY_CODEX_WORKSPACE = await askValue("Allowed workspace directory", {
+      name: "RELAY_CODEX_WORKSPACE",
+      existing,
+      fallback: root,
+      validate: validateDirectory,
+    });
+    values.RELAY_GITHUB_TOKEN = await askOptionalValue("Fine-grained GitHub token (optional)", {
+      name: "RELAY_GITHUB_TOKEN",
+      existing,
+      secret: true,
+    });
+    values.RELAY_GIT_USER_NAME = await askOptionalValue("Git commit name (optional)", {
+      name: "RELAY_GIT_USER_NAME",
+      existing,
+      fallback: gitConfig("user.name"),
+    });
+    values.RELAY_GIT_USER_EMAIL = await askOptionalValue("Git commit email (optional)", {
+      name: "RELAY_GIT_USER_EMAIL",
+      existing,
+      fallback: gitConfig("user.email"),
     });
     values.RELAY_CODEX_MODEL = await askOptionalValue("Codex model (blank uses your CLI default)", {
       name: "RELAY_CODEX_MODEL",
@@ -117,6 +150,15 @@ async function configureWorker() {
       fallback: "900000",
       validate: validateMilliseconds,
     });
+
+    const shouldBuild = args.yes || await confirm(`Build or update ${values.RELAY_CODEX_IMAGE}?`, true);
+    if (shouldBuild) {
+      if (args.dryRun) {
+        console.log(`[dry run] Build ${values.RELAY_CODEX_IMAGE} from worker/container`);
+      } else {
+        buildCodexImage(values.RELAY_CONTAINER_RUNTIME, values.RELAY_CODEX_IMAGE);
+      }
+    }
   } else {
     values.OPENAI_API_KEY = await askValue("OpenAI API key", {
       name: "OPENAI_API_KEY",
@@ -191,10 +233,10 @@ async function askValue(label, options) {
 }
 
 async function askOptionalValue(label, options) {
-  const current = process.env[options.name] ?? options.existing[options.name] ?? "";
+  const current = process.env[options.name] ?? options.existing[options.name] ?? options.fallback ?? "";
   if (args.yes) return current;
-  const suffix = current ? ` [${current}]` : "";
-  const answer = await question(`${label}${suffix}: `);
+  const suffix = current ? (options.secret ? " [already set]" : ` [${current}]`) : "";
+  const answer = await question(`${label}${suffix}: `, options.secret);
   return answer.trim() || current;
 }
 
@@ -314,16 +356,46 @@ function validateMilliseconds(value) {
     : "Enter an integer of at least 1000 milliseconds.";
 }
 
-function validateCodexPath(value) {
-  const result = spawnSync(value, ["--version"], { encoding: "utf8" });
-  if (result.error || result.status !== 0) {
-    return "Codex CLI was not found there. Install Codex or enter its executable path.";
+function validateDirectory(value) {
+  if (!isAbsolute(value)) return "Enter an absolute directory path.";
+  try {
+    return statSync(value).isDirectory() ? null : "Enter an existing directory path.";
+  } catch {
+    return "Enter an existing directory path.";
   }
-  const version = `${result.stdout || ""} ${result.stderr || ""}`.match(/(\d+)\.(\d+)\.(\d+)/);
-  if (!version || Number(version[1]) === 0 && Number(version[2]) < 138) {
-    return "Relay requires Codex CLI 0.138.0 or newer for restricted permission profiles.";
+}
+
+function validateFile(value) {
+  if (!isAbsolute(value)) return "Enter an absolute file path.";
+  try {
+    return statSync(value).isFile() ? null : "Enter an existing file path.";
+  } catch {
+    return "Enter an existing file path.";
+  }
+}
+
+function validateContainerRuntime(value) {
+  const result = spawnSync(value, ["version", "--format", "{{.Server.Version}}"], { encoding: "utf8" });
+  if (result.error || result.status !== 0) {
+    return "Docker was not found or its service is not running.";
   }
   return null;
+}
+
+function gitConfig(name) {
+  const result = spawnSync("git", ["config", "--global", "--get", name], { encoding: "utf8" });
+  return result.status === 0 ? result.stdout.trim() : "";
+}
+
+function buildCodexImage(runtime, image) {
+  run(runtime, [
+    "build",
+    "--build-arg",
+    "CODEX_VERSION=0.147.0",
+    "--tag",
+    image,
+    join(root, "worker/container"),
+  ], "Codex worker image build failed.");
 }
 
 function findExecutable(name) {
@@ -356,7 +428,7 @@ function printNextSteps(selectedMode, selectedBackend) {
   if (selectedMode === "worker" || selectedMode === "both") {
     console.log("Worker next steps:");
     if (selectedBackend === "codex") {
-      console.log("  • Run codex login (or codex login --device-auth on a headless Pi)");
+      console.log("  • Keep the configured Codex login and fine-grained GitHub token current");
     }
     console.log("  • Test in the foreground: node --env-file=.env.worker worker/index.mjs");
     if (!args.installService) console.log("  • Run continuously: npm run worker:service:install");

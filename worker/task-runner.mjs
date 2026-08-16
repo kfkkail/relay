@@ -15,9 +15,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
       backend,
       run(input) {
         return runCodex(input, {
-          command: env.RELAY_CONTAINER_RUNTIME || "docker",
-          image: env.RELAY_CODEX_IMAGE || undefined,
-          authFile: env.RELAY_CODEX_AUTH_FILE,
+          command: env.RELAY_CODEX_PATH || "codex",
           model: env.RELAY_CODEX_MODEL || undefined,
           timeoutMs: env.RELAY_CODEX_TIMEOUT_MS || undefined,
           workspace: env.RELAY_CODEX_WORKSPACE,

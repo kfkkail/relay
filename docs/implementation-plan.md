@@ -9,8 +9,8 @@
 4. Let a local laptop worker authenticate with a revocable token and poll
    outbound for queued runs. Offline workers simply leave runs queued.
 5. Run a text-only agent through the OpenAI API or a locally authenticated Codex
-   CLI in a disposable, workspace-mounted container; return a Markdown result
-   through the worker API.
+   CLI constrained to one configured workspace; return a Markdown result through
+   the worker API.
 6. Let the user review the result, add written feedback, queue another attempt,
    accept a result, and draft an editable child task from accepted output.
 7. Preserve a concise event audit trail without modeling a chat transcript.
@@ -29,10 +29,10 @@
   deployed Next.js worker routes. The laptop exposes no inbound port.
 - **Agent adapter:** selectable OpenAI Responses API or Codex CLI. The API path
   declares no tools. The Codex path disables web search and user configuration,
-  removes worker secrets from its environment, and runs in a disposable
-  container that mounts only one explicitly configured workspace plus read-only
-  Codex authentication. Codex has normal filesystem, command, and network access
-  inside that container, including GitHub CLI operations, while the host remains
+  removes Relay and API secrets from its environment, and uses Codex's built-in
+  `workspace-write` sandbox for one explicitly configured workspace. Codex runs
+  as the local user with normal installed command-line tools, command network
+  access, and existing GitHub CLI authentication, while project writes remain
   workspace-only. Richer structured result artifacts remain a later slice.
 - **Deployments:** Vercel's GitHub integration only. No Vercel API dependency.
 

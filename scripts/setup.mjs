@@ -1,7 +1,6 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
 import { accessSync, constants, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { homedir } from "node:os";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
@@ -102,22 +101,11 @@ async function configureWorker() {
   };
 
   if (backend === "codex") {
-    values.RELAY_CONTAINER_RUNTIME = await askValue("Container runtime path", {
-      name: "RELAY_CONTAINER_RUNTIME",
+    values.RELAY_CODEX_PATH = await askValue("Codex CLI path", {
+      name: "RELAY_CODEX_PATH",
       existing,
-      fallback: findExecutable("docker"),
-      validate: validateContainerRuntime,
-    });
-    values.RELAY_CODEX_IMAGE = await askValue("Codex worker image", {
-      name: "RELAY_CODEX_IMAGE",
-      existing,
-      fallback: "relay-codex-worker:local",
-    });
-    values.RELAY_CODEX_AUTH_FILE = await askValue("Codex authentication file", {
-      name: "RELAY_CODEX_AUTH_FILE",
-      existing,
-      fallback: join(homedir(), ".codex/auth.json"),
-      validate: validateFile,
+      fallback: findExecutable("codex"),
+      validate: validateCodex,
     });
     values.RELAY_CODEX_WORKSPACE = await askValue("Allowed workspace directory", {
       name: "RELAY_CODEX_WORKSPACE",
@@ -125,20 +113,10 @@ async function configureWorker() {
       fallback: root,
       validate: validateDirectory,
     });
-    values.RELAY_GITHUB_TOKEN = await askOptionalValue("Fine-grained GitHub token (optional)", {
-      name: "RELAY_GITHUB_TOKEN",
+    values.RELAY_COMMAND_PATH = await askValue("Command search path", {
+      name: "RELAY_COMMAND_PATH",
       existing,
-      secret: true,
-    });
-    values.RELAY_GIT_USER_NAME = await askOptionalValue("Git commit name (optional)", {
-      name: "RELAY_GIT_USER_NAME",
-      existing,
-      fallback: gitConfig("user.name"),
-    });
-    values.RELAY_GIT_USER_EMAIL = await askOptionalValue("Git commit email (optional)", {
-      name: "RELAY_GIT_USER_EMAIL",
-      existing,
-      fallback: gitConfig("user.email"),
+      fallback: process.env.PATH,
     });
     values.RELAY_CODEX_MODEL = await askOptionalValue("Codex model (blank uses your CLI default)", {
       name: "RELAY_CODEX_MODEL",
@@ -151,14 +129,6 @@ async function configureWorker() {
       validate: validateMilliseconds,
     });
 
-    const shouldBuild = args.yes || await confirm(`Build or update ${values.RELAY_CODEX_IMAGE}?`, true);
-    if (shouldBuild) {
-      if (args.dryRun) {
-        console.log(`[dry run] Build ${values.RELAY_CODEX_IMAGE} from worker/container`);
-      } else {
-        buildCodexImage(values.RELAY_CONTAINER_RUNTIME, values.RELAY_CODEX_IMAGE);
-      }
-    }
   } else {
     values.OPENAI_API_KEY = await askValue("OpenAI API key", {
       name: "OPENAI_API_KEY",
@@ -365,37 +335,18 @@ function validateDirectory(value) {
   }
 }
 
-function validateFile(value) {
-  if (!isAbsolute(value)) return "Enter an absolute file path.";
+function validateCodex(value) {
+  if (!isAbsolute(value)) return "Enter the absolute path to the Codex CLI.";
   try {
-    return statSync(value).isFile() ? null : "Enter an existing file path.";
+    accessSync(value, constants.X_OK);
   } catch {
-    return "Enter an existing file path.";
+    return "Enter an existing executable path.";
   }
-}
-
-function validateContainerRuntime(value) {
-  const result = spawnSync(value, ["version", "--format", "{{.Server.Version}}"], { encoding: "utf8" });
+  const result = spawnSync(value, ["--version"], { encoding: "utf8" });
   if (result.error || result.status !== 0) {
-    return "Docker was not found or its service is not running.";
+    return "Codex CLI could not be started from that path.";
   }
   return null;
-}
-
-function gitConfig(name) {
-  const result = spawnSync("git", ["config", "--global", "--get", name], { encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : "";
-}
-
-function buildCodexImage(runtime, image) {
-  run(runtime, [
-    "build",
-    "--build-arg",
-    "CODEX_VERSION=0.147.0",
-    "--tag",
-    image,
-    join(root, "worker/container"),
-  ], "Codex worker image build failed.");
 }
 
 function findExecutable(name) {
@@ -428,7 +379,7 @@ function printNextSteps(selectedMode, selectedBackend) {
   if (selectedMode === "worker" || selectedMode === "both") {
     console.log("Worker next steps:");
     if (selectedBackend === "codex") {
-      console.log("  • Keep the configured Codex login and fine-grained GitHub token current");
+      console.log("  • Keep `codex login` and `gh auth login` current for this user");
     }
     console.log("  • Test in the foreground: node --env-file=.env.worker worker/index.mjs");
     if (!args.installService) console.log("  • Run continuously: npm run worker:service:install");

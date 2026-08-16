@@ -8,8 +8,8 @@
 3. Support creating and editing Markdown task instructions, then queueing a run.
 4. Let a local laptop worker authenticate with a revocable token and poll
    outbound for queued runs. Offline workers simply leave runs queued.
-5. Run a text-only agent through either the OpenAI API or a locally authenticated
-   Codex CLI with a deny-by-default permission profile; return a Markdown result
+5. Run a text-only agent through the OpenAI API or a locally authenticated Codex
+   CLI in a disposable, workspace-mounted container; return a Markdown result
    through the worker API.
 6. Let the user review the result, add written feedback, queue another attempt,
    accept a result, and draft an editable child task from accepted output.
@@ -29,17 +29,18 @@
   deployed Next.js worker routes. The laptop exposes no inbound port.
 - **Agent adapter:** selectable OpenAI Responses API or Codex CLI. The API path
   declares no tools. The Codex path disables web search and user configuration,
-  removes worker secrets from its environment, and restricts local commands to
-  minimal runtime files plus an empty temporary workspace. A later slice can
-  add repository work behind an explicit repository allowlist and richer result
-  artifacts.
+  removes worker secrets from its environment, and runs in a disposable
+  container that mounts only one explicitly configured workspace plus read-only
+  Codex authentication. Codex has normal filesystem, command, and network access
+  inside that container, including GitHub CLI operations, while the host remains
+  workspace-only. Richer structured result artifacts remain a later slice.
 - **Deployments:** Vercel's GitHub integration only. No Vercel API dependency.
 
 ## Deliberately deferred
 
-Repository mutation, GitHub PR creation by the worker, file artifacts,
-customizable workflows, multiple concurrent agents, delegation, integrations,
-native iOS, and elaborate boards are outside this increment.
+File artifacts, structured GitHub result metadata, customizable workflows,
+multiple concurrent agents, delegation, integrations, native iOS, and elaborate
+boards are outside this increment.
 
 ## Blocking decisions
 

@@ -33,9 +33,12 @@ npm run setup -- --mode web
 npm run setup -- --mode worker --install-service
 ```
 
-Worker setup recommends Codex CLI, which reuses `codex login` and does not need
-an OpenAI API key. The direct OpenAI API backend remains available for
-usage-based API billing.
+Worker setup recommends containerized Codex CLI, which reuses `codex login` and
+does not need an OpenAI API key. Each task gets a disposable container with only
+the configured workspace mounted read-write. Codex can edit repositories, run
+commands, use GitHub Actions, push branches, and create pull requests there,
+without receiving access to the rest of the host. The direct OpenAI API backend
+remains available for usage-based API billing.
 
 The remaining cloud steps require your authorization:
 
@@ -86,6 +89,7 @@ npm run lint
 npm run test
 npm run build
 npm run worker
+npm run worker:image:build
 npm run worker:service:install
 ```
 

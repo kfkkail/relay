@@ -18,6 +18,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
           command: env.RELAY_CODEX_PATH || "codex",
           model: env.RELAY_CODEX_MODEL || undefined,
           timeoutMs: env.RELAY_CODEX_TIMEOUT_MS || undefined,
+          workspace: env.RELAY_CODEX_WORKSPACE,
           env,
         });
       },

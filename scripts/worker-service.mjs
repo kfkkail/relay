@@ -144,7 +144,7 @@ async function validateWorkerEnv() {
   const backend = (env.RELAY_WORKER_BACKEND || "openai").toLowerCase();
   const required = ["RELAY_URL", "RELAY_WORKER_TOKEN"];
   if (backend === "openai") required.push("OPENAI_API_KEY");
-  else if (backend === "codex") required.push("RELAY_CODEX_PATH");
+  else if (backend === "codex") required.push("RELAY_CODEX_PATH", "RELAY_CODEX_WORKSPACE");
   else fail("RELAY_WORKER_BACKEND must be either codex or openai.");
 
   for (const name of required) {

@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,17 +12,22 @@ afterEach(async () => {
 });
 
 describe("Codex CLI runner", () => {
-  it("uses a restricted, ephemeral, non-interactive configuration", () => {
+  it("uses an allowlisted workspace with command network access", () => {
     const args = codexArguments("gpt-example");
 
     expect(args).toContain("--ephemeral");
     expect(args).toContain("--ignore-user-config");
     expect(args).toContain("--ignore-rules");
     expect(args).toContain('approval_policy="never"');
+    expect(args).not.toContain("approvals_reviewer");
+    expect(args).not.toContain(":danger-full-access");
+    expect(args).not.toContain("--dangerously-bypass-approvals-and-sandbox");
     expect(args).toContain('web_search="disabled"');
+    expect(args).toContain('default_permissions="relay-workspace"');
     expect(args).toContain(
-      'permissions.relay-text-only.filesystem={":root"="deny", ":minimal"="read", ":workspace_roots"={"."="read"}}',
+      'permissions.relay-workspace.filesystem={":root"="deny", ":minimal"="read", "/opt/homebrew"="read", "/usr/local"="read", "/Library/Developer/CommandLineTools"="read", "/Applications/Xcode.app"="read", "~/.config/gh"="read", "~/.gitconfig"="read", "~/.config/git"="read", ":tmpdir"="write", ":slash_tmp"="write", ":workspace_roots"={"."="write", "**/.env"="deny", "**/.env.*"="deny"}}',
     );
+    expect(args).toContain("permissions.relay-workspace.network.enabled=true");
     expect(args).toContain("--model");
     expect(args.at(-1)).toBe("-");
   });
@@ -36,12 +41,20 @@ describe("Codex CLI runner", () => {
       CODEX_API_KEY: "codex-secret",
       SUPABASE_SECRET_KEY: "database-secret",
       HTTPS_PROXY: "https://proxy-user:proxy-secret@example.com",
+      RELAY_GITHUB_TOKEN: "github-token",
     });
 
-    expect(env).toEqual({ HOME: "/home/relay", PATH: "/usr/bin" });
+    expect(env).toEqual({
+      HOME: "/home/relay",
+      PATH: "/usr/bin",
+      GIT_TERMINAL_PROMPT: "0",
+      GH_TOKEN: "github-token",
+    });
   });
 
-  it("passes task text over stdin and removes the isolated workspace afterward", async () => {
+  it("passes task text over stdin and runs from the configured workspace", async () => {
+    const workspace = await mkdtemp(join(tmpdir(), "relay-workspace-test-"));
+    temporaryDirectories.push(workspace);
     const fixture = await makeExecutable(`#!/usr/bin/env node
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
@@ -52,12 +65,21 @@ process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.
       command: fixture,
       env: { ...process.env, RELAY_WORKER_TOKEN: "do-not-forward" },
       timeoutMs: 5000,
+      workspace,
     }));
 
-    expect(result.input).toContain("Relay's text-only task worker");
+    expect(result.input).toContain("Relay's local software task worker");
+    expect(result.input).toContain("Never request or use access outside the configured workspace");
     expect(result.input).toContain("# Task\nWrite a summary");
     expect(result.secret).toBeUndefined();
-    await expect(import("node:fs/promises").then(({ access }) => access(result.cwd))).rejects.toThrow();
+    expect(result.cwd).toBe(await realpath(workspace));
+  });
+
+  it("requires an existing configured workspace", async () => {
+    await expect(runWithCodex("task", {
+      command: "/opt/codex",
+      timeoutMs: 5000,
+    })).rejects.toThrow("RELAY_CODEX_WORKSPACE is required");
   });
 
   it("returns a safe usage-limit error without model diagnostics", async () => {
@@ -70,6 +92,7 @@ process.exit(1);
       command: fixture,
       env: process.env,
       timeoutMs: 5000,
+      workspace: process.cwd(),
     })).rejects.toThrow("Codex CLI usage limit reached");
   });
 });
@@ -80,6 +103,7 @@ describe("worker backend selection", () => {
     const runner = createTaskRunner({
       RELAY_WORKER_BACKEND: "codex",
       RELAY_CODEX_PATH: "/opt/codex",
+      RELAY_CODEX_WORKSPACE: "/srv/repos",
       RELAY_CODEX_MODEL: "gpt-example",
     }, {
       runCodex: async (input, options) => {
@@ -91,7 +115,7 @@ describe("worker backend selection", () => {
     await expect(runner.run("task input")).resolves.toBe("done");
     expect(calls[0]).toMatchObject({
       input: "task input",
-      options: { command: "/opt/codex", model: "gpt-example" },
+      options: { command: "/opt/codex", model: "gpt-example", workspace: "/srv/repos" },
     });
   });
 

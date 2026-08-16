@@ -1,5 +1,5 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
@@ -107,6 +107,17 @@ async function configureWorker() {
       fallback: findExecutable("codex"),
       validate: validateCodexPath,
     });
+    values.RELAY_CODEX_WORKSPACE = await askValue("Codex workspace directory", {
+      name: "RELAY_CODEX_WORKSPACE",
+      existing,
+      fallback: root,
+      validate: validateDirectory,
+    });
+    values.RELAY_GITHUB_TOKEN = await askOptionalValue("Fine-grained GitHub token (optional)", {
+      name: "RELAY_GITHUB_TOKEN",
+      existing,
+      secret: true,
+    });
     values.RELAY_CODEX_MODEL = await askOptionalValue("Codex model (blank uses your CLI default)", {
       name: "RELAY_CODEX_MODEL",
       existing,
@@ -194,7 +205,7 @@ async function askOptionalValue(label, options) {
   const current = process.env[options.name] ?? options.existing[options.name] ?? "";
   if (args.yes) return current;
   const suffix = current ? ` [${current}]` : "";
-  const answer = await question(`${label}${suffix}: `);
+  const answer = await question(`${label}${suffix}: `, options.secret);
   return answer.trim() || current;
 }
 
@@ -312,6 +323,15 @@ function validateMilliseconds(value) {
   return /^\d+$/.test(value) && Number(value) >= 1000
     ? null
     : "Enter an integer of at least 1000 milliseconds.";
+}
+
+function validateDirectory(value) {
+  if (!isAbsolute(value)) return "Enter an absolute directory path.";
+  try {
+    return statSync(value).isDirectory() ? null : "Enter an existing directory path.";
+  } catch {
+    return "Enter an existing directory path.";
+  }
 }
 
 function validateCodexPath(value) {

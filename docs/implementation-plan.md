@@ -8,9 +8,9 @@
 3. Support creating and editing Markdown task instructions, then queueing a run.
 4. Let a local laptop worker authenticate with a revocable token and poll
    outbound for queued runs. Offline workers simply leave runs queued.
-5. Run a text-only agent through either the OpenAI API or a locally authenticated
-   Codex CLI with a deny-by-default permission profile; return a Markdown result
-   through the worker API.
+5. Run a text-only agent through the OpenAI API or a locally authenticated Codex
+   CLI software worker with an explicit local workspace; return a Markdown
+   result through the worker API.
 6. Let the user review the result, add written feedback, queue another attempt,
    accept a result, and draft an editable child task from accepted output.
 7. Preserve a concise event audit trail without modeling a chat transcript.
@@ -30,16 +30,16 @@
 - **Agent adapter:** selectable OpenAI Responses API or Codex CLI. The API path
   declares no tools. The Codex path disables web search and user configuration,
   removes worker secrets from its environment, and restricts local commands to
-  minimal runtime files plus an empty temporary workspace. A later slice can
-  add repository work behind an explicit repository allowlist and richer result
-  artifacts.
+  minimal runtime files plus one explicitly configured workspace. That worker
+  can edit repositories and use authenticated GitHub CLI operations inside the
+  workspace. Richer structured result artifacts remain a later slice.
 - **Deployments:** Vercel's GitHub integration only. No Vercel API dependency.
 
 ## Deliberately deferred
 
-Repository mutation, GitHub PR creation by the worker, file artifacts,
-customizable workflows, multiple concurrent agents, delegation, integrations,
-native iOS, and elaborate boards are outside this increment.
+File artifacts, structured GitHub result metadata, customizable workflows,
+multiple concurrent agents, delegation, integrations, native iOS, and elaborate
+boards are outside this increment.
 
 ## Blocking decisions
 

@@ -34,8 +34,11 @@ npm run setup -- --mode worker --install-service
 ```
 
 Worker setup recommends Codex CLI, which reuses `codex login` and does not need
-an OpenAI API key. The direct OpenAI API backend remains available for
-usage-based API billing.
+an OpenAI API key. The setup asks for an explicit local workspace; Codex can
+edit repositories, run commands, and use authenticated GitHub CLI operations
+inside that directory and its descendants. Relay never gives the Codex worker
+an unrestricted-machine or `danger-full-access` mode. The direct OpenAI API
+backend remains available for usage-based API billing.
 
 The remaining cloud steps require your authorization:
 

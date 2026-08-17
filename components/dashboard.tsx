@@ -43,6 +43,7 @@ export function Dashboard({
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editTitle, setEditTitle] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
   const [workerOpen, setWorkerOpen] = useState(false);
   const [workerToken, setWorkerToken] = useState("");
@@ -106,6 +107,7 @@ export function Dashboard({
 
   function startEditing(task: Task) {
     setEditingTask(task);
+    setEditTitle(task.title);
     setEditInstructions(task.instructions);
   }
 
@@ -115,10 +117,11 @@ export function Dashboard({
     await runAction(async () => {
       const body = await requestJson(`/api/tasks/${editingTask.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ instructions: editInstructions }),
+        body: JSON.stringify({ title: editTitle, instructions: editInstructions }),
       });
       setTasks((current) => current.map((task) => task.id === body.task.id ? body.task : task));
       setEditingTask(null);
+      setEditTitle("");
       setEditInstructions("");
     });
   }
@@ -252,12 +255,14 @@ export function Dashboard({
       {editingTask && (
         <div className="modal-backdrop" onMouseDown={() => setEditingTask(null)}>
           <section className="sheet composer" role="dialog" aria-modal="true" aria-labelledby="edit-task-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="sheet-heading"><div><p className="eyebrow">Task document</p><h2 id="edit-task-title">Edit Markdown</h2></div><button className="icon-button" onClick={() => setEditingTask(null)} aria-label="Cancel editing"><X size={20} /></button></div>
+            <div className="sheet-heading"><div><p className="eyebrow">Task details</p><h2 id="edit-task-title">Edit task</h2></div><button className="icon-button" onClick={() => setEditingTask(null)} aria-label="Cancel editing"><X size={20} /></button></div>
             <form onSubmit={updateTask}>
+              <label htmlFor="edit-task-name">Task title</label>
+              <input id="edit-task-name" value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required maxLength={160} autoFocus />
               <label htmlFor="edit-task-instructions">Markdown instructions and context</label>
-              <textarea id="edit-task-instructions" value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} required maxLength={100000} rows={14} autoFocus />
+              <textarea id="edit-task-instructions" value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} required maxLength={100000} rows={14} />
               <div className="composer-hint"><span>Markdown supported</span><span>{editInstructions.length.toLocaleString()} characters</span></div>
-              <div className="edit-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingTask(null)}>Cancel</button><button className="primary-button" disabled={busy || !editInstructions.trim()}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button></div>
+              <div className="edit-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingTask(null)}>Cancel</button><button className="primary-button" disabled={busy || !editTitle.trim() || !editInstructions.trim()}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button></div>
             </form>
           </section>
         </div>

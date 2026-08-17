@@ -22,7 +22,7 @@ import ReactMarkdown from "react-markdown";
 import { buildFollowUpInstructions, latestCompletedRun, statusLabel } from "@/lib/domain";
 import type { Task, TaskStatus, Worker } from "@/lib/types";
 
-const filters: Array<TaskStatus | "all"> = ["all", "inbox", "ready", "working", "waiting", "done"];
+const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
 
 type Draft = { title: string; instructions: string; parentTaskId: string | null };
 const emptyDraft: Draft = { title: "", instructions: "", parentTaskId: null };
@@ -38,7 +38,7 @@ export function Dashboard({
 }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
-  const [filter, setFilter] = useState<TaskStatus | "all">("all");
+  const [filter, setFilter] = useState<TaskStatus>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -50,7 +50,7 @@ export function Dashboard({
   const [error, setError] = useState("");
 
   const visibleTasks = useMemo(
-    () => (filter === "all" ? tasks : tasks.filter((task) => task.status === filter)),
+    () => tasks.filter((task) => task.status === filter),
     [filter, tasks],
   );
   const selected = tasks.find((task) => task.id === selectedId) ?? null;
@@ -184,8 +184,8 @@ export function Dashboard({
           <div className="filter-strip" aria-label="Filter tasks">
             {filters.map((item) => (
               <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>
-                {item === "all" ? "All" : statusLabel(item)}
-                <span>{item === "all" ? tasks.length : tasks.filter((task) => task.status === item).length}</span>
+                {statusLabel(item)}
+                <span>{tasks.filter((task) => task.status === item).length}</span>
               </button>
             ))}
           </div>

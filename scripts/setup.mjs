@@ -74,6 +74,19 @@ async function configureWeb() {
       existing,
       secret: true,
     }),
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: await askValue("VAPID public key", {
+      name: "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+      existing,
+    }),
+    VAPID_PRIVATE_KEY: await askValue("VAPID private key", {
+      name: "VAPID_PRIVATE_KEY",
+      existing,
+      secret: true,
+    }),
+    VAPID_SUBJECT: await askValue("VAPID subject (for example, mailto:you@example.com)", {
+      name: "VAPID_SUBJECT",
+      existing,
+    }),
   };
 
   await saveEnv(target, values);
@@ -372,7 +385,7 @@ function printNextSteps(selectedMode, selectedBackend) {
   console.log("\nSetup files are ready.\n");
   if (selectedMode === "web" || selectedMode === "both") {
     console.log("Web next steps:");
-    console.log("  1. Run supabase/migrations/0001_initial.sql in the Supabase SQL Editor.");
+    console.log("  1. Run the files in supabase/migrations in numeric order in the Supabase SQL Editor.");
     console.log("  2. Run npm run dev, or deploy the repository to Vercel.");
     console.log("  3. Add your Relay URL and /auth/callback to Supabase Auth redirect URLs.\n");
   }

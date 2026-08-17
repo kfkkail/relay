@@ -43,7 +43,7 @@ remains available for usage-based API billing.
 
 The remaining cloud steps require your authorization:
 
-1. Create a Supabase project and run [`supabase/migrations/0001_initial.sql`](supabase/migrations/0001_initial.sql).
+1. Create a Supabase project and run the SQL files in [`supabase/migrations`](supabase/migrations) in numeric order.
 2. Run `npm run dev`, or deploy the repository to Vercel using the three web
    values written to `.env.local`.
 3. Add the deployed URL and `/auth/callback` URL to the Supabase Auth redirect
@@ -80,6 +80,12 @@ logs with `npm run worker:service:uninstall`.
 Connect this GitHub repository to Vercel and configure the web environment
 variables there. GitHub pushes and pull requests drive Vercel deployments;
 Relay does not call Vercel APIs directly.
+
+Waiting-task notifications use Web Push. Generate a VAPID key pair with
+`npx web-push generate-vapid-keys`, then configure `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY`, and a `VAPID_SUBJECT` such as `mailto:you@example.com` in
+the web environment. Relay asks for notification permission on first use and
+subscribes each browser or installed PWA that grants it.
 
 ## Commands
 

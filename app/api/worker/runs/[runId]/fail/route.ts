@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse } from "@/lib/http";
 import { requireWorker } from "@/lib/worker-auth";
+import { notifyTaskWaiting } from "@/lib/push-notifications";
 
 export async function POST(
   request: Request,
@@ -13,7 +14,7 @@ export async function POST(
     const message = typeof body.error === "string" ? body.error.slice(0, 20000) : "Worker run failed.";
     const { data: run, error: runError } = await supabase
       .from("runs")
-      .select("id,task_id,user_id,attempt")
+      .select("id,task_id,user_id,attempt,tasks(title)")
       .eq("id", runId)
       .eq("worker_id", worker.id)
       .eq("status", "working")
@@ -31,6 +32,11 @@ export async function POST(
       user_id: run.user_id,
       type: "run.failed",
       payload: { attempt: run.attempt, error: message },
+    });
+    await notifyTaskWaiting(supabase, {
+      id: run.task_id,
+      user_id: run.user_id,
+      title: run.tasks[0]?.title ?? "A task",
     });
     return NextResponse.json({ failed: true });
   } catch (error) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse } from "@/lib/http";
 import { requireWorker } from "@/lib/worker-auth";
 import type { ResultArtifact } from "@/lib/types";
+import { notifyTaskWaiting } from "@/lib/push-notifications";
 
 export async function POST(
   request: Request,
@@ -17,7 +18,7 @@ export async function POST(
 
     const { data: run, error: runError } = await supabase
       .from("runs")
-      .select("id,task_id,user_id,attempt")
+      .select("id,task_id,user_id,attempt,tasks(title)")
       .eq("id", runId)
       .eq("worker_id", worker.id)
       .eq("status", "working")
@@ -42,6 +43,11 @@ export async function POST(
       user_id: run.user_id,
       type: "run.completed",
       payload: { attempt: run.attempt, artifactCount: artifacts.length },
+    });
+    await notifyTaskWaiting(supabase, {
+      id: run.task_id,
+      user_id: run.user_id,
+      title: run.tasks[0]?.title ?? "A task",
     });
     return NextResponse.json({ completed: true });
   } catch (error) {

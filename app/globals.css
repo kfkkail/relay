@@ -301,7 +301,7 @@ textarea { resize: vertical; }
 .sheet-heading h2 { margin: 0; font-size: 26px; letter-spacing: -.045em; }
 .sheet .primary-button { margin-top: 20px; }
 .sheet-intro { color: var(--ink-soft); line-height: 1.55; }
-.composer textarea { min-height: 240px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 14px; }
+.composer textarea { min-height: 240px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 16px; }
 .composer-hint { display: flex; justify-content: space-between; margin-top: 6px; color: var(--ink-soft); font-size: 11px; }
 .edit-actions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 10px; margin-top: 20px; }
 .edit-actions .primary-button { margin-top: 0; }

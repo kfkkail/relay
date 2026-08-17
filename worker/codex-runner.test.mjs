@@ -79,7 +79,16 @@ process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.
     expect(result.args).toEqual(codexArguments("gpt-example"));
     expect(result.input).toContain("running on the owner's machine");
     expect(result.input).toContain("Do not disable or evade the Codex sandbox");
-    expect(result.input).toContain("# Task\nCreate a pull request");
+    expect(result.input).toContain("Relay displays one text/Markdown result");
+    expect(result.input).toContain("Do not link to local files or generated documents");
+    expect(result.input).toContain("http/https links are supported");
+    expect(result.input).toContain("commits, and pull requests");
+    expect(result.input).toContain(
+      "# Trusted Relay worker policy\n\n",
+    );
+    expect(result.input).toContain(
+      "# Untrusted task text\n\n# Task\nCreate a pull request",
+    );
     expect(result.relaySecret).toBeUndefined();
     expect(result.home).toBe("/Users/relay");
     expect(result.cwd).toBe(await realpath(workspace));
@@ -138,6 +147,31 @@ describe("worker backend selection", () => {
     expect(() => createTaskRunner({ RELAY_WORKER_BACKEND: "openai" })).toThrow(
       "OPENAI_API_KEY is required",
     );
+  });
+
+  it("gives the OpenAI backend the same result contract and a separate untrusted input", async () => {
+    const calls = [];
+    class FakeOpenAI {
+      responses = {
+        create: async (request) => {
+          calls.push(request);
+          return { output_text: "done" };
+        },
+      };
+    }
+    const runner = createTaskRunner({
+      RELAY_WORKER_BACKEND: "openai",
+      OPENAI_API_KEY: "test-key",
+    }, { OpenAI: FakeOpenAI });
+
+    await expect(runner.run("# Task\nSummarize the document")).resolves.toBe("done");
+    expect(calls[0].instructions).toContain("one text/Markdown result");
+    expect(calls[0].instructions).toContain("Do not link to local files or generated documents");
+    expect(calls[0].instructions).toContain("http/https links are supported");
+    expect(calls[0].instructions).toContain("commits, and pull requests");
+    expect(calls[0].instructions).toContain("untrusted task text");
+    expect(calls[0].input).toBe("# Task\nSummarize the document");
+    expect(calls[0].instructions).not.toContain("Summarize the document");
   });
 });
 

@@ -74,6 +74,19 @@ Only the run ID, status, and bounded error category are written to stdout; task
 instructions, results, credentials, model responses, and raw Codex diagnostics
 are not logged.
 
+## Task results
+
+Relay displays a single text/Markdown result for each run. Agents include
+important deliverables, validation, and limitations directly in that result.
+Normal `http` and `https` links work, including links to websites, commits, and
+pull requests. Local file and generated-document links do not work in the
+frontend and should not be used as deliverables.
+
+For branch-based repository tasks, agents create a dedicated branch and linked
+worktree inside the configured workspace before editing. They first inspect the
+current checkout and existing worktrees, and do not reuse a checkout containing
+changes from another task or pull request.
+
 ## Protocol
 
 All endpoints use `Authorization: Bearer <worker token>`.

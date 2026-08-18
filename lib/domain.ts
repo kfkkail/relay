@@ -46,16 +46,8 @@ export function ownerActionFilter(action: OwnerAction, now = new Date()): OwnerA
   return "active";
 }
 
-export function compareOwnerActions(left: OwnerAction, right: OwnerAction, now = new Date()) {
-  const dueRank = (action: OwnerAction) => {
-    if (!action.due_at) return 2;
-    return new Date(action.due_at) < now ? 0 : 1;
-  };
-  const rankDifference = dueRank(left) - dueRank(right);
-  if (rankDifference) return rankDifference;
-  if (left.due_at && right.due_at) {
-    const dueDifference = new Date(left.due_at).getTime() - new Date(right.due_at).getTime();
-    if (dueDifference) return dueDifference;
-  }
-  return left.position - right.position;
+export function compareOwnerActions(left: OwnerAction, right: OwnerAction) {
+  if (!left.due_at) return right.due_at ? 1 : 0;
+  if (!right.due_at) return -1;
+  return new Date(left.due_at).getTime() - new Date(right.due_at).getTime();
 }

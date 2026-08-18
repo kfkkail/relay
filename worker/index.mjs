@@ -1,4 +1,7 @@
 import { createTaskRunner } from "./task-runner.mjs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
@@ -26,9 +29,22 @@ while (!stopping) {
     continue;
   }
 
-  const { run, task } = claimed;
+  const { run, task, attachments = [] } = claimed;
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
+  let attachmentDirectory;
   try {
+    const localAttachments = [];
+    if (attachments.length) {
+      attachmentDirectory = await mkdtemp(join(tmpdir(), `relay-${run.id}-`));
+      for (const attachment of attachments) {
+        const extension = attachment.mime_type === "image/jpeg" ? ".jpg" : attachment.mime_type === "image/png" ? ".png" : ".webp";
+        const path = join(attachmentDirectory, `${attachment.id}${extension}`);
+        const data = await relayDownload(`/api/worker/runs/${run.id}/attachments/${attachment.id}`);
+        if (data.byteLength !== attachment.byte_size) throw new Error(`Attachment ${attachment.file_name} did not match its recorded size.`);
+        await writeFile(path, data, { flag: "wx" });
+        localAttachments.push({ path, mimeType: attachment.mime_type, fileName: attachment.file_name });
+      }
+    }
     const input = [
       `# Task\n${task.title}`,
       `# Instructions and context\n${task.instructions}`,
@@ -37,7 +53,8 @@ while (!stopping) {
       .filter(Boolean)
       .join("\n\n");
 
-    const resultMarkdown = await taskRunner.run(input);
+    const attachmentNote = localAttachments.length ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}` : "";
+    const resultMarkdown = await taskRunner.run({ text: input + attachmentNote, attachments: localAttachments });
 
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
@@ -55,6 +72,8 @@ while (!stopping) {
     } catch (reportError) {
       console.error(`Could not report failure for ${run.id}: ${safeError(reportError)}`);
     }
+  } finally {
+    if (attachmentDirectory) await rm(attachmentDirectory, { recursive: true, force: true });
   }
 }
 
@@ -79,6 +98,15 @@ async function relayRequest(path, init) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Relay returned HTTP ${response.status}.`);
   return body;
+}
+
+async function relayDownload(path) {
+  const response = await fetch(`${relayUrl}${path}`, { headers: { Authorization: `Bearer ${workerToken}` } });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || `Relay could not download an attachment (HTTP ${response.status}).`);
+  }
+  return Buffer.from(await response.arrayBuffer());
 }
 
 function safeError(error) {

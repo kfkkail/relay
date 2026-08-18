@@ -26,6 +26,7 @@ export async function POST(request: Request) {
           title: claimed.title,
           instructions: claimed.instructions,
         },
+        attachments: claimed.attachments ?? [],
       },
       { headers: { "Cache-Control": "no-store" } },
     );

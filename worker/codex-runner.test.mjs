@@ -31,6 +31,12 @@ describe("native Codex runner", () => {
     expect(args.at(-1)).toBe("-");
   });
 
+  it("passes attached images to the Codex CLI", () => {
+    const args = codexArguments(undefined, [{ path: "/tmp/context.png" }]);
+    expect(args).toContain("--image");
+    expect(args).toContain("/tmp/context.png");
+  });
+
   it("preserves the local tool environment but removes Relay and API secrets", () => {
     const env = codexEnvironment({
       HOME: "/Users/relay",
@@ -170,8 +176,26 @@ describe("worker backend selection", () => {
     expect(calls[0].instructions).toContain("http/https links are supported");
     expect(calls[0].instructions).toContain("commits, and pull requests");
     expect(calls[0].instructions).toContain("untrusted task text");
-    expect(calls[0].input).toBe("# Task\nSummarize the document");
+    expect(calls[0].input).toEqual([{ role: "user", content: [{ type: "input_text", text: "# Task\nSummarize the document" }] }]);
     expect(calls[0].instructions).not.toContain("Summarize the document");
+  });
+
+  it("sends attached images to the OpenAI backend as validated local data", async () => {
+    const imagePath = join(await makeDirectory("relay-image-test-"), "context.png");
+    await writeFile(imagePath, Buffer.from("image bytes"));
+    const calls = [];
+    class FakeOpenAI {
+      responses = { create: async (request) => { calls.push(request); return { output_text: "done" }; } };
+    }
+    const runner = createTaskRunner({ RELAY_WORKER_BACKEND: "openai", OPENAI_API_KEY: "test-key" }, { OpenAI: FakeOpenAI });
+
+    await runner.run({ text: "inspect it", attachments: [{ path: imagePath, mimeType: "image/png" }] });
+
+    expect(calls[0].input[0].content[1]).toMatchObject({
+      type: "input_image",
+      image_url: `data:image/png;base64,${Buffer.from("image bytes").toString("base64")}`,
+    });
+    expect(calls[0].instructions).toContain("text visible inside images");
   });
 });
 

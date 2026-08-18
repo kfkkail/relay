@@ -3,6 +3,7 @@ import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 
 const taskSelect = `
   id,title,status,instructions,accepted_result,parent_task_id,created_at,updated_at,
+  task_attachments(id,file_name,mime_type,byte_size,width,height),
   runs(id,task_id,status,attempt,worker_id,feedback,result_markdown,result_artifacts,error,queued_at,started_at,finished_at)
 `;
 

@@ -295,7 +295,7 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none !important;
 .artifact-list a span { color: var(--ink-soft); font-size: 10px; font-weight: 750; text-transform: uppercase; }
 
 label { display: block; margin: 17px 0 7px; font-size: 13px; font-weight: 700; }
-input, textarea { width: 100%; border: 1px solid #c8c4ba; border-radius: 13px; padding: 13px 14px; outline: none; color: var(--ink); background: #fff; line-height: 1.5; transition: border-color .15s, box-shadow .15s; }
+input, textarea { width: 100%; min-width: 0; border: 1px solid #c8c4ba; border-radius: 13px; padding: 13px 14px; outline: none; color: var(--ink); background: #fff; line-height: 1.5; transition: border-color .15s, box-shadow .15s; }
 select { width: 100%; border: 1px solid #c8c4ba; border-radius: 11px; padding: 10px 12px; color: var(--ink); background: #fff; }
 input:focus, textarea:focus { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(23, 63, 53, .1); }
 textarea { resize: vertical; }

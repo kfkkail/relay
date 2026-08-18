@@ -24,6 +24,11 @@ export async function POST(
       .select("id")
       .single();
     if (error) throw error;
+    const { error: snapshotError } = await supabase.rpc("snapshot_run_attachments", { p_run_id: run.id });
+    if (snapshotError) {
+      await supabase.from("runs").delete().eq("id", run.id);
+      throw snapshotError;
+    }
     await supabase.from("tasks").update({ status: "ready" }).eq("id", task.id);
     await supabase.from("events").insert({
       task_id: task.id,

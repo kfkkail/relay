@@ -26,6 +26,15 @@ export type Run = {
   finished_at: string | null;
 };
 
+export type TaskAttachment = {
+  id: string;
+  file_name: string;
+  mime_type: "image/jpeg" | "image/png" | "image/webp";
+  byte_size: number;
+  width: number | null;
+  height: number | null;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -35,6 +44,7 @@ export type Task = {
   parent_task_id: string | null;
   created_at: string;
   updated_at: string;
+  task_attachments: TaskAttachment[];
   runs: Run[];
 };
 

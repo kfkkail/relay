@@ -11,8 +11,10 @@ import {
   Clock3,
   Copy,
   Laptop,
+  Image as ImageIcon,
   LogOut,
   Pencil,
+  Paperclip,
   Plus,
   RefreshCw,
   Search,
@@ -27,6 +29,7 @@ import remarkGfm from "remark-gfm";
 import { buildFollowUpInstructions, compareOwnerActions, latestCompletedRun, ownerActionFilter, statusLabel } from "@/lib/domain";
 import { localDateTimeToUtc, utcToLocalDateTime } from "@/lib/date-time";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
 
@@ -52,6 +55,8 @@ export function Dashboard({
   const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [draftImage, setDraftImage] = useState<File | null>(null);
+  const [pendingTask, setPendingTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [selectedOwnerActionId, setSelectedOwnerActionId] = useState<string | null>(null);
   const [editingOwnerAction, setEditingOwnerAction] = useState(false);
@@ -60,6 +65,7 @@ export function Dashboard({
   const [ownerActionDueAt, setOwnerActionDueAt] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
+  const [editImage, setEditImage] = useState<File | null>(null);
   const [workerOpen, setWorkerOpen] = useState(false);
   const [workerToken, setWorkerToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -138,13 +144,17 @@ export function Dashboard({
   async function createTask(event: FormEvent) {
     event.preventDefault();
     await runAction(async () => {
-      const body = await requestJson("/api/tasks", {
-        method: "POST",
-        body: JSON.stringify(draft),
-      });
-      setTasks((current) => [body.task, ...current]);
-      setSelectedId(body.task.id);
+      const task = pendingTask ?? (await requestJson("/api/tasks", {
+        method: "POST", body: JSON.stringify(draft),
+      })).task as Task;
+      setPendingTask(task);
+      setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
+      setSelectedId(task.id);
+      if (draftImage) task.task_attachments = [await uploadAttachment(task.id, draftImage)];
+      setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
       setDraft(emptyDraft);
+      setDraftImage(null);
+      setPendingTask(null);
       setComposerOpen(false);
     });
   }
@@ -160,6 +170,7 @@ export function Dashboard({
     setEditingTask(task);
     setEditTitle(task.title);
     setEditInstructions(task.instructions);
+    setEditImage(null);
   }
 
   function openTask(taskId: string) {
@@ -201,10 +212,16 @@ export function Dashboard({
         method: "PATCH",
         body: JSON.stringify({ title: editTitle, instructions: editInstructions }),
       });
+      if (editImage) {
+        const existing = editingTask.task_attachments[0];
+        if (existing) await requestJson(`/api/tasks/${editingTask.id}/attachments/${existing.id}`, { method: "DELETE" });
+        body.task.task_attachments = [await uploadAttachment(editingTask.id, editImage)];
+      }
       setTasks((current) => current.map((task) => task.id === body.task.id ? body.task : task));
       setEditingTask(null);
       setEditTitle("");
       setEditInstructions("");
+      setEditImage(null);
     });
   }
 
@@ -264,7 +281,7 @@ export function Dashboard({
         <aside className={`task-column ${selected ? "has-selection" : ""}`}>
           <div className="task-column-heading">
             <div><p className="eyebrow">Your relay</p><h1>Tasks in motion</h1></div>
-            <button className="new-button" onClick={() => { setDraft(emptyDraft); setComposerOpen(true); }}><Plus size={19} />New</button>
+            <button className="new-button" onClick={() => { setDraft(emptyDraft); setDraftImage(null); setPendingTask(null); setComposerOpen(true); }}><Plus size={19} />New</button>
           </div>
 
           <div className="filter-strip" aria-label="Filter tasks">
@@ -335,7 +352,8 @@ export function Dashboard({
               <label htmlFor="task-instructions">Markdown instructions and context</label>
               <textarea id="task-instructions" value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder={"## Outcome\nDescribe the result you want.\n\n## Context\nAdd useful constraints and background."} required rows={14} />
               <div className="composer-hint"><span>Markdown supported</span><span>{draft.instructions.length.toLocaleString()} characters</span></div>
-              <button className="primary-button" disabled={busy}>{busy ? "Saving…" : "Save to Inbox"}<ArrowRight size={18} /></button>
+              <ImagePicker file={draftImage} onChange={setDraftImage} />
+              <button className="primary-button" disabled={busy}>{busy ? "Saving and uploading…" : "Save to Inbox"}<ArrowRight size={18} /></button>
             </form>
           </section>
         </div>
@@ -351,6 +369,7 @@ export function Dashboard({
               <label htmlFor="edit-task-instructions">Markdown instructions and context</label>
               <textarea id="edit-task-instructions" value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} required maxLength={100000} rows={14} />
               <div className="composer-hint"><span>Markdown supported</span><span>{editInstructions.length.toLocaleString()} characters</span></div>
+              {editingTask.status === "inbox" && <ImagePicker file={editImage} onChange={setEditImage} currentName={editingTask.task_attachments[0]?.file_name} />}
               <div className="edit-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingTask(null)}>Cancel</button><button className="primary-button" disabled={busy || !editTitle.trim() || !editInstructions.trim()}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button></div>
             </form>
           </section>
@@ -493,6 +512,16 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
 
       <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.instructions}</ReactMarkdown></div></section>
 
+      {task.task_attachments.map((attachment) => <section className="attachment-section" key={attachment.id}>
+        <div className="section-label"><span>Attached image</span><span>{formatBytes(attachment.byte_size)}</span></div>
+        <a href={`/api/tasks/${task.id}/attachments/${attachment.id}`} target="_blank" rel="noreferrer">
+          {/* Authenticated endpoint; filename is rendered as plain text and never used as markup. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- authenticated dynamic image endpoint */}
+          <img src={`/api/tasks/${task.id}/attachments/${attachment.id}`} alt={attachment.file_name} />
+          <span><ImageIcon size={16} />{attachment.file_name} · Open full size</span>
+        </a>
+      </section>)}
+
       <section className="your-actions-section"><div className="section-label"><span>Your actions</span><button className="document-edit-button" disabled={busy} onClick={() => onCreateOwnerAction(`Action for ${task.title}`)}><Plus size={14} />Create linked</button></div>{linkedActions.length ? <div className="task-actions-list">{linkedActions.map((action) => <div key={action.id}><div><button className="linked-action-title" onClick={() => onOpenOwnerAction(action.id)}>{action.title}</button><span>{ownerActionStatusLabel(action)}</span></div><div><button onClick={() => onUpdateOwnerAction(action.id, { status: action.status === "done" ? "todo" : "done" })}>{action.status === "done" ? "Reopen" : "Complete"}</button><button onClick={() => onUnlinkOwnerAction(action.id)}>Unlink</button></div></div>)}</div> : <p className="no-actions">No owner actions are linked to this task.</p>}{availableActions.length > 0 && <label className="link-existing">Link existing action<select defaultValue="" onChange={(event) => { if (event.target.value) onLinkOwnerAction(event.target.value); event.target.value = ""; }}><option value="" disabled>Choose an action…</option>{availableActions.map((action) => <option key={action.id} value={action.id}>{action.title}</option>)}</select></label>}</section>
 
       {active && <section className="run-status-card"><div className="run-spinner"><RefreshCw size={22} /></div><div><p className="eyebrow">Attempt {active.attempt}</p><h2>{active.status === "queued" ? "Waiting for your laptop" : "Worker is on it"}</h2><p>{active.status === "queued" ? "This run stays safely queued while your worker is offline." : "The result will appear here when the worker finishes."}</p></div></section>}
@@ -517,6 +546,47 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
 function StatusPill({ status }: { status: TaskStatus }) {
   const Icon = status === "working" ? RefreshCw : status === "waiting" ? Clock3 : status === "done" ? Check : CircleDot;
   return <span className={`status-pill ${status}`}><Icon size={13} />{statusLabel(status)}</span>;
+}
+
+function ImagePicker({ file, onChange, currentName }: { file: File | null; onChange: (file: File | null) => void; currentName?: string }) {
+  const preview = useMemo(() => file ? URL.createObjectURL(file) : null, [file]);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  return <div className="image-picker">
+    <label htmlFor="task-image"><Paperclip size={15} />{currentName ? "Replace image" : "Attach image"}</label>
+    <input id="task-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
+    {(file || currentName) && <div className="image-preview">
+      {preview ? <>
+        {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}
+        <img src={preview} alt="Selected upload preview" />
+      </> : <ImageIcon size={28} />}
+      <div><strong>{file?.name ?? currentName}</strong>{file && <span>{formatBytes(file.size)}</span>}</div>
+      {file && <button type="button" onClick={() => onChange(null)} aria-label="Remove selected image"><X size={17} /></button>}
+    </div>}
+    <p>JPEG, PNG, or WebP · up to 10 MB</p>
+  </div>;
+}
+
+async function uploadAttachment(taskId: string, file: File) {
+  if (file.size > 10 * 1024 * 1024) throw new Error("Images must be 10 MB or smaller.");
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("Images must be JPEG, PNG, or WebP.");
+  const created = await requestJson(`/api/tasks/${taskId}/attachments`, {
+    method: "POST", body: JSON.stringify({ fileName: file.name, mimeType: file.type, byteSize: file.size }),
+  });
+  try {
+    const { error } = await createSupabaseClient().storage.from("task-attachments").uploadToSignedUrl(created.path, created.token, file, { contentType: file.type });
+    if (error) throw error;
+    const finalized = await requestJson(`/api/tasks/${taskId}/attachments`, {
+      method: "PATCH", body: JSON.stringify({ attachmentId: created.attachmentId }),
+    });
+    return finalized.attachment;
+  } catch (error) {
+    await requestJson(`/api/tasks/${taskId}/attachments/${created.attachmentId}`, { method: "DELETE" }).catch(() => {});
+    throw error;
+  }
+}
+
+function formatBytes(bytes: number) {
+  return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function plainPreview(markdown: string) {

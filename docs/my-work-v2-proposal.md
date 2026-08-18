@@ -27,3 +27,5 @@ After observing v2 usage, consider saved recurring actions, bulk completion/resc
 2. Search includes linked task names and stays scoped to the selected lifecycle view.
 3. Snoozed actions return to Active automatically after the selected time.
 4. Existing task links, ordering, and owner isolation continue to work unchanged.
+
+Pull request: https://github.com/kfkkail/relay/pull/20

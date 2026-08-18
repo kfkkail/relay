@@ -39,8 +39,14 @@ describe("Owner action rules", () => {
       action({ due_at: null }),
       action({ due_at: "2026-08-20T12:00:00.000Z" }),
       action({ due_at: "2026-08-16T12:00:00.000Z" }),
-    ].sort((left, right) => compareOwnerActions(left, right, now));
+    ].sort(compareOwnerActions);
     expect(items.map((item) => item.due_at)).toEqual(["2026-08-16T12:00:00.000Z", "2026-08-20T12:00:00.000Z", null]);
+  });
+
+  it("does not use manual positions to order actions with the same due date", () => {
+    const first = action({ due_at: "2026-08-20T12:00:00.000Z", position: 2 });
+    const second = action({ due_at: "2026-08-20T12:00:00.000Z", position: 1 });
+    expect(compareOwnerActions(first, second)).toBe(0);
   });
 
   it("relabels waiting without changing its stored value", () => {

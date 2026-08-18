@@ -259,7 +259,7 @@ export function Dashboard({
         </div>
       </header>
 
-      {area === "my-work" ? <MyWork actions={ownerActions} busy={busy} runAction={runAction} onCreate={createOwnerAction} onUpdate={updateOwnerAction} onDelete={deleteOwnerAction} onRefresh={refreshOwnerActions} onOpenAction={openOwnerAction} onOpenTask={openTask} /> : <section className="workspace">
+      {area === "my-work" ? <MyWork actions={ownerActions} busy={busy} runAction={runAction} onCreate={createOwnerAction} onUpdate={updateOwnerAction} onDelete={deleteOwnerAction} onOpenAction={openOwnerAction} onOpenTask={openTask} /> : <section className="workspace">
         <aside className={`task-column ${selected ? "has-selection" : ""}`}>
           <div className="task-column-heading">
             <div><p className="eyebrow">Your relay</p><h1>Tasks in motion</h1></div>
@@ -394,14 +394,13 @@ export function Dashboard({
   );
 }
 
-function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefresh, onOpenAction, onOpenTask }: {
+function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onOpenAction, onOpenTask }: {
   actions: OwnerAction[];
   busy: boolean;
   runAction: (action: () => Promise<void>) => Promise<void>;
   onCreate: (input: { title: string; notes?: string; dueAt?: string | null }) => Promise<void>;
   onUpdate: (actionId: string, updates: Record<string, unknown>) => Promise<void>;
   onDelete: (actionId: string) => Promise<void>;
-  onRefresh: () => Promise<void>;
   onOpenAction: (actionId: string) => void;
   onOpenTask: (taskId: string) => void;
 }) {
@@ -434,19 +433,6 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefr
     });
   }
 
-  async function move(action: OwnerAction, direction: -1 | 1) {
-    const index = visible.findIndex((item) => item.id === action.id);
-    const other = visible[index + direction];
-    if (!other) return;
-    const ids = [...actions].sort((a, b) => a.position - b.position).map((item) => item.id);
-    const from = ids.indexOf(action.id); const to = ids.indexOf(other.id);
-    [ids[from], ids[to]] = [ids[to], ids[from]];
-    await runAction(async () => {
-      await requestJson("/api/owner-actions/reorder", { method: "POST", body: JSON.stringify({ actionIds: ids }) });
-      await onRefresh();
-    });
-  }
-
   function startHiding(action: OwnerAction) {
     const startedAt = Date.now();
     const tomorrow = new Date(startedAt + 86400000);
@@ -464,10 +450,10 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefr
     <div className="my-work-heading"><div><p className="eyebrow">Owner actions</p><h1>My Work</h1></div><button className="new-button" onClick={() => { setTitle(""); setNotes(""); setDueAt(""); setComposerOpen(true); }}><Plus size={19} />New action</button></div>
     <div className="filter-strip" aria-label="Filter owner actions">{(["active", "snoozed", "done"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item[0].toUpperCase() + item.slice(1)}<span>{actions.filter((action) => ownerActionFilter(action) === item).length}</span></button>)}</div>
     <label className="owner-action-search"><Search size={17} /><span className="sr-only">Search My Work</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search actions and linked tasks" /></label>
-    <div className="owner-action-list">{visible.length ? visible.map((action, index) => <article className="owner-action-card" key={action.id}>
+    <div className="owner-action-list">{visible.length ? visible.map((action) => <article className="owner-action-card" key={action.id}>
       <button className="completion-button" aria-label={action.status === "done" ? `Reopen ${action.title}` : `Complete ${action.title}`} disabled={busy} onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "done" ? "todo" : "done" }))}>{action.status === "done" ? <Check size={18} /> : <CircleDot size={18} />}</button>
       <div className="owner-action-copy"><button className="owner-action-title" onClick={() => onOpenAction(action.id)}><h2>{action.title}</h2></button>{action.notes && <p>{action.notes}</p>}<div className="action-meta"><span className={`owner-status ${action.status}`}>{ownerActionStatusLabel(action)}</span>{filter === "snoozed" && action.snoozed_until && <span><Clock3 size={13} />Returns {formatDate(action.snoozed_until)}</span>}{action.due_at && <span className={new Date(action.due_at) <= new Date() && action.status !== "done" ? "overdue" : ""}><CalendarDays size={13} />Due {formatDate(action.due_at)}</span>}<span>{action.owner_action_tasks.length} linked {action.owner_action_tasks.length === 1 ? "task" : "tasks"}</span></div>{action.owner_action_tasks.length > 0 && <div className="linked-task-titles">{action.owner_action_tasks.map((link) => link.tasks && <button key={link.task_id} onClick={() => onOpenTask(link.task_id)}>{link.tasks.title}</button>)}</div>}</div>
-      <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}<button disabled={index === 0} aria-label="Move up" onClick={() => move(action, -1)}>↑</button><button disabled={index === visible.length - 1} aria-label="Move down" onClick={() => move(action, 1)}>↓</button>{filter === "snoozed" ? <button onClick={() => runAction(() => onUpdate(action.id, { snoozedUntil: null }))}>Show now</button> : action.status !== "done" && <button disabled={Boolean(action.due_at && new Date(action.due_at) <= new Date())} title={action.due_at && new Date(action.due_at) <= new Date() ? "This action is already due and must stay visible." : undefined} onClick={() => startHiding(action)}>Hide until</button>}<button className="danger-control" aria-label={`Delete ${action.title}`} onClick={() => remove(action)}><Trash2 size={13} /></button>{filter !== "snoozed" && action.status !== "done" && action.due_at && new Date(action.due_at) <= new Date() && <span className="hide-disabled-note">Already due — cannot be hidden.</span>}</div>
+      <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}{filter === "snoozed" ? <button onClick={() => runAction(() => onUpdate(action.id, { snoozedUntil: null }))}>Show now</button> : action.status !== "done" && <button disabled={Boolean(action.due_at && new Date(action.due_at) <= new Date())} title={action.due_at && new Date(action.due_at) <= new Date() ? "This action is already due and must stay visible." : undefined} onClick={() => startHiding(action)}>Hide until</button>}<button className="danger-control" aria-label={`Delete ${action.title}`} onClick={() => remove(action)}><Trash2 size={13} /></button>{filter !== "snoozed" && action.status !== "done" && action.due_at && new Date(action.due_at) <= new Date() && <span className="hide-disabled-note">Already due — cannot be hidden.</span>}</div>
     </article>) : <div className="empty-state"><div className="empty-orbit"><UserRoundCheck size={24} /></div><h2>{query ? "No actions match your search." : "Nothing needs you right now."}</h2></div>}</div>
     {composerOpen && <div className="modal-backdrop" onMouseDown={() => setComposerOpen(false)}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">My Work</p><h2 id="new-action-title">New action</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div><form onSubmit={create}><label htmlFor="owner-action-title">Action title</label><input id="owner-action-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={160} autoFocus /><label htmlFor="owner-action-notes">Notes (optional)</label><textarea id="owner-action-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={20000} rows={5} /><label htmlFor="owner-action-due">Due date (optional)</label><input id="owner-action-due" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><button className="primary-button" disabled={busy}>Create action<ArrowRight size={18} /></button></form></section></div>}
     {snoozing && <div className="modal-backdrop" onMouseDown={() => setSnoozing(null)}><section className="sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="hide-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">Remind me on</p><h2 id="hide-action-title">Hide {snoozing.title}</h2></div><button className="icon-button" onClick={() => setSnoozing(null)}><X size={20} /></button></div><form onSubmit={(event) => { event.preventDefault(); void runAction(async () => { await onUpdate(snoozing.id, { snoozedUntil: snoozeUntil }); setSnoozing(null); }); }}><p className="sheet-intro">The due date will not change. This action returns to Active at the selected time or when it is due, whichever comes first.</p><div className="hide-quick-choices"><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(1)}>Tomorrow</button><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 7 * 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(7)}>Next week</button></div><label htmlFor="hide-until">Pick date and time</label><input id="hide-until" type="datetime-local" min={toLocalDateTime(new Date(hideStartedAt).toISOString())} max={toLocalDateTime(snoozing.due_at)} value={snoozeUntil} onChange={(event) => setSnoozeUntil(event.target.value)} required autoFocus /><button className="primary-button" disabled={busy}>Hide action<Clock3 size={18} /></button></form></section></div>}

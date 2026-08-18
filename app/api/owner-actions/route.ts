@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const { data, error, count } = await supabase
       .from("owner_actions")
       .select(ownerActionSelect, { count: "exact" })
-      .order("position", { ascending: true })
+      .order("due_at", { ascending: true, nullsFirst: false })
       .range(from, from + pageSize - 1);
     if (error) throw error;
     return NextResponse.json({ actions: data ?? [], page, pageSize, total: count ?? 0 });
@@ -30,10 +30,9 @@ export async function POST(request: Request) {
     if (!title) throw new ApiError("Action title is required.");
     if (title.length > 160) throw new ApiError("Action title must be 160 characters or fewer.");
     if (notes.length > 20000) throw new ApiError("Notes must be 20,000 characters or fewer.");
-    const { data: last } = await supabase.from("owner_actions").select("position").order("position", { ascending: false }).limit(1).maybeSingle();
     const { data, error } = await supabase
       .from("owner_actions")
-      .insert({ user_id: user.id, title, notes, due_at: optionalDate(body.dueAt, "Due date"), position: (last?.position ?? -1) + 1 })
+      .insert({ user_id: user.id, title, notes, due_at: optionalDate(body.dueAt, "Due date") })
       .select(ownerActionSelect)
       .single();
     if (error) throw error;

@@ -36,7 +36,7 @@ export default async function Home() {
         id,title,notes,status,due_at,snoozed_until,position,completed_at,created_at,updated_at,
         owner_action_tasks(task_id,tasks(id,title,status))
       `)
-      .order("position", { ascending: true }),
+      .order("due_at", { ascending: true, nullsFirst: false }),
   ]);
 
   return (

@@ -34,10 +34,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     } catch (error) {
       throw new ApiError(error instanceof Error ? error.message : "Invalid action date.");
     }
-    if ("position" in body) {
-      if (!Number.isSafeInteger(body.position) || body.position < 0) throw new ApiError("Position must be a non-negative integer.");
-      updates.position = body.position;
-    }
     if (!Object.keys(updates).length) throw new ApiError("No supported changes supplied.");
     const { data, error } = await supabase.from("owner_actions").update(updates).eq("id", actionId).select(ownerActionSelect).single();
     if (error || !data) throw new ApiError("Action not found.", 404);

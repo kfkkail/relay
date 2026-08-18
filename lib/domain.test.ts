@@ -44,7 +44,7 @@ describe("Owner action rules", () => {
   });
 
   it("relabels waiting without changing its stored value", () => {
-    expect(statusLabel("waiting")).toBe("Needs attention");
+    expect(statusLabel("waiting")).toBe("Review");
   });
 });
 

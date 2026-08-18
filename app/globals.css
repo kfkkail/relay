@@ -32,6 +32,7 @@ button, input, textarea { font: inherit; }
 button { color: inherit; }
 
 button, a { -webkit-tap-highlight-color: transparent; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
 .eyebrow {
   margin: 0 0 8px;
@@ -325,6 +326,9 @@ textarea { resize: vertical; }
 .my-work-view { max-width: 980px; min-height: calc(100dvh - 64px); margin: 0 auto; padding: 28px 0 80px; }
 .my-work-heading { display: flex; align-items: flex-end; justify-content: space-between; padding: 0 18px 22px; }
 .my-work-heading h1 { margin: 0; font-size: clamp(32px, 7vw, 48px); letter-spacing: -.055em; }
+.owner-action-search { display: flex; align-items: center; gap: 9px; margin: 0 18px 14px; border: 1px solid var(--line); border-radius: 13px; padding: 0 12px; color: var(--ink-soft); background: var(--surface); }
+.owner-action-search:focus-within { border-color: var(--forest); box-shadow: 0 0 0 3px var(--forest-soft); }
+.owner-action-search input { width: 100%; border: 0; outline: 0; padding: 11px 0; color: var(--ink); background: transparent; }
 .owner-action-list { display: grid; gap: 10px; padding: 0 12px; }
 .owner-action-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 13px; border: 1px solid rgba(23,53,46,.12); border-radius: 18px; padding: 16px; background: var(--surface); }
 .completion-button { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--forest); background: #fff; cursor: pointer; }
@@ -339,6 +343,8 @@ textarea { resize: vertical; }
 .linked-task-titles { margin-top: 8px; color: var(--blue); font-size: 12px; }
 .action-controls { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
 .action-controls button, .task-actions-list button { border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.action-controls .danger-control { display: grid; place-items: center; color: #9a3f2d; }
+.small-sheet { max-width: 520px; }
 .your-actions-section { border-top: 1px solid var(--line); padding-bottom: 20px; background: #f7f5ee; }
 .task-actions-list { display: grid; gap: 7px; padding: 0 20px; }
 .task-actions-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: #fff; }
@@ -403,6 +409,7 @@ textarea { resize: vertical; }
   .artifact-list { padding-right: 42px; padding-left: 42px; }
   .my-work-view { min-height: calc(100dvh - 72px); padding-top: 42px; }
   .my-work-heading, .my-work-view > .filter-strip { padding-right: 28px; padding-left: 28px; }
+  .owner-action-search { margin-right: 28px; margin-left: 28px; }
   .owner-action-list { padding-right: 20px; padding-left: 20px; }
   .owner-action-card { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; padding: 18px; }
   .action-controls { grid-column: 3; justify-content: flex-end; }

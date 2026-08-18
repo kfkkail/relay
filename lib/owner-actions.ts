@@ -10,3 +10,9 @@ export function optionalDate(value: unknown, field: string) {
   }
   return new Date(value).toISOString();
 }
+
+export function futureOptionalDate(value: unknown, field: string, now = new Date()) {
+  const date = optionalDate(value, field);
+  if (date && new Date(date) <= now) throw new Error(`${field} must be in the future.`);
+  return date;
+}

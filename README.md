@@ -43,7 +43,8 @@ remains available for usage-based API billing.
 
 The remaining cloud steps require your authorization:
 
-1. Create a Supabase project and run [`supabase/migrations/0001_initial.sql`](supabase/migrations/0001_initial.sql).
+1. Create a Supabase project and deploy the committed migrations as described
+   under [Database migrations](#database-migrations).
 2. Run `npm run dev`, or deploy the repository to Vercel using the three web
    values written to `.env.local`.
 3. Add the deployed URL and `/auth/callback` URL to the Supabase Auth redirect
@@ -80,6 +81,36 @@ logs with `npm run worker:service:uninstall`.
 Connect this GitHub repository to Vercel and configure the web environment
 variables there. GitHub pushes and pull requests drive Vercel deployments;
 Relay does not call Vercel APIs directly.
+
+### Database migrations
+
+Create schema changes with `supabase migration new <description>` and commit the
+generated timestamped migration. Do not edit a migration after it has reached
+production, and do not make production schema changes through Supabase Studio
+or the SQL Editor. Use a new forward-fix migration instead.
+
+Pull requests that change `supabase/config.toml` or `supabase/migrations/` reset
+a fresh local Supabase database, lint its schema, and run the application tests.
+Merges to `main` deploy pending migrations through the protected GitHub
+`production` environment. Vercel deploys independently, so migrations and
+application changes must remain backward compatible using an expand/contract
+rollout when sequencing matters.
+
+Before enabling production deployment, create the `production` GitHub
+environment and add these environment secrets:
+
+- `SUPABASE_ACCESS_TOKEN`
+- `SUPABASE_DB_PASSWORD`
+- `SUPABASE_PROJECT_ID`
+
+Require the migration validation check in branch protection. An environment
+approval rule is recommended for the first few production migrations. The
+deployment workflow can also be started manually for recovery.
+
+For an existing project, first run `supabase migration list` against production
+and confirm its schema and migration history match the committed migrations.
+Only use `supabase migration repair` after separately verifying that the schema
+already contains the migration; repair changes migration tracking, not schema.
 
 ## Commands
 

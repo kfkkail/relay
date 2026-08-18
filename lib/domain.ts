@@ -1,4 +1,4 @@
-import type { Run, Task, TaskStatus } from "@/lib/types";
+import type { OwnerAction, Run, Task, TaskStatus } from "@/lib/types";
 
 export const ACTIVE_RUN_STATUSES = new Set(["queued", "working"]);
 
@@ -33,7 +33,29 @@ export function statusLabel(status: TaskStatus) {
     inbox: "Inbox",
     ready: "Ready",
     working: "Working",
-    waiting: "Waiting",
+    waiting: "Needs attention",
     done: "Done",
   }[status];
+}
+
+export type OwnerActionFilter = "active" | "snoozed" | "done";
+
+export function ownerActionFilter(action: OwnerAction, now = new Date()): OwnerActionFilter {
+  if (action.status === "done") return "done";
+  if (action.snoozed_until && new Date(action.snoozed_until) > now) return "snoozed";
+  return "active";
+}
+
+export function compareOwnerActions(left: OwnerAction, right: OwnerAction, now = new Date()) {
+  const dueRank = (action: OwnerAction) => {
+    if (!action.due_at) return 2;
+    return new Date(action.due_at) < now ? 0 : 1;
+  };
+  const rankDifference = dueRank(left) - dueRank(right);
+  if (rankDifference) return rankDifference;
+  if (left.due_at && right.due_at) {
+    const dueDifference = new Date(left.due_at).getTime() - new Date(right.due_at).getTime();
+    if (dueDifference) return dueDifference;
+  }
+  return left.position - right.position;
 }

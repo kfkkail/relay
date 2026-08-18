@@ -3,7 +3,7 @@ import { SetupPanel } from "@/components/setup-panel";
 import { SignIn } from "@/components/sign-in";
 import { hasPublicSupabaseConfig } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
-import type { Task, Worker } from "@/lib/types";
+import type { OwnerAction, Task, Worker } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export default async function Home() {
   } = await supabase.auth.getUser();
   if (!user) return <SignIn />;
 
-  const [{ data: tasks }, { data: workers }] = await Promise.all([
+  const [{ data: tasks }, { data: workers }, { data: ownerActions }] = await Promise.all([
     supabase
       .from("tasks")
       .select(`
@@ -30,12 +30,20 @@ export default async function Home() {
       .select("id,name,last_seen_at,created_at")
       .is("revoked_at", null)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("owner_actions")
+      .select(`
+        id,title,notes,status,due_at,snoozed_until,position,completed_at,created_at,updated_at,
+        owner_action_tasks(task_id,tasks(id,title,status))
+      `)
+      .order("position", { ascending: true }),
   ]);
 
   return (
     <Dashboard
       initialTasks={(tasks ?? []) as Task[]}
       initialWorkers={(workers ?? []) as Worker[]}
+      initialOwnerActions={(ownerActions ?? []) as unknown as OwnerAction[]}
       userEmail={user.email ?? "account"}
     />
   );

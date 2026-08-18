@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
   Check,
   ChevronRight,
   CircleDot,
@@ -16,11 +17,12 @@ import {
   RefreshCw,
   Send,
   Sparkles,
+  UserRoundCheck,
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { buildFollowUpInstructions, latestCompletedRun, statusLabel } from "@/lib/domain";
-import type { Task, TaskStatus, Worker } from "@/lib/types";
+import { buildFollowUpInstructions, compareOwnerActions, latestCompletedRun, ownerActionFilter, statusLabel } from "@/lib/domain";
+import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
 
@@ -30,14 +32,18 @@ const emptyDraft: Draft = { title: "", instructions: "", parentTaskId: null };
 export function Dashboard({
   initialTasks,
   initialWorkers,
+  initialOwnerActions,
   userEmail,
 }: {
   initialTasks: Task[];
   initialWorkers: Worker[];
+  initialOwnerActions: OwnerAction[];
   userEmail: string;
 }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
+  const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
+  const [area, setArea] = useState<"tasks" | "my-work">("tasks");
   const [filter, setFilter] = useState<TaskStatus>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -65,6 +71,36 @@ export function Dashboard({
       // Keep the last good local view during a temporary network failure.
     }
   }, []);
+
+  const refreshOwnerActions = useCallback(async () => {
+    const body = await requestJson("/api/owner-actions?pageSize=100");
+    setOwnerActions(body.actions);
+  }, []);
+
+  async function createOwnerAction(input: { title: string; notes?: string; dueAt?: string | null; taskId?: string }) {
+    const body = await requestJson("/api/owner-actions", { method: "POST", body: JSON.stringify(input) });
+    let action = body.action as OwnerAction;
+    if (input.taskId) {
+      const linked = await requestJson(`/api/owner-actions/${action.id}/tasks`, { method: "POST", body: JSON.stringify({ taskId: input.taskId }) });
+      action = linked.action;
+    }
+    setOwnerActions((current) => [...current, action]);
+  }
+
+  async function updateOwnerAction(actionId: string, updates: Record<string, unknown>) {
+    const body = await requestJson(`/api/owner-actions/${actionId}`, { method: "PATCH", body: JSON.stringify(updates) });
+    setOwnerActions((current) => current.map((action) => action.id === actionId ? body.action : action));
+  }
+
+  async function linkOwnerAction(actionId: string, taskId: string) {
+    const body = await requestJson(`/api/owner-actions/${actionId}/tasks`, { method: "POST", body: JSON.stringify({ taskId }) });
+    setOwnerActions((current) => current.map((action) => action.id === actionId ? body.action : action));
+  }
+
+  async function unlinkOwnerAction(actionId: string, taskId: string) {
+    await requestJson(`/api/owner-actions/${actionId}/tasks/${taskId}`, { method: "DELETE" });
+    await refreshOwnerActions();
+  }
 
   useEffect(() => {
     if (!hasLiveRun) return;
@@ -169,6 +205,7 @@ export function Dashboard({
     <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><span className="brand-mark">R</span><span>Relay</span></div>
+        <nav className="area-nav" aria-label="Main navigation"><button className={area === "tasks" ? "active" : ""} onClick={() => setArea("tasks")}>Tasks</button><button className={area === "my-work" ? "active" : ""} onClick={() => setArea("my-work")}>My Work</button></nav>
         <div className="topbar-actions">
           <button className="icon-button" aria-label="Worker setup" onClick={() => setWorkerOpen(true)}><Laptop size={20} /></button>
           <form action="/auth/sign-out" method="post">
@@ -177,7 +214,7 @@ export function Dashboard({
         </div>
       </header>
 
-      <section className="workspace">
+      {area === "my-work" ? <MyWork actions={ownerActions} busy={busy} runAction={runAction} onCreate={createOwnerAction} onUpdate={updateOwnerAction} onRefresh={refreshOwnerActions} /> : <section className="workspace">
         <aside className={`task-column ${selected ? "has-selection" : ""}`}>
           <div className="task-column-heading">
             <div><p className="eyebrow">Your relay</p><h1>Tasks in motion</h1></div>
@@ -227,12 +264,17 @@ export function Dashboard({
               onAccept={() => acceptTask(selected.id)}
               onFollowUp={() => startFollowUp(selected)}
               onEdit={() => startEditing(selected)}
+              ownerActions={ownerActions}
+              onCreateOwnerAction={(title) => runAction(() => createOwnerAction({ title, taskId: selected.id }))}
+              onUpdateOwnerAction={(actionId, updates) => runAction(() => updateOwnerAction(actionId, updates))}
+              onLinkOwnerAction={(actionId) => runAction(() => linkOwnerAction(actionId, selected.id))}
+              onUnlinkOwnerAction={(actionId) => runAction(() => unlinkOwnerAction(actionId, selected.id))}
             />
           ) : (
             <div className="detail-placeholder"><CircleDot size={30} /><h2>Select a task</h2><p>Its durable context and run results will appear here.</p></div>
           )}
         </section>
-      </section>
+      </section>}
 
       {error && <div className="toast" role="alert">{error}<button onClick={() => setError("")} aria-label="Dismiss"><X size={16} /></button></div>}
 
@@ -287,7 +329,55 @@ export function Dashboard({
   );
 }
 
-function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollowUp, onEdit }: {
+function MyWork({ actions, busy, runAction, onCreate, onUpdate, onRefresh }: {
+  actions: OwnerAction[];
+  busy: boolean;
+  runAction: (action: () => Promise<void>) => Promise<void>;
+  onCreate: (input: { title: string; notes?: string; dueAt?: string | null }) => Promise<void>;
+  onUpdate: (actionId: string, updates: Record<string, unknown>) => Promise<void>;
+  onRefresh: () => Promise<void>;
+}) {
+  const [filter, setFilter] = useState<"active" | "snoozed" | "done">("active");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const visible = useMemo(() => actions.filter((action) => ownerActionFilter(action) === filter).sort((a, b) => compareOwnerActions(a, b)), [actions, filter]);
+
+  async function create(event: FormEvent) {
+    event.preventDefault();
+    await runAction(async () => {
+      await onCreate({ title, notes, dueAt: dueAt || null });
+      setTitle(""); setNotes(""); setDueAt(""); setComposerOpen(false);
+    });
+  }
+
+  async function move(action: OwnerAction, direction: -1 | 1) {
+    const index = visible.findIndex((item) => item.id === action.id);
+    const other = visible[index + direction];
+    if (!other) return;
+    const ids = [...actions].sort((a, b) => a.position - b.position).map((item) => item.id);
+    const from = ids.indexOf(action.id); const to = ids.indexOf(other.id);
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    await runAction(async () => {
+      await requestJson("/api/owner-actions/reorder", { method: "POST", body: JSON.stringify({ actionIds: ids }) });
+      await onRefresh();
+    });
+  }
+
+  return <section className="my-work-view">
+    <div className="my-work-heading"><div><p className="eyebrow">Owner actions</p><h1>My Work</h1></div><button className="new-button" onClick={() => setComposerOpen(true)}><Plus size={19} />New action</button></div>
+    <div className="filter-strip" aria-label="Filter owner actions">{(["active", "snoozed", "done"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item[0].toUpperCase() + item.slice(1)}<span>{actions.filter((action) => ownerActionFilter(action) === item).length}</span></button>)}</div>
+    <div className="owner-action-list">{visible.length ? visible.map((action, index) => <article className="owner-action-card" key={action.id}>
+      <button className="completion-button" aria-label={action.status === "done" ? `Reopen ${action.title}` : `Complete ${action.title}`} disabled={busy} onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "done" ? "todo" : "done" }))}>{action.status === "done" ? <Check size={18} /> : <CircleDot size={18} />}</button>
+      <div className="owner-action-copy"><h2>{action.title}</h2>{action.notes && <p>{action.notes}</p>}<div className="action-meta"><span className={`owner-status ${action.status}`}>{action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done"}</span>{action.due_at && <span className={new Date(action.due_at) < new Date() && action.status !== "done" ? "overdue" : ""}><CalendarDays size={13} />{formatShortDate(action.due_at)}</span>}<span>{action.owner_action_tasks.length} linked {action.owner_action_tasks.length === 1 ? "task" : "tasks"}</span></div>{action.owner_action_tasks.length > 0 && <div className="linked-task-titles">{action.owner_action_tasks.map((link) => link.tasks?.title).filter(Boolean).join(" · ")}</div>}</div>
+      <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}<button disabled={index === 0} aria-label="Move up" onClick={() => move(action, -1)}>↑</button><button disabled={index === visible.length - 1} aria-label="Move down" onClick={() => move(action, 1)}>↓</button><button onClick={() => runAction(() => onUpdate(action.id, { snoozedUntil: filter === "snoozed" ? null : new Date(Date.now() + 86400000).toISOString() }))}>{filter === "snoozed" ? "Unsnooze" : "Tomorrow"}</button></div>
+    </article>) : <div className="empty-state"><div className="empty-orbit"><UserRoundCheck size={24} /></div><h2>Nothing needs you right now.</h2></div>}</div>
+    {composerOpen && <div className="modal-backdrop" onMouseDown={() => setComposerOpen(false)}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">My Work</p><h2 id="new-action-title">New action</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div><form onSubmit={create}><label htmlFor="owner-action-title">Action title</label><input id="owner-action-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={160} autoFocus /><label htmlFor="owner-action-notes">Notes (optional)</label><textarea id="owner-action-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={20000} rows={5} /><label htmlFor="owner-action-due">Due date (optional)</label><input id="owner-action-due" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><button className="primary-button" disabled={busy}>Create action<ArrowRight size={18} /></button></form></section></div>}
+  </section>;
+}
+
+function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollowUp, onEdit, ownerActions, onCreateOwnerAction, onUpdateOwnerAction, onLinkOwnerAction, onUnlinkOwnerAction }: {
   task: Task;
   busy: boolean;
   onBack: () => void;
@@ -296,11 +386,18 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
   onAccept: () => void;
   onFollowUp: () => void;
   onEdit: () => void;
+  ownerActions: OwnerAction[];
+  onCreateOwnerAction: (title: string) => void;
+  onUpdateOwnerAction: (actionId: string, updates: Record<string, unknown>) => void;
+  onLinkOwnerAction: (actionId: string) => void;
+  onUnlinkOwnerAction: (actionId: string) => void;
 }) {
   const [feedback, setFeedback] = useState("");
   const latest = latestCompletedRun(task.runs);
   const active = task.runs.find((run) => run.status === "working" || run.status === "queued");
   const failed = [...task.runs].sort((a, b) => b.attempt - a.attempt).find((run) => run.status === "failed");
+  const linkedActions = ownerActions.filter((action) => action.owner_action_tasks.some((link) => link.task_id === task.id));
+  const availableActions = ownerActions.filter((action) => action.status !== "done" && !linkedActions.includes(action));
 
   return (
     <div className="detail-content">
@@ -311,14 +408,17 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
 
       <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown>{task.instructions}</ReactMarkdown></div></section>
 
+      <section className="your-actions-section"><div className="section-label"><span>Your actions</span><button className="document-edit-button" disabled={busy} onClick={() => onCreateOwnerAction(`Action for ${task.title}`)}><Plus size={14} />Create linked</button></div>{linkedActions.length ? <div className="task-actions-list">{linkedActions.map((action) => <div key={action.id}><div><strong>{action.title}</strong><span>{action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done"}</span></div><div><button onClick={() => onUpdateOwnerAction(action.id, { status: action.status === "done" ? "todo" : "done" })}>{action.status === "done" ? "Reopen" : "Complete"}</button><button onClick={() => onUnlinkOwnerAction(action.id)}>Unlink</button></div></div>)}</div> : <p className="no-actions">No owner actions are linked to this task.</p>}{availableActions.length > 0 && <label className="link-existing">Link existing action<select defaultValue="" onChange={(event) => { if (event.target.value) onLinkOwnerAction(event.target.value); event.target.value = ""; }}><option value="" disabled>Choose an action…</option>{availableActions.map((action) => <option key={action.id} value={action.id}>{action.title}</option>)}</select></label>}</section>
+
       {active && <section className="run-status-card"><div className="run-spinner"><RefreshCw size={22} /></div><div><p className="eyebrow">Attempt {active.attempt}</p><h2>{active.status === "queued" ? "Waiting for your laptop" : "Worker is on it"}</h2><p>{active.status === "queued" ? "This run stays safely queued while your worker is offline." : "The result will appear here when the worker finishes."}</p></div></section>}
 
-      {failed && !active && !latest && <section className="error-card"><p className="eyebrow">Attempt {failed.attempt} failed</p><h2>The worker could not finish this run.</h2><p>{failed.error}</p><button className="secondary-button" disabled={busy} onClick={onQueue}><RefreshCw size={17} />Try again</button></section>}
+      {failed && !active && !latest && <section className="error-card"><p className="eyebrow">Attempt {failed.attempt} failed</p><h2>The worker could not finish this run.</h2><p>{failed.error}</p><div className="handoff-actions"><button className="secondary-button" disabled={busy} onClick={onQueue}><RefreshCw size={17} />Try again</button><button className="secondary-button" disabled={busy} onClick={() => onCreateOwnerAction(`Decide whether to retry ${task.title}`)}><UserRoundCheck size={17} />Add to My Work</button></div></section>}
 
       {latest && task.status !== "done" && (
         <section className="result-section">
           <div className="section-label"><span>Result · attempt {latest.attempt}</span><span>{latest.finished_at ? formatDate(latest.finished_at) : "Ready to review"}</span></div>
           <div className="markdown result-markdown"><ReactMarkdown>{latest.result_markdown}</ReactMarkdown></div>
+          <div className="result-handoff"><button className="secondary-button compact" disabled={busy} onClick={() => onCreateOwnerAction(`Review ${task.title}`)}><UserRoundCheck size={17} />Add to My Work</button></div>
           {latest.result_artifacts.length > 0 && <div className="artifact-list">{latest.result_artifacts.map((artifact, index) => <a key={`${artifact.type}-${index}`} href={artifact.url} target="_blank" rel="noreferrer"><span>{artifact.type.replace("_", " ")}</span><strong>{artifact.label}</strong><ChevronRight size={17} /></a>)}</div>}
           <div className="review-actions"><label htmlFor="feedback">Feedback for another run</label><textarea id="feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="What should change or be explored next?" rows={4} /><div><button className="secondary-button" disabled={busy || !feedback.trim()} onClick={() => onFeedback(feedback)}><RefreshCw size={17} />Run again</button><button className="accept-button" disabled={busy} onClick={onAccept}><Check size={18} />Accept</button></div></div>
         </section>
@@ -352,6 +452,10 @@ function relativeDate(value: string) {
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
 }
 
 async function requestJson(path: string, init?: RequestInit) {

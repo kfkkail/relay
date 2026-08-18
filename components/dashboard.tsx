@@ -442,6 +442,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
       <div className="mobile-detail-bar"><button className="back-button" onClick={onBack}><ArrowLeft size={18} />Tasks</button><StatusPill status={task.status} /></div>
       <div className="detail-heading"><div><StatusPill status={task.status} /><h1>{task.title}</h1><p>Updated {formatDate(task.updated_at)}{task.parent_task_id ? " · Follow-up task" : ""}</p></div>
         {(task.status === "inbox" || (task.status === "waiting" && !latest)) && <button className="primary-button compact" disabled={busy} onClick={onQueue}><Send size={17} />Queue run</button>}
+        {task.status === "done" && task.accepted_result && <button className="secondary-button compact" disabled={busy} onClick={onFollowUp}><Plus size={17} />Follow up</button>}
       </div>
 
       <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown>{task.instructions}</ReactMarkdown></div></section>
@@ -462,7 +463,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
         </section>
       )}
 
-      {task.status === "done" && task.accepted_result && <section className="result-section accepted"><div className="accepted-heading"><div><Check size={18} /><span>Accepted result</span></div><button className="secondary-button compact" onClick={onFollowUp}><Plus size={17} />Follow-up</button></div><div className="markdown result-markdown"><ReactMarkdown>{task.accepted_result}</ReactMarkdown></div></section>}
+      {task.status === "done" && task.accepted_result && <section className="result-section accepted"><div className="accepted-heading"><div><Check size={18} /><span>Accepted result</span></div></div><div className="markdown result-markdown"><ReactMarkdown>{task.accepted_result}</ReactMarkdown></div></section>}
     </div>
   );
 }

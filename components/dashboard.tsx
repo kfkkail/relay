@@ -51,6 +51,11 @@ export function Dashboard({
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [selectedOwnerActionId, setSelectedOwnerActionId] = useState<string | null>(null);
+  const [editingOwnerAction, setEditingOwnerAction] = useState(false);
+  const [ownerActionTitle, setOwnerActionTitle] = useState("");
+  const [ownerActionNotes, setOwnerActionNotes] = useState("");
+  const [ownerActionDueAt, setOwnerActionDueAt] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
   const [workerOpen, setWorkerOpen] = useState(false);
@@ -63,6 +68,7 @@ export function Dashboard({
     [filter, tasks],
   );
   const selected = tasks.find((task) => task.id === selectedId) ?? null;
+  const selectedOwnerAction = ownerActions.find((action) => action.id === selectedOwnerActionId) ?? null;
   const hasLiveRun = tasks.some((task) => task.status === "ready" || task.status === "working");
 
   const refreshTasks = useCallback(async () => {
@@ -154,6 +160,37 @@ export function Dashboard({
     setEditInstructions(task.instructions);
   }
 
+  function openTask(taskId: string) {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) return;
+    setArea("tasks");
+    setFilter(task.status);
+    setSelectedId(task.id);
+    setSelectedOwnerActionId(null);
+  }
+
+  function openOwnerAction(actionId: string) {
+    setSelectedOwnerActionId(actionId);
+    setEditingOwnerAction(false);
+  }
+
+  function startEditingOwnerAction() {
+    if (!selectedOwnerAction) return;
+    setOwnerActionTitle(selectedOwnerAction.title);
+    setOwnerActionNotes(selectedOwnerAction.notes);
+    setOwnerActionDueAt(toLocalDateTime(selectedOwnerAction.due_at));
+    setEditingOwnerAction(true);
+  }
+
+  async function saveOwnerAction(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedOwnerAction) return;
+    await runAction(async () => {
+      await updateOwnerAction(selectedOwnerAction.id, { title: ownerActionTitle, notes: ownerActionNotes, dueAt: ownerActionDueAt || null });
+      setEditingOwnerAction(false);
+    });
+  }
+
   async function updateTask(event: FormEvent) {
     event.preventDefault();
     if (!editingTask) return;
@@ -221,7 +258,7 @@ export function Dashboard({
         </div>
       </header>
 
-      {area === "my-work" ? <MyWork actions={ownerActions} busy={busy} runAction={runAction} onCreate={createOwnerAction} onUpdate={updateOwnerAction} onDelete={deleteOwnerAction} onRefresh={refreshOwnerActions} /> : <section className="workspace">
+      {area === "my-work" ? <MyWork actions={ownerActions} busy={busy} runAction={runAction} onCreate={createOwnerAction} onUpdate={updateOwnerAction} onDelete={deleteOwnerAction} onRefresh={refreshOwnerActions} onOpenAction={openOwnerAction} onOpenTask={openTask} /> : <section className="workspace">
         <aside className={`task-column ${selected ? "has-selection" : ""}`}>
           <div className="task-column-heading">
             <div><p className="eyebrow">Your relay</p><h1>Tasks in motion</h1></div>
@@ -276,6 +313,7 @@ export function Dashboard({
               onUpdateOwnerAction={(actionId, updates) => runAction(() => updateOwnerAction(actionId, updates))}
               onLinkOwnerAction={(actionId) => runAction(() => linkOwnerAction(actionId, selected.id))}
               onUnlinkOwnerAction={(actionId) => runAction(() => unlinkOwnerAction(actionId, selected.id))}
+              onOpenOwnerAction={openOwnerAction}
             />
           ) : (
             <div className="detail-placeholder"><CircleDot size={30} /><h2>Select a task</h2><p>Its durable context and run results will appear here.</p></div>
@@ -317,6 +355,25 @@ export function Dashboard({
         </div>
       )}
 
+      {selectedOwnerAction && (
+        <div className="modal-backdrop" onMouseDown={() => setSelectedOwnerActionId(null)}>
+          <section className="sheet owner-action-sheet" role="dialog" aria-modal="true" aria-labelledby="owner-action-detail-title" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="sheet-heading"><div><p className="eyebrow">Owner action</p><h2 id="owner-action-detail-title">{editingOwnerAction ? "Edit action" : selectedOwnerAction.title}</h2></div><button className="icon-button" onClick={() => setSelectedOwnerActionId(null)} aria-label="Close action"><X size={20} /></button></div>
+            {editingOwnerAction ? <form onSubmit={saveOwnerAction}>
+              <label htmlFor="detail-owner-action-title">Action title</label><input id="detail-owner-action-title" value={ownerActionTitle} onChange={(event) => setOwnerActionTitle(event.target.value)} required maxLength={160} autoFocus />
+              <label htmlFor="detail-owner-action-notes">Notes (optional)</label><textarea id="detail-owner-action-notes" value={ownerActionNotes} onChange={(event) => setOwnerActionNotes(event.target.value)} maxLength={20000} rows={5} />
+              <label htmlFor="detail-owner-action-due">Due date (optional)</label><input id="detail-owner-action-due" type="datetime-local" value={ownerActionDueAt} onChange={(event) => setOwnerActionDueAt(event.target.value)} />
+              <div className="edit-actions"><button type="button" className="secondary-button" onClick={() => setEditingOwnerAction(false)}>Cancel</button><button className="primary-button" disabled={busy}>Save changes<Check size={18} /></button></div>
+            </form> : <div className="owner-action-detail">
+              <div className="action-meta"><span className={`owner-status ${selectedOwnerAction.status}`}>{ownerActionStatusLabel(selectedOwnerAction)}</span>{selectedOwnerAction.due_at && <span><CalendarDays size={13} />Due {formatDate(selectedOwnerAction.due_at)}</span>}</div>
+              <section><h3>Notes</h3><p>{selectedOwnerAction.notes || "No notes added."}</p></section>
+              <section><h3>Linked tasks</h3>{selectedOwnerAction.owner_action_tasks.length ? <div className="owner-action-links">{selectedOwnerAction.owner_action_tasks.map((link) => link.tasks && <button key={link.task_id} onClick={() => openTask(link.task_id)}>{link.tasks.title}<ChevronRight size={16} /></button>)}</div> : <p>No linked tasks.</p>}</section>
+              <button className="primary-button" disabled={busy} onClick={startEditingOwnerAction}><Pencil size={17} />Edit action</button>
+            </div>}
+          </section>
+        </div>
+      )}
+
       {workerOpen && (
         <div className="modal-backdrop" onMouseDown={() => setWorkerOpen(false)}>
           <section className="sheet worker-sheet" role="dialog" aria-modal="true" aria-labelledby="worker-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -336,7 +393,7 @@ export function Dashboard({
   );
 }
 
-function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefresh }: {
+function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefresh, onOpenAction, onOpenTask }: {
   actions: OwnerAction[];
   busy: boolean;
   runAction: (action: () => Promise<void>) => Promise<void>;
@@ -344,6 +401,8 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefr
   onUpdate: (actionId: string, updates: Record<string, unknown>) => Promise<void>;
   onDelete: (actionId: string) => Promise<void>;
   onRefresh: () => Promise<void>;
+  onOpenAction: (actionId: string) => void;
+  onOpenTask: (taskId: string) => void;
 }) {
   const [filter, setFilter] = useState<"active" | "snoozed" | "done">("active");
   const [composerOpen, setComposerOpen] = useState(false);
@@ -351,7 +410,6 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefr
   const [notes, setNotes] = useState("");
   const [dueAt, setDueAt] = useState("");
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<OwnerAction | null>(null);
   const [snoozing, setSnoozing] = useState<OwnerAction | null>(null);
   const [snoozeUntil, setSnoozeUntil] = useState("");
   const visible = useMemo(() => {
@@ -360,19 +418,6 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefr
       .filter((action) => !normalized || [action.title, action.notes, ...action.owner_action_tasks.map((link) => link.tasks?.title ?? "")].some((value) => value.toLocaleLowerCase().includes(normalized)))
       .sort((a, b) => compareOwnerActions(a, b));
   }, [actions, filter, query]);
-
-  function startEditing(action: OwnerAction) {
-    setEditing(action); setTitle(action.title); setNotes(action.notes); setDueAt(toLocalDateTime(action.due_at));
-  }
-
-  async function save(event: FormEvent) {
-    event.preventDefault();
-    if (!editing) return;
-    await runAction(async () => {
-      await onUpdate(editing.id, { title, notes, dueAt: dueAt || null });
-      setEditing(null); setTitle(""); setNotes(""); setDueAt("");
-    });
-  }
 
   async function remove(action: OwnerAction) {
     if (!window.confirm(`Delete “${action.title}”? This cannot be undone.`)) return;
@@ -406,16 +451,15 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onRefr
     <label className="owner-action-search"><Search size={17} /><span className="sr-only">Search My Work</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search actions and linked tasks" /></label>
     <div className="owner-action-list">{visible.length ? visible.map((action, index) => <article className="owner-action-card" key={action.id}>
       <button className="completion-button" aria-label={action.status === "done" ? `Reopen ${action.title}` : `Complete ${action.title}`} disabled={busy} onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "done" ? "todo" : "done" }))}>{action.status === "done" ? <Check size={18} /> : <CircleDot size={18} />}</button>
-      <div className="owner-action-copy"><h2>{action.title}</h2>{action.notes && <p>{action.notes}</p>}<div className="action-meta"><span className={`owner-status ${action.status}`}>{action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done"}</span>{action.due_at && <span className={new Date(action.due_at) < new Date() && action.status !== "done" ? "overdue" : ""}><CalendarDays size={13} />{formatShortDate(action.due_at)}</span>}<span>{action.owner_action_tasks.length} linked {action.owner_action_tasks.length === 1 ? "task" : "tasks"}</span></div>{action.owner_action_tasks.length > 0 && <div className="linked-task-titles">{action.owner_action_tasks.map((link) => link.tasks?.title).filter(Boolean).join(" · ")}</div>}</div>
-      <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}<button onClick={() => startEditing(action)}>Edit</button><button disabled={index === 0} aria-label="Move up" onClick={() => move(action, -1)}>↑</button><button disabled={index === visible.length - 1} aria-label="Move down" onClick={() => move(action, 1)}>↓</button><button onClick={() => filter === "snoozed" ? runAction(() => onUpdate(action.id, { snoozedUntil: null })) : (setSnoozing(action), setSnoozeUntil(toLocalDateTime(new Date(Date.now() + 86400000).toISOString())))}>{filter === "snoozed" ? "Unsnooze" : "Snooze"}</button><button className="danger-control" aria-label={`Delete ${action.title}`} onClick={() => remove(action)}><Trash2 size={13} /></button></div>
+      <div className="owner-action-copy"><button className="owner-action-title" onClick={() => onOpenAction(action.id)}><h2>{action.title}</h2></button>{action.notes && <p>{action.notes}</p>}<div className="action-meta"><span className={`owner-status ${action.status}`}>{ownerActionStatusLabel(action)}</span>{action.due_at && <span className={new Date(action.due_at) < new Date() && action.status !== "done" ? "overdue" : ""}><CalendarDays size={13} />{formatShortDate(action.due_at)}</span>}<span>{action.owner_action_tasks.length} linked {action.owner_action_tasks.length === 1 ? "task" : "tasks"}</span></div>{action.owner_action_tasks.length > 0 && <div className="linked-task-titles">{action.owner_action_tasks.map((link) => link.tasks && <button key={link.task_id} onClick={() => onOpenTask(link.task_id)}>{link.tasks.title}</button>)}</div>}</div>
+      <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}<button disabled={index === 0} aria-label="Move up" onClick={() => move(action, -1)}>↑</button><button disabled={index === visible.length - 1} aria-label="Move down" onClick={() => move(action, 1)}>↓</button><button onClick={() => filter === "snoozed" ? runAction(() => onUpdate(action.id, { snoozedUntil: null })) : (setSnoozing(action), setSnoozeUntil(toLocalDateTime(new Date(Date.now() + 86400000).toISOString())))}>{filter === "snoozed" ? "Unsnooze" : "Snooze"}</button><button className="danger-control" aria-label={`Delete ${action.title}`} onClick={() => remove(action)}><Trash2 size={13} /></button></div>
     </article>) : <div className="empty-state"><div className="empty-orbit"><UserRoundCheck size={24} /></div><h2>{query ? "No actions match your search." : "Nothing needs you right now."}</h2></div>}</div>
     {composerOpen && <div className="modal-backdrop" onMouseDown={() => setComposerOpen(false)}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">My Work</p><h2 id="new-action-title">New action</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div><form onSubmit={create}><label htmlFor="owner-action-title">Action title</label><input id="owner-action-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={160} autoFocus /><label htmlFor="owner-action-notes">Notes (optional)</label><textarea id="owner-action-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={20000} rows={5} /><label htmlFor="owner-action-due">Due date (optional)</label><input id="owner-action-due" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><button className="primary-button" disabled={busy}>Create action<ArrowRight size={18} /></button></form></section></div>}
-    {editing && <div className="modal-backdrop" onMouseDown={() => setEditing(null)}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="edit-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">My Work</p><h2 id="edit-action-title">Edit action</h2></div><button className="icon-button" onClick={() => setEditing(null)}><X size={20} /></button></div><form onSubmit={save}><label htmlFor="edit-owner-action-title">Action title</label><input id="edit-owner-action-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={160} autoFocus /><label htmlFor="edit-owner-action-notes">Notes (optional)</label><textarea id="edit-owner-action-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={20000} rows={5} /><label htmlFor="edit-owner-action-due">Due date (optional)</label><input id="edit-owner-action-due" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><button className="primary-button" disabled={busy}>Save changes<Check size={18} /></button></form></section></div>}
     {snoozing && <div className="modal-backdrop" onMouseDown={() => setSnoozing(null)}><section className="sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="snooze-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">Hide until</p><h2 id="snooze-action-title">Snooze {snoozing.title}</h2></div><button className="icon-button" onClick={() => setSnoozing(null)}><X size={20} /></button></div><form onSubmit={(event) => { event.preventDefault(); void runAction(async () => { await onUpdate(snoozing.id, { snoozedUntil: snoozeUntil }); setSnoozing(null); }); }}><label htmlFor="snooze-until">Return to Active</label><input id="snooze-until" type="datetime-local" min={toLocalDateTime(new Date().toISOString())} value={snoozeUntil} onChange={(event) => setSnoozeUntil(event.target.value)} required autoFocus /><button className="primary-button" disabled={busy}>Snooze action<Clock3 size={18} /></button></form></section></div>}
   </section>;
 }
 
-function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollowUp, onEdit, ownerActions, onCreateOwnerAction, onUpdateOwnerAction, onLinkOwnerAction, onUnlinkOwnerAction }: {
+function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollowUp, onEdit, ownerActions, onCreateOwnerAction, onUpdateOwnerAction, onLinkOwnerAction, onUnlinkOwnerAction, onOpenOwnerAction }: {
   task: Task;
   busy: boolean;
   onBack: () => void;
@@ -429,6 +473,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
   onUpdateOwnerAction: (actionId: string, updates: Record<string, unknown>) => void;
   onLinkOwnerAction: (actionId: string) => void;
   onUnlinkOwnerAction: (actionId: string) => void;
+  onOpenOwnerAction: (actionId: string) => void;
 }) {
   const [feedback, setFeedback] = useState("");
   const latest = latestCompletedRun(task.runs);
@@ -446,7 +491,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
 
       <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown>{task.instructions}</ReactMarkdown></div></section>
 
-      <section className="your-actions-section"><div className="section-label"><span>Your actions</span><button className="document-edit-button" disabled={busy} onClick={() => onCreateOwnerAction(`Action for ${task.title}`)}><Plus size={14} />Create linked</button></div>{linkedActions.length ? <div className="task-actions-list">{linkedActions.map((action) => <div key={action.id}><div><strong>{action.title}</strong><span>{action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done"}</span></div><div><button onClick={() => onUpdateOwnerAction(action.id, { status: action.status === "done" ? "todo" : "done" })}>{action.status === "done" ? "Reopen" : "Complete"}</button><button onClick={() => onUnlinkOwnerAction(action.id)}>Unlink</button></div></div>)}</div> : <p className="no-actions">No owner actions are linked to this task.</p>}{availableActions.length > 0 && <label className="link-existing">Link existing action<select defaultValue="" onChange={(event) => { if (event.target.value) onLinkOwnerAction(event.target.value); event.target.value = ""; }}><option value="" disabled>Choose an action…</option>{availableActions.map((action) => <option key={action.id} value={action.id}>{action.title}</option>)}</select></label>}</section>
+      <section className="your-actions-section"><div className="section-label"><span>Your actions</span><button className="document-edit-button" disabled={busy} onClick={() => onCreateOwnerAction(`Action for ${task.title}`)}><Plus size={14} />Create linked</button></div>{linkedActions.length ? <div className="task-actions-list">{linkedActions.map((action) => <div key={action.id}><div><button className="linked-action-title" onClick={() => onOpenOwnerAction(action.id)}>{action.title}</button><span>{ownerActionStatusLabel(action)}</span></div><div><button onClick={() => onUpdateOwnerAction(action.id, { status: action.status === "done" ? "todo" : "done" })}>{action.status === "done" ? "Reopen" : "Complete"}</button><button onClick={() => onUnlinkOwnerAction(action.id)}>Unlink</button></div></div>)}</div> : <p className="no-actions">No owner actions are linked to this task.</p>}{availableActions.length > 0 && <label className="link-existing">Link existing action<select defaultValue="" onChange={(event) => { if (event.target.value) onLinkOwnerAction(event.target.value); event.target.value = ""; }}><option value="" disabled>Choose an action…</option>{availableActions.map((action) => <option key={action.id} value={action.id}>{action.title}</option>)}</select></label>}</section>
 
       {active && <section className="run-status-card"><div className="run-spinner"><RefreshCw size={22} /></div><div><p className="eyebrow">Attempt {active.attempt}</p><h2>{active.status === "queued" ? "Waiting for your laptop" : "Worker is on it"}</h2><p>{active.status === "queued" ? "This run stays safely queued while your worker is offline." : "The result will appear here when the worker finishes."}</p></div></section>}
 
@@ -494,6 +539,10 @@ function formatDate(value: string) {
 
 function formatShortDate(value: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function ownerActionStatusLabel(action: OwnerAction) {
+  return action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done";
 }
 
 function toLocalDateTime(value: string | null) {

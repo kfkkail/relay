@@ -333,6 +333,8 @@ textarea { resize: vertical; }
 .owner-action-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 13px; border: 1px solid rgba(23,53,46,.12); border-radius: 18px; padding: 16px; background: var(--surface); }
 .completion-button { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--forest); background: #fff; cursor: pointer; }
 .owner-action-copy h2 { margin: 3px 0 5px; font-size: 18px; letter-spacing: -.025em; }
+.owner-action-title { border: 0; padding: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.owner-action-title:hover h2, .owner-action-title:focus-visible h2 { color: var(--blue); text-decoration: underline; }
 .owner-action-copy > p { margin: 0 0 9px; color: var(--ink-soft); font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
 .action-meta { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: center; color: var(--ink-soft); font-size: 11px; }
 .action-meta span { display: inline-flex; align-items: center; gap: 4px; }
@@ -340,11 +342,21 @@ textarea { resize: vertical; }
 .owner-status.in_progress { color: #285a69; background: var(--blue-soft); }
 .owner-status.done { color: #275a47; background: var(--forest-soft); }
 .action-meta .overdue { color: #a23f2a; font-weight: 750; }
-.linked-task-titles { margin-top: 8px; color: var(--blue); font-size: 12px; }
+.linked-task-titles { display: flex; flex-wrap: wrap; gap: 5px 10px; margin-top: 8px; }
+.linked-task-titles button, .linked-action-title { border: 0; padding: 0; color: var(--blue); background: transparent; font: inherit; font-weight: 700; cursor: pointer; }
+.linked-task-titles button:hover, .linked-action-title:hover { text-decoration: underline; }
 .action-controls { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
 .action-controls button, .task-actions-list button { border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
 .action-controls .danger-control { display: grid; place-items: center; color: #9a3f2d; }
 .small-sheet { max-width: 520px; }
+.owner-action-sheet { max-width: 620px; }
+.owner-action-detail { display: grid; gap: 22px; }
+.owner-action-detail section { display: grid; gap: 7px; }
+.owner-action-detail h3, .owner-action-detail p { margin: 0; }
+.owner-action-detail h3 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.owner-action-detail p { white-space: pre-wrap; line-height: 1.55; }
+.owner-action-links { display: grid; gap: 7px; }
+.owner-action-links button { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px; color: var(--blue); background: #fff; font-weight: 700; text-align: left; cursor: pointer; }
 .your-actions-section { border-top: 1px solid var(--line); padding-bottom: 20px; background: #f7f5ee; }
 .task-actions-list { display: grid; gap: 7px; padding: 0 20px; }
 .task-actions-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: #fff; }

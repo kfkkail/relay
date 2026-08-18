@@ -33,7 +33,7 @@ export function statusLabel(status: TaskStatus) {
     inbox: "Inbox",
     ready: "Ready",
     working: "Working",
-    waiting: "Needs attention",
+    waiting: "Review",
     done: "Done",
   }[status];
 }

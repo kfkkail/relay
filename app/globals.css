@@ -79,6 +79,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 
 .topbar-actions { display: flex; gap: 6px; }
 .topbar-actions form { display: contents; }
+.area-nav { position: absolute; left: 50%; display: flex; gap: 3px; border-radius: 12px; padding: 3px; background: var(--paper-deep); transform: translateX(-50%); }
+.area-nav button { border: 0; border-radius: 9px; padding: 7px 11px; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.area-nav button.active { background: var(--surface); box-shadow: 0 2px 8px rgba(23,53,46,.1); }
 
 .icon-button, .back-button {
   display: inline-flex;
@@ -292,6 +295,7 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none !important;
 
 label { display: block; margin: 17px 0 7px; font-size: 13px; font-weight: 700; }
 input, textarea { width: 100%; border: 1px solid #c8c4ba; border-radius: 13px; padding: 13px 14px; outline: none; color: var(--ink); background: #fff; line-height: 1.5; transition: border-color .15s, box-shadow .15s; }
+select { width: 100%; border: 1px solid #c8c4ba; border-radius: 11px; padding: 10px 12px; color: var(--ink); background: #fff; }
 input:focus, textarea:focus { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(23, 63, 53, .1); }
 textarea { resize: vertical; }
 
@@ -317,6 +321,35 @@ textarea { resize: vertical; }
 .token-panel code { display: block; overflow-wrap: anywhere; border-radius: 10px; padding: 11px; background: #fff; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; }
 .token-panel .secondary-button { width: 100%; margin-top: 10px; }
 .privacy-note { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
+
+.my-work-view { max-width: 980px; min-height: calc(100dvh - 64px); margin: 0 auto; padding: 28px 0 80px; }
+.my-work-heading { display: flex; align-items: flex-end; justify-content: space-between; padding: 0 18px 22px; }
+.my-work-heading h1 { margin: 0; font-size: clamp(32px, 7vw, 48px); letter-spacing: -.055em; }
+.owner-action-list { display: grid; gap: 10px; padding: 0 12px; }
+.owner-action-card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 13px; border: 1px solid rgba(23,53,46,.12); border-radius: 18px; padding: 16px; background: var(--surface); }
+.completion-button { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid var(--line); border-radius: 50%; color: var(--forest); background: #fff; cursor: pointer; }
+.owner-action-copy h2 { margin: 3px 0 5px; font-size: 18px; letter-spacing: -.025em; }
+.owner-action-copy > p { margin: 0 0 9px; color: var(--ink-soft); font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.action-meta { display: flex; flex-wrap: wrap; gap: 8px 13px; align-items: center; color: var(--ink-soft); font-size: 11px; }
+.action-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.owner-status { border-radius: 999px; padding: 4px 8px; background: var(--paper-deep); font-weight: 750; }
+.owner-status.in_progress { color: #285a69; background: var(--blue-soft); }
+.owner-status.done { color: #275a47; background: var(--forest-soft); }
+.action-meta .overdue { color: #a23f2a; font-weight: 750; }
+.linked-task-titles { margin-top: 8px; color: var(--blue); font-size: 12px; }
+.action-controls { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
+.action-controls button, .task-actions-list button { border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; background: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+.your-actions-section { border-top: 1px solid var(--line); padding-bottom: 20px; background: #f7f5ee; }
+.task-actions-list { display: grid; gap: 7px; padding: 0 20px; }
+.task-actions-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: #fff; }
+.task-actions-list > div > div { display: flex; gap: 7px; align-items: center; }
+.task-actions-list strong { font-size: 13px; }
+.task-actions-list span { color: var(--ink-soft); font-size: 10px; }
+.no-actions { margin: 0; padding: 0 20px 12px; color: var(--ink-soft); font-size: 13px; }
+.link-existing { margin: 12px 20px 0; color: var(--ink-soft); font-size: 11px; }
+.link-existing select { margin-top: 6px; }
+.handoff-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.result-handoff { display: flex; justify-content: flex-end; padding: 0 20px 20px; }
 
 .toast { position: fixed; z-index: 80; right: 12px; bottom: 18px; left: 12px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-radius: 14px; padding: 13px 15px; color: #fff; background: #6e2f22; box-shadow: var(--shadow); font-size: 13px; }
 .toast button { display: grid; place-items: center; border: 0; color: #fff; background: transparent; }
@@ -368,6 +401,14 @@ textarea { resize: vertical; }
   .review-actions { padding: 25px 42px 32px; }
   .accepted-heading { padding-right: 42px; padding-left: 42px; }
   .artifact-list { padding-right: 42px; padding-left: 42px; }
+  .my-work-view { min-height: calc(100dvh - 72px); padding-top: 42px; }
+  .my-work-heading, .my-work-view > .filter-strip { padding-right: 28px; padding-left: 28px; }
+  .owner-action-list { padding-right: 20px; padding-left: 20px; }
+  .owner-action-card { grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; padding: 18px; }
+  .action-controls { grid-column: 3; justify-content: flex-end; }
+  .task-actions-list, .no-actions { padding-right: 42px; padding-left: 42px; }
+  .link-existing { margin-right: 42px; margin-left: 42px; }
+  .result-handoff { padding-right: 42px; padding-left: 42px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

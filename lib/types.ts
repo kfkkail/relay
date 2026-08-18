@@ -44,3 +44,25 @@ export type Worker = {
   last_seen_at: string | null;
   created_at: string;
 };
+
+export const ownerActionStatuses = ["todo", "in_progress", "done"] as const;
+export type OwnerActionStatus = (typeof ownerActionStatuses)[number];
+
+export type OwnerActionTaskLink = {
+  task_id: string;
+  tasks: Pick<Task, "id" | "title" | "status"> | null;
+};
+
+export type OwnerAction = {
+  id: string;
+  title: string;
+  notes: string;
+  status: OwnerActionStatus;
+  due_at: string | null;
+  snoozed_until: string | null;
+  position: number;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  owner_action_tasks: OwnerActionTaskLink[];
+};

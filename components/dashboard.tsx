@@ -25,6 +25,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { buildFollowUpInstructions, compareOwnerActions, latestCompletedRun, ownerActionFilter, statusLabel } from "@/lib/domain";
+import { localDateTimeToUtc, utcToLocalDateTime } from "@/lib/date-time";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
@@ -179,7 +180,7 @@ export function Dashboard({
     if (!selectedOwnerAction) return;
     setOwnerActionTitle(selectedOwnerAction.title);
     setOwnerActionNotes(selectedOwnerAction.notes);
-    setOwnerActionDueAt(toLocalDateTime(selectedOwnerAction.due_at));
+    setOwnerActionDueAt(utcToLocalDateTime(selectedOwnerAction.due_at));
     setEditingOwnerAction(true);
   }
 
@@ -187,7 +188,7 @@ export function Dashboard({
     event.preventDefault();
     if (!selectedOwnerAction) return;
     await runAction(async () => {
-      await updateOwnerAction(selectedOwnerAction.id, { title: ownerActionTitle, notes: ownerActionNotes, dueAt: ownerActionDueAt || null });
+      await updateOwnerAction(selectedOwnerAction.id, { title: ownerActionTitle, notes: ownerActionNotes, dueAt: ownerActionDueAt ? localDateTimeToUtc(ownerActionDueAt) : null });
       setEditingOwnerAction(false);
     });
   }
@@ -428,7 +429,7 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onOpen
   async function create(event: FormEvent) {
     event.preventDefault();
     await runAction(async () => {
-      await onCreate({ title, notes, dueAt: dueAt || null });
+      await onCreate({ title, notes, dueAt: dueAt ? localDateTimeToUtc(dueAt) : null });
       setTitle(""); setNotes(""); setDueAt(""); setComposerOpen(false);
     });
   }
@@ -439,11 +440,11 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onOpen
     const initial = action.due_at && new Date(action.due_at) < tomorrow ? action.due_at : tomorrow.toISOString();
     setHideStartedAt(startedAt);
     setSnoozing(action);
-    setSnoozeUntil(toLocalDateTime(initial));
+    setSnoozeUntil(utcToLocalDateTime(initial));
   }
 
   function quickHide(days: number) {
-    setSnoozeUntil(toLocalDateTime(new Date(hideStartedAt + days * 86400000).toISOString()));
+    setSnoozeUntil(utcToLocalDateTime(new Date(hideStartedAt + days * 86400000).toISOString()));
   }
 
   return <section className="my-work-view">
@@ -456,7 +457,7 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onOpen
       <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}{filter === "snoozed" ? <button onClick={() => runAction(() => onUpdate(action.id, { snoozedUntil: null }))}>Show now</button> : action.status !== "done" && <button disabled={Boolean(action.due_at && new Date(action.due_at) <= new Date())} title={action.due_at && new Date(action.due_at) <= new Date() ? "This action is already due and must stay visible." : undefined} onClick={() => startHiding(action)}>Hide until</button>}<button className="danger-control" aria-label={`Delete ${action.title}`} onClick={() => remove(action)}><Trash2 size={13} /></button>{filter !== "snoozed" && action.status !== "done" && action.due_at && new Date(action.due_at) <= new Date() && <span className="hide-disabled-note">Already due — cannot be hidden.</span>}</div>
     </article>) : <div className="empty-state"><div className="empty-orbit"><UserRoundCheck size={24} /></div><h2>{query ? "No actions match your search." : "Nothing needs you right now."}</h2></div>}</div>
     {composerOpen && <div className="modal-backdrop" onMouseDown={() => setComposerOpen(false)}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">My Work</p><h2 id="new-action-title">New action</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div><form onSubmit={create}><label htmlFor="owner-action-title">Action title</label><input id="owner-action-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={160} autoFocus /><label htmlFor="owner-action-notes">Notes (optional)</label><textarea id="owner-action-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={20000} rows={5} /><label htmlFor="owner-action-due">Due date (optional)</label><input id="owner-action-due" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><button className="primary-button" disabled={busy}>Create action<ArrowRight size={18} /></button></form></section></div>}
-    {snoozing && <div className="modal-backdrop" onMouseDown={() => setSnoozing(null)}><section className="sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="hide-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">Remind me on</p><h2 id="hide-action-title">Hide {snoozing.title}</h2></div><button className="icon-button" onClick={() => setSnoozing(null)}><X size={20} /></button></div><form onSubmit={(event) => { event.preventDefault(); void runAction(async () => { await onUpdate(snoozing.id, { snoozedUntil: snoozeUntil }); setSnoozing(null); }); }}><p className="sheet-intro">The due date will not change. This action returns to Active at the selected time or when it is due, whichever comes first.</p><div className="hide-quick-choices"><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(1)}>Tomorrow</button><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 7 * 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(7)}>Next week</button></div><label htmlFor="hide-until">Pick date and time</label><input id="hide-until" type="datetime-local" min={toLocalDateTime(new Date(hideStartedAt).toISOString())} max={toLocalDateTime(snoozing.due_at)} value={snoozeUntil} onChange={(event) => setSnoozeUntil(event.target.value)} required autoFocus /><button className="primary-button" disabled={busy}>Hide action<Clock3 size={18} /></button></form></section></div>}
+    {snoozing && <div className="modal-backdrop" onMouseDown={() => setSnoozing(null)}><section className="sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="hide-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">Remind me on</p><h2 id="hide-action-title">Hide {snoozing.title}</h2></div><button className="icon-button" onClick={() => setSnoozing(null)}><X size={20} /></button></div><form onSubmit={(event) => { event.preventDefault(); void runAction(async () => { await onUpdate(snoozing.id, { snoozedUntil: localDateTimeToUtc(snoozeUntil) }); setSnoozing(null); }); }}><p className="sheet-intro">The due date will not change. This action returns to Active at the selected time or when it is due, whichever comes first.</p><div className="hide-quick-choices"><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(1)}>Tomorrow</button><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 7 * 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(7)}>Next week</button></div><label htmlFor="hide-until">Pick date and time</label><input id="hide-until" type="datetime-local" min={utcToLocalDateTime(new Date(hideStartedAt).toISOString())} max={utcToLocalDateTime(snoozing.due_at)} value={snoozeUntil} onChange={(event) => setSnoozeUntil(event.target.value)} required autoFocus /><button className="primary-button" disabled={busy}>Hide action<Clock3 size={18} /></button></form></section></div>}
   </section>;
 }
 
@@ -540,13 +541,6 @@ function formatDate(value: string) {
 
 function ownerActionStatusLabel(action: OwnerAction) {
   return action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done";
-}
-
-function toLocalDateTime(value: string | null) {
-  if (!value) return "";
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 async function requestJson(path: string, init?: RequestInit) {

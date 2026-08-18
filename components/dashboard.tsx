@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { buildFollowUpInstructions, compareOwnerActions, latestCompletedRun, ownerActionFilter, statusLabel } from "@/lib/domain";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
 
@@ -444,7 +445,7 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
         {(task.status === "inbox" || (task.status === "waiting" && !latest)) && <button className="primary-button compact" disabled={busy} onClick={onQueue}><Send size={17} />Queue run</button>}
       </div>
 
-      <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown>{task.instructions}</ReactMarkdown></div></section>
+      <section className="document-section"><div className="section-label"><span>Task document</span><button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button></div><div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.instructions}</ReactMarkdown></div></section>
 
       <section className="your-actions-section"><div className="section-label"><span>Your actions</span><button className="document-edit-button" disabled={busy} onClick={() => onCreateOwnerAction(`Action for ${task.title}`)}><Plus size={14} />Create linked</button></div>{linkedActions.length ? <div className="task-actions-list">{linkedActions.map((action) => <div key={action.id}><div><strong>{action.title}</strong><span>{action.status === "in_progress" ? "In progress" : action.status === "todo" ? "To do" : "Done"}</span></div><div><button onClick={() => onUpdateOwnerAction(action.id, { status: action.status === "done" ? "todo" : "done" })}>{action.status === "done" ? "Reopen" : "Complete"}</button><button onClick={() => onUnlinkOwnerAction(action.id)}>Unlink</button></div></div>)}</div> : <p className="no-actions">No owner actions are linked to this task.</p>}{availableActions.length > 0 && <label className="link-existing">Link existing action<select defaultValue="" onChange={(event) => { if (event.target.value) onLinkOwnerAction(event.target.value); event.target.value = ""; }}><option value="" disabled>Choose an action…</option>{availableActions.map((action) => <option key={action.id} value={action.id}>{action.title}</option>)}</select></label>}</section>
 
@@ -455,14 +456,14 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
       {latest && task.status !== "done" && (
         <section className="result-section">
           <div className="section-label"><span>Result · attempt {latest.attempt}</span><span>{latest.finished_at ? formatDate(latest.finished_at) : "Ready to review"}</span></div>
-          <div className="markdown result-markdown"><ReactMarkdown>{latest.result_markdown}</ReactMarkdown></div>
+          <div className="markdown result-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{latest.result_markdown}</ReactMarkdown></div>
           <div className="result-handoff"><button className="secondary-button compact" disabled={busy} onClick={() => onCreateOwnerAction(`Review ${task.title}`)}><UserRoundCheck size={17} />Add to My Work</button></div>
           {latest.result_artifacts.length > 0 && <div className="artifact-list">{latest.result_artifacts.map((artifact, index) => <a key={`${artifact.type}-${index}`} href={artifact.url} target="_blank" rel="noreferrer"><span>{artifact.type.replace("_", " ")}</span><strong>{artifact.label}</strong><ChevronRight size={17} /></a>)}</div>}
           <div className="review-actions"><label htmlFor="feedback">Feedback for another run</label><textarea id="feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="What should change or be explored next?" rows={4} /><div><button className="secondary-button" disabled={busy || !feedback.trim()} onClick={() => onFeedback(feedback)}><RefreshCw size={17} />Run again</button><button className="accept-button" disabled={busy} onClick={onAccept}><Check size={18} />Accept</button></div></div>
         </section>
       )}
 
-      {task.status === "done" && task.accepted_result && <section className="result-section accepted"><div className="accepted-heading"><div><Check size={18} /><span>Accepted result</span></div><button className="secondary-button compact" onClick={onFollowUp}><Plus size={17} />Follow-up</button></div><div className="markdown result-markdown"><ReactMarkdown>{task.accepted_result}</ReactMarkdown></div></section>}
+      {task.status === "done" && task.accepted_result && <section className="result-section accepted"><div className="accepted-heading"><div><Check size={18} /><span>Accepted result</span></div><button className="secondary-button compact" onClick={onFollowUp}><Plus size={17} />Follow-up</button></div><div className="markdown result-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.accepted_result}</ReactMarkdown></div></section>}
     </div>
   );
 }

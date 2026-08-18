@@ -34,6 +34,17 @@ describe("Owner action rules", () => {
     expect(ownerActionFilter(action({ status: "done", completed_at: now.toISOString() }), now)).toBe("done");
   });
 
+  it("returns snoozed actions when the snooze time arrives", () => {
+    expect(ownerActionFilter(action({ snoozed_until: now.toISOString() }), now)).toBe("active");
+  });
+
+  it("returns snoozed actions when their due date arrives first", () => {
+    expect(ownerActionFilter(action({
+      due_at: now.toISOString(),
+      snoozed_until: "2026-08-19T12:00:00.000Z",
+    }), now)).toBe("active");
+  });
+
   it("orders overdue before upcoming before unscheduled", () => {
     const items = [
       action({ due_at: null }),

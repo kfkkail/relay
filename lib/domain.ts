@@ -42,7 +42,9 @@ export type OwnerActionFilter = "active" | "snoozed" | "done";
 
 export function ownerActionFilter(action: OwnerAction, now = new Date()): OwnerActionFilter {
   if (action.status === "done") return "done";
-  if (action.snoozed_until && new Date(action.snoozed_until) > now) return "snoozed";
+  const snoozed = action.snoozed_until && new Date(action.snoozed_until) > now;
+  const due = action.due_at && new Date(action.due_at) <= now;
+  if (snoozed && !due) return "snoozed";
   return "active";
 }
 

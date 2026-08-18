@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-import { optionalDate, ownerActionSelect } from "@/lib/owner-actions";
+import { futureOptionalDate, optionalDate, ownerActionSelect } from "@/lib/owner-actions";
 import { ownerActionStatuses } from "@/lib/types";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ actionId: string }> }) {
@@ -24,7 +24,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       updates.completed_at = body.status === "done" ? new Date().toISOString() : null;
     }
     if ("dueAt" in body) updates.due_at = optionalDate(body.dueAt, "Due date");
-    if ("snoozedUntil" in body) updates.snoozed_until = optionalDate(body.snoozedUntil, "Snooze date");
+    if ("snoozedUntil" in body) updates.snoozed_until = futureOptionalDate(body.snoozedUntil, "Snooze date");
     if ("position" in body) {
       if (!Number.isSafeInteger(body.position) || body.position < 0) throw new ApiError("Position must be a non-negative integer.");
       updates.position = body.position;

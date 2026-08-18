@@ -1,0 +1,42 @@
+name: Validate Supabase migrations
+
+on:
+  pull_request:
+    paths:
+      - "supabase/config.toml"
+      - "supabase/migrations/**"
+      - ".github/workflows/supabase-migrations.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Reset local database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.114.0
+
+      - name: Start local Supabase
+        run: supabase start
+
+      - name: Apply migrations from scratch
+        run: supabase db reset
+
+      - name: Lint database schema
+        run: supabase db lint --level warning
+
+      - name: Run application tests
+        run: npm ci && npm test
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup

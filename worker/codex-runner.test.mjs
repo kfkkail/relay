@@ -26,6 +26,9 @@ describe("native Codex runner", () => {
     expect(args).toContain("--ephemeral");
     expect(args).toContain("--ignore-user-config");
     expect(args).toContain("--ignore-rules");
+    expect(args).toContain(
+      'plugins."google-calendar@openai-curated".enabled=true',
+    );
     expect(args).toContain('approval_policy="never"');
     expect(args).toContain("sandbox_workspace_write.network_access=true");
     expect(args).toContain('web_search="disabled"');
@@ -97,6 +100,12 @@ process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.
     );
     expect(result.input).toContain("http/https links are supported");
     expect(result.input).toContain("commits, and pull requests");
+    expect(result.input).toContain(
+      "An unambiguous request to make a calendar change is authorization",
+    );
+    expect(result.input).toContain(
+      "use the Keusch calendar with calendar ID andreajkeusch@gmail.com",
+    );
     expect(result.input).toContain("# Trusted Relay worker policy\n\n");
     expect(result.input).toContain(
       "# Untrusted task text\n\n# Task\nCreate a pull request",

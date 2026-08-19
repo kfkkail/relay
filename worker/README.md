@@ -55,13 +55,19 @@ The API backend is text-only and declares no tools. The Codex backend launches
 the installed `codex` executable directly as the local user, from the configured
 workspace. That gives tasks the machine's normal Git, GitHub CLI, package
 managers, language toolchains, network, credential helpers, and keychain access.
+It also explicitly enables the Google Calendar plugin while continuing to ignore
+the rest of the user's Codex configuration. Connect and authorize Google Calendar
+in Codex once; Relay can then read calendar context and carry out explicitly
+requested event changes without asking for a second confirmation. New events
+default to the writable **Keusch** calendar unless the task names another one.
 
 Relay starts `codex exec` with Codex's built-in `workspace-write` sandbox,
 non-interactive approvals, and network access. Project files can only be changed
 inside `RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories
 remain available so developer tools work. This is deliberately not
 `danger-full-access`. User Codex configuration, web search, and custom execution
-rules are ignored so they cannot silently widen the worker's permissions.
+rules are ignored so they cannot silently widen the worker's permissions; Google
+Calendar is the sole explicitly enabled user plugin.
 
 The worker token and API/database secrets are removed before Codex starts. Other
 local environment and credential-helper access are preserved intentionally for

@@ -62,9 +62,11 @@ requested event changes without asking for a second confirmation. New events
 default to the writable **Keusch** calendar unless the task names another one.
 
 Relay starts `codex exec` with Codex's built-in `workspace-write` sandbox,
-non-interactive approvals, and network access. Project files can only be changed
-inside `RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories
-remain available so developer tools work. This is deliberately not
+automatic approval review, and network access. Approval-gated connector writes
+are reviewed against the task instead of being rejected by a non-interactive
+`never` policy. Project files can only be changed inside
+`RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories remain
+available so developer tools work. This is deliberately not
 `danger-full-access`. User Codex configuration, web search, and custom execution
 rules are ignored so they cannot silently widen the worker's permissions; Google
 Calendar is the sole explicitly enabled user plugin.

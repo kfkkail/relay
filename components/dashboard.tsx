@@ -1098,11 +1098,7 @@ function MyWork({
                   )
                 }
               >
-                {action.status === "done" ? (
-                  <Check size={18} />
-                ) : (
-                  <CircleDot size={18} />
-                )}
+                {action.status === "done" && <Check size={18} />}
               </button>
               <div className="owner-action-copy">
                 <button

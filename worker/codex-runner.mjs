@@ -44,8 +44,6 @@ export function codexArguments(model, attachments = []) {
     'plugins."google-calendar@openai-curated".enabled=true',
     "--color",
     "never",
-    "--sandbox",
-    "workspace-write",
     "--approve-for-me",
     "-c",
     "sandbox_workspace_write.network_access=true",

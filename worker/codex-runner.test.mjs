@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 describe("native Codex runner", () => {
-  it("uses Codex's workspace sandbox with command network access", () => {
+  it("uses Codex's auto-reviewed workspace sandbox with command network access", () => {
     const args = codexArguments("gpt-example");
 
     expect(args).toContain("--ephemeral");
@@ -30,10 +30,10 @@ describe("native Codex runner", () => {
       'plugins."google-calendar@openai-curated".enabled=true',
     );
     expect(args).toContain("--approve-for-me");
+    expect(args).not.toContain("--sandbox");
     expect(args).not.toContain('approval_policy="never"');
     expect(args).toContain("sandbox_workspace_write.network_access=true");
     expect(args).toContain('web_search="disabled"');
-    expect(args).toContain("workspace-write");
     expect(args).not.toContain("danger-full-access");
     expect(args).toContain("--model");
     expect(args.at(-1)).toBe("-");

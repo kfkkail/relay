@@ -33,8 +33,8 @@ import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
 
-type Draft = { title: string; instructions: string; parentTaskId: string | null };
-const emptyDraft: Draft = { title: "", instructions: "", parentTaskId: null };
+type Draft = { title: string; instructions: string; parentTaskId: string | null; ownerActionId: string | null };
+const emptyDraft: Draft = { title: "", instructions: "", parentTaskId: null, ownerActionId: null };
 
 export function Dashboard({
   initialTasks,
@@ -151,6 +151,7 @@ export function Dashboard({
       setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
       setSelectedId(task.id);
       if (draftImage) task.task_attachments = [await uploadAttachment(task.id, draftImage)];
+      if (draft.ownerActionId) await linkOwnerAction(draft.ownerActionId, task.id);
       setTasks((current) => [task, ...current.filter((item) => item.id !== task.id)]);
       setDraft(emptyDraft);
       setDraftImage(null);
@@ -247,7 +248,21 @@ export function Dashboard({
       title: `Follow up: ${task.title}`,
       instructions: buildFollowUpInstructions(task),
       parentTaskId: task.id,
+      ownerActionId: null,
     });
+    setComposerOpen(true);
+  }
+
+  function startTaskFromOwnerAction(action: OwnerAction) {
+    setDraft({
+      title: action.title,
+      instructions: action.notes || `Complete the owner action: ${action.title}`,
+      parentTaskId: null,
+      ownerActionId: action.id,
+    });
+    setDraftImage(null);
+    setPendingTask(null);
+    setSelectedOwnerActionId(null);
     setComposerOpen(true);
   }
 
@@ -345,7 +360,7 @@ export function Dashboard({
       {composerOpen && (
         <div className="modal-backdrop" onMouseDown={() => setComposerOpen(false)}>
           <section className="sheet composer" role="dialog" aria-modal="true" aria-labelledby="new-task-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="sheet-heading"><div><p className="eyebrow">{draft.parentTaskId ? "From accepted result" : "Capture"}</p><h2 id="new-task-title">{draft.parentTaskId ? "Create follow-up" : "New task"}</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div>
+            <div className="sheet-heading"><div><p className="eyebrow">{draft.parentTaskId ? "From accepted result" : draft.ownerActionId ? "From owner action" : "Capture"}</p><h2 id="new-task-title">{draft.parentTaskId ? "Create follow-up" : "New task"}</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div>
             <form onSubmit={createTask}>
               <label htmlFor="task-title">Task title</label>
               <input id="task-title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="What needs to be true?" autoFocus required maxLength={160} />
@@ -389,7 +404,7 @@ export function Dashboard({
               <div className="action-meta"><span className={`owner-status ${selectedOwnerAction.status}`}>{ownerActionStatusLabel(selectedOwnerAction)}</span>{selectedOwnerAction.due_at && <span><CalendarDays size={13} />Due {formatDate(selectedOwnerAction.due_at)}</span>}</div>
               <section><h3>Notes</h3><p>{selectedOwnerAction.notes || "No notes added."}</p></section>
               <section><h3>Linked tasks</h3>{selectedOwnerAction.owner_action_tasks.length ? <div className="owner-action-links">{selectedOwnerAction.owner_action_tasks.map((link) => link.tasks && <button key={link.task_id} onClick={() => openTask(link.task_id)}>{link.tasks.title}<ChevronRight size={16} /></button>)}</div> : <p>No linked tasks.</p>}</section>
-              <button className="primary-button" disabled={busy} onClick={startEditingOwnerAction}><Pencil size={17} />Edit action</button>
+              <div className="edit-actions"><button className="secondary-button" disabled={busy} onClick={() => startTaskFromOwnerAction(selectedOwnerAction)}><Plus size={17} />Create task</button><button className="primary-button" disabled={busy} onClick={startEditingOwnerAction}><Pencil size={17} />Edit action</button></div>
             </div>}
           </section>
         </div>

@@ -21,8 +21,12 @@ export async function requireWorker(request: Request) {
     .is("revoked_at", null)
     .maybeSingle();
 
-  if (error || !worker) throw new ApiError("Worker token is invalid or revoked.", 401);
+  if (error || !worker)
+    throw new ApiError("Worker token is invalid or revoked.", 401);
 
-  await supabase.from("workers").update({ last_seen_at: new Date().toISOString() }).eq("id", worker.id);
+  await supabase
+    .from("workers")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("id", worker.id);
   return { supabase, worker };
 }

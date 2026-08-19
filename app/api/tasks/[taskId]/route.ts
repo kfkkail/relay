@@ -16,14 +16,18 @@ export async function PATCH(
     const { supabase, user } = await requireUser();
     const body = await request.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
-    const instructions = typeof body.instructions === "string" ? body.instructions : "";
+    const instructions =
+      typeof body.instructions === "string" ? body.instructions : "";
     if (!title) throw new ApiError("Task title is required.");
     if (title.length > 160) {
       throw new ApiError("Task title must be 160 characters or fewer.");
     }
-    if (!instructions.trim()) throw new ApiError("Markdown instructions are required.");
+    if (!instructions.trim())
+      throw new ApiError("Markdown instructions are required.");
     if (instructions.length > 100000) {
-      throw new ApiError("Markdown instructions must be 100,000 characters or fewer.");
+      throw new ApiError(
+        "Markdown instructions must be 100,000 characters or fewer.",
+      );
     }
 
     const { data: task, error } = await supabase

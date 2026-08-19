@@ -29,7 +29,9 @@ if (!new Set(["web", "worker", "both"]).has(mode)) {
 }
 
 if (!args.skipInstall) {
-  const shouldInstall = args.yes || await confirm("Install exact package versions with npm ci?", true);
+  const shouldInstall =
+    args.yes ||
+    (await confirm("Install exact package versions with npm ci?", true));
   if (shouldInstall) {
     if (args.dryRun) {
       console.log("[dry run] npm ci");
@@ -40,13 +42,18 @@ if (!args.skipInstall) {
 }
 
 if (mode === "web" || mode === "both") await configureWeb();
-const workerBackend = mode === "worker" || mode === "both" ? await configureWorker() : undefined;
+const workerBackend =
+  mode === "worker" || mode === "both" ? await configureWorker() : undefined;
 
 if ((mode === "worker" || mode === "both") && args.installService) {
   if (args.dryRun) {
     console.log("[dry run] Install the Relay worker background service");
   } else {
-    run(process.execPath, [join(root, "scripts/worker-service.mjs"), "install"], "Service installation failed.");
+    run(
+      process.execPath,
+      [join(root, "scripts/worker-service.mjs"), "install"],
+      "Service installation failed.",
+    );
   }
 }
 
@@ -64,11 +71,14 @@ async function configureWeb() {
       existing,
       validate: validateHttpUrl,
     }),
-    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: await askValue("Supabase publishable key", {
-      name: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
-      existing,
-      secret: true,
-    }),
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: await askValue(
+      "Supabase publishable key",
+      {
+        name: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        existing,
+        secret: true,
+      },
+    ),
     SUPABASE_SECRET_KEY: await askValue("Supabase secret key", {
       name: "SUPABASE_SECRET_KEY",
       existing,
@@ -83,7 +93,9 @@ async function configureWorker() {
   const target = join(root, ".env.worker");
   const existing = await readEnv(target);
   console.log("\nWorker settings (.env.worker)");
-  console.log("Create the worker token inside Relay after the web application is running.\n");
+  console.log(
+    "Create the worker token inside Relay after the web application is running.\n",
+  );
 
   const backend = await chooseWorkerBackend(existing);
   const values = {
@@ -107,28 +119,36 @@ async function configureWorker() {
       fallback: findExecutable("codex"),
       validate: validateCodex,
     });
-    values.RELAY_CODEX_WORKSPACE = await askValue("Allowed workspace directory", {
-      name: "RELAY_CODEX_WORKSPACE",
-      existing,
-      fallback: root,
-      validate: validateDirectory,
-    });
+    values.RELAY_CODEX_WORKSPACE = await askValue(
+      "Allowed workspace directory",
+      {
+        name: "RELAY_CODEX_WORKSPACE",
+        existing,
+        fallback: root,
+        validate: validateDirectory,
+      },
+    );
     values.RELAY_COMMAND_PATH = await askValue("Command search path", {
       name: "RELAY_COMMAND_PATH",
       existing,
       fallback: process.env.PATH,
     });
-    values.RELAY_CODEX_MODEL = await askOptionalValue("Codex model (blank uses your CLI default)", {
-      name: "RELAY_CODEX_MODEL",
-      existing,
-    });
-    values.RELAY_CODEX_TIMEOUT_MS = await askValue("Codex timeout in milliseconds", {
-      name: "RELAY_CODEX_TIMEOUT_MS",
-      existing,
-      fallback: "900000",
-      validate: validateMilliseconds,
-    });
-
+    values.RELAY_CODEX_MODEL = await askOptionalValue(
+      "Codex model (blank uses your CLI default)",
+      {
+        name: "RELAY_CODEX_MODEL",
+        existing,
+      },
+    );
+    values.RELAY_CODEX_TIMEOUT_MS = await askValue(
+      "Codex timeout in milliseconds",
+      {
+        name: "RELAY_CODEX_TIMEOUT_MS",
+        existing,
+        fallback: "900000",
+        validate: validateMilliseconds,
+      },
+    );
   } else {
     values.OPENAI_API_KEY = await askValue("OpenAI API key", {
       name: "OPENAI_API_KEY",
@@ -156,8 +176,11 @@ async function configureWorker() {
 }
 
 async function chooseWorkerBackend(existing) {
-  const current = (process.env.RELAY_WORKER_BACKEND || existing.RELAY_WORKER_BACKEND ||
-    (existing.OPENAI_API_KEY ? "openai" : "codex")).toLowerCase();
+  const current = (
+    process.env.RELAY_WORKER_BACKEND ||
+    existing.RELAY_WORKER_BACKEND ||
+    (existing.OPENAI_API_KEY ? "openai" : "codex")
+  ).toLowerCase();
   if (!new Set(["codex", "openai"]).has(current)) {
     fail("RELAY_WORKER_BACKEND must be either codex or openai.");
   }
@@ -168,7 +191,9 @@ async function chooseWorkerBackend(existing) {
   console.log("  2. OpenAI API (uses API billing)\n");
   const defaultChoice = current === "openai" ? "2" : "1";
   while (true) {
-    const answer = (await question(`Choose 1 or 2 [${defaultChoice}]: `)).trim() || defaultChoice;
+    const answer =
+      (await question(`Choose 1 or 2 [${defaultChoice}]: `)).trim() ||
+      defaultChoice;
     if (answer === "1") return "codex";
     if (answer === "2") return "openai";
     console.log("Please choose 1 or 2.");
@@ -176,7 +201,11 @@ async function chooseWorkerBackend(existing) {
 }
 
 async function askValue(label, options) {
-  const current = process.env[options.name] || options.existing[options.name] || options.fallback || "";
+  const current =
+    process.env[options.name] ||
+    options.existing[options.name] ||
+    options.fallback ||
+    "";
 
   if (args.yes) {
     if (!current) fail(`${options.name} is required in non-interactive mode.`);
@@ -186,7 +215,11 @@ async function askValue(label, options) {
   }
 
   while (true) {
-    const suffix = current ? (options.secret ? " [already set]" : ` [${current}]`) : "";
+    const suffix = current
+      ? options.secret
+        ? " [already set]"
+        : ` [${current}]`
+      : "";
     const answer = await question(`${label}${suffix}: `, options.secret);
     const value = answer.trim() || current;
     if (!value) {
@@ -203,17 +236,26 @@ async function askValue(label, options) {
 }
 
 async function askOptionalValue(label, options) {
-  const current = process.env[options.name] ?? options.existing[options.name] ?? options.fallback ?? "";
+  const current =
+    process.env[options.name] ??
+    options.existing[options.name] ??
+    options.fallback ??
+    "";
   if (args.yes) return current;
-  const suffix = current ? (options.secret ? " [already set]" : ` [${current}]`) : "";
+  const suffix = current
+    ? options.secret
+      ? " [already set]"
+      : ` [${current}]`
+    : "";
   const answer = await question(`${label}${suffix}: `, options.secret);
   return answer.trim() || current;
 }
 
 async function saveEnv(target, values) {
-  const contents = Object.entries(values)
-    .map(([name, value]) => `${name}=${formatEnvValue(value)}`)
-    .join("\n") + "\n";
+  const contents =
+    Object.entries(values)
+      .map(([name, value]) => `${name}=${formatEnvValue(value)}`)
+      .join("\n") + "\n";
 
   if (args.dryRun) {
     console.log(`[dry run] Write ${target}`);
@@ -248,7 +290,10 @@ async function confirm(label, defaultValue) {
 
 async function question(prompt, secret = false) {
   if (!secret || !process.stdin.isTTY) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
     try {
       return await rl.question(prompt);
     } finally {
@@ -263,7 +308,11 @@ async function question(prompt, secret = false) {
       callback();
     },
   });
-  const rl = createInterface({ input: process.stdin, output: hiddenOutput, terminal: true });
+  const rl = createInterface({
+    input: process.stdin,
+    output: hiddenOutput,
+    terminal: true,
+  });
   try {
     const answer = rl.question(prompt);
     muted = true;
@@ -329,7 +378,9 @@ function validateMilliseconds(value) {
 function validateDirectory(value) {
   if (!isAbsolute(value)) return "Enter an absolute directory path.";
   try {
-    return statSync(value).isDirectory() ? null : "Enter an existing directory path.";
+    return statSync(value).isDirectory()
+      ? null
+      : "Enter an existing directory path.";
   } catch {
     return "Enter an existing directory path.";
   }
@@ -351,7 +402,9 @@ function validateCodex(value) {
 
 function findExecutable(name) {
   if (isAbsolute(name)) return name;
-  for (const directory of (process.env.PATH || "").split(delimiter).filter(Boolean)) {
+  for (const directory of (process.env.PATH || "")
+    .split(delimiter)
+    .filter(Boolean)) {
     const candidate = join(directory, name);
     try {
       accessSync(candidate, constants.X_OK);
@@ -364,7 +417,10 @@ function findExecutable(name) {
 }
 
 function run(command, commandArgs, errorMessage) {
-  const result = spawnSync(command, commandArgs, { cwd: root, stdio: "inherit" });
+  const result = spawnSync(command, commandArgs, {
+    cwd: root,
+    stdio: "inherit",
+  });
   if (result.error || result.status !== 0) fail(errorMessage);
 }
 
@@ -372,17 +428,26 @@ function printNextSteps(selectedMode, selectedBackend) {
   console.log("\nSetup files are ready.\n");
   if (selectedMode === "web" || selectedMode === "both") {
     console.log("Web next steps:");
-    console.log("  1. Run supabase/migrations/0001_initial.sql in the Supabase SQL Editor.");
+    console.log(
+      "  1. Run supabase/migrations/0001_initial.sql in the Supabase SQL Editor.",
+    );
     console.log("  2. Run npm run dev, or deploy the repository to Vercel.");
-    console.log("  3. Add your Relay URL and /auth/callback to Supabase Auth redirect URLs.\n");
+    console.log(
+      "  3. Add your Relay URL and /auth/callback to Supabase Auth redirect URLs.\n",
+    );
   }
   if (selectedMode === "worker" || selectedMode === "both") {
     console.log("Worker next steps:");
     if (selectedBackend === "codex") {
-      console.log("  • Keep `codex login` and `gh auth login` current for this user");
+      console.log(
+        "  • Keep `codex login` and `gh auth login` current for this user",
+      );
     }
-    console.log("  • Test in the foreground: node --env-file=.env.worker worker/index.mjs");
-    if (!args.installService) console.log("  • Run continuously: npm run worker:service:install");
+    console.log(
+      "  • Test in the foreground: node --env-file=.env.worker worker/index.mjs",
+    );
+    if (!args.installService)
+      console.log("  • Run continuously: npm run worker:service:install");
     console.log("");
   }
 }
@@ -399,7 +464,8 @@ function parseArgs(rawArgs) {
   for (let index = 0; index < rawArgs.length; index += 1) {
     const arg = rawArgs[index];
     if (arg === "--mode") parsed.mode = rawArgs[++index];
-    else if (arg.startsWith("--mode=")) parsed.mode = arg.slice("--mode=".length);
+    else if (arg.startsWith("--mode="))
+      parsed.mode = arg.slice("--mode=".length);
     else if (arg === "--yes" || arg === "-y") parsed.yes = true;
     else if (arg === "--skip-install") parsed.skipInstall = true;
     else if (arg === "--install-service") parsed.installService = true;

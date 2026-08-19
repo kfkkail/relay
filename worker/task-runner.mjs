@@ -44,7 +44,11 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
         const content = [{ type: "input_text", text: payload.text }];
         for (const attachment of payload.attachments) {
           const encoded = (await readFile(attachment.path)).toString("base64");
-          content.push({ type: "input_image", image_url: `data:${attachment.mimeType};base64,${encoded}`, detail: "auto" });
+          content.push({
+            type: "input_image",
+            image_url: `data:${attachment.mimeType};base64,${encoded}`,
+            detail: "auto",
+          });
         }
         const response = await client.responses.create({
           model,
@@ -65,6 +69,7 @@ function normalizeInput(input) {
 
 function required(env, name) {
   const value = env[name];
-  if (!value) throw new Error(`${name} is required when RELAY_WORKER_BACKEND=openai.`);
+  if (!value)
+    throw new Error(`${name} is required when RELAY_WORKER_BACKEND=openai.`);
   return value;
 }

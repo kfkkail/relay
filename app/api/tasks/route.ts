@@ -27,14 +27,22 @@ export async function POST(request: Request) {
     const { supabase, user } = await requireUser();
     const body = await request.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
-    const instructions = typeof body.instructions === "string" ? body.instructions.trim() : "";
-    const parentTaskId = typeof body.parentTaskId === "string" ? body.parentTaskId : null;
+    const instructions =
+      typeof body.instructions === "string" ? body.instructions.trim() : "";
+    const parentTaskId =
+      typeof body.parentTaskId === "string" ? body.parentTaskId : null;
     if (!title) throw new ApiError("Task title is required.");
-    if (!instructions) throw new ApiError("Markdown instructions are required.");
+    if (!instructions)
+      throw new ApiError("Markdown instructions are required.");
 
     const { data, error } = await supabase
       .from("tasks")
-      .insert({ user_id: user.id, title, instructions, parent_task_id: parentTaskId })
+      .insert({
+        user_id: user.id,
+        title,
+        instructions,
+        parent_task_id: parentTaskId,
+      })
       .select(taskSelect)
       .single();
     if (error) throw error;

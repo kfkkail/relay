@@ -11,9 +11,14 @@ export function optionalDate(value: unknown, field: string) {
   return new Date(value).toISOString();
 }
 
-export function futureOptionalDate(value: unknown, field: string, now = new Date()) {
+export function futureOptionalDate(
+  value: unknown,
+  field: string,
+  now = new Date(),
+) {
   const date = optionalDate(value, field);
-  if (date && new Date(date) <= now) throw new Error(`${field} must be in the future.`);
+  if (date && new Date(date) <= now)
+    throw new Error(`${field} must be in the future.`);
   return date;
 }
 
@@ -23,11 +28,16 @@ export function ownerActionDateUpdates(
   now = new Date(),
 ) {
   const updates: { due_at?: string | null; snoozed_until?: string | null } = {};
-  const dueAt = "dueAt" in body ? optionalDate(body.dueAt, "Due date") : currentDueAt;
+  const dueAt =
+    "dueAt" in body ? optionalDate(body.dueAt, "Due date") : currentDueAt;
 
   if ("dueAt" in body) updates.due_at = dueAt;
   if ("snoozedUntil" in body) {
-    const snoozedUntil = futureOptionalDate(body.snoozedUntil, "Hide until date", now);
+    const snoozedUntil = futureOptionalDate(
+      body.snoozedUntil,
+      "Hide until date",
+      now,
+    );
     if (snoozedUntil && dueAt && new Date(dueAt) <= now) {
       throw new Error("Overdue actions cannot be hidden.");
     }

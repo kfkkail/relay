@@ -13,15 +13,23 @@ Relay displays one text/Markdown result. Include important deliverables directly
 export async function runWithCodex(input, options = {}) {
   const command = options.command || "codex";
   const timeoutMs = parseTimeout(options.timeoutMs);
-  const workspace = await resolveDirectory(options.workspace, "RELAY_CODEX_WORKSPACE");
+  const workspace = await resolveDirectory(
+    options.workspace,
+    "RELAY_CODEX_WORKSPACE",
+  );
   const environment = codexEnvironment(options.env || process.env);
 
   const prompt = `# Trusted Relay worker policy\n\n${SOFTWARE_WORKER_POLICY}\n\n# Untrusted task text\n\n${input}`;
-  return await execute(command, codexArguments(options.model, options.attachments), prompt, {
-    cwd: workspace,
-    env: environment,
-    timeoutMs,
-  });
+  return await execute(
+    command,
+    codexArguments(options.model, options.attachments),
+    prompt,
+    {
+      cwd: workspace,
+      env: environment,
+      timeoutMs,
+    },
+  );
 }
 
 export function codexArguments(model, attachments = []) {
@@ -64,10 +72,12 @@ export function codexEnvironment(source) {
 }
 
 async function resolveDirectory(value, name) {
-  if (!value) throw new Error(`${name} is required when RELAY_WORKER_BACKEND=codex.`);
+  if (!value)
+    throw new Error(`${name} is required when RELAY_WORKER_BACKEND=codex.`);
   try {
     const resolved = await realpath(value);
-    if (!(await stat(resolved)).isDirectory()) throw new Error("not a directory");
+    if (!(await stat(resolved)).isDirectory())
+      throw new Error("not a directory");
     return resolved;
   } catch {
     throw new Error(`${name} must be an existing directory.`);
@@ -87,7 +97,11 @@ async function execute(command, args, input, options) {
 
     const timer = setTimeout(() => {
       child.kill("SIGTERM");
-      finish(new Error(`Codex CLI timed out after ${options.timeoutMs} milliseconds.`));
+      finish(
+        new Error(
+          `Codex CLI timed out after ${options.timeoutMs} milliseconds.`,
+        ),
+      );
     }, options.timeoutMs);
 
     child.stdout.setEncoding("utf8");
@@ -96,23 +110,29 @@ async function execute(command, args, input, options) {
       stdout += chunk;
       if (stdout.length > MAX_RESULT_LENGTH) {
         child.kill("SIGTERM");
-        finish(new Error("Codex CLI result exceeded Relay's 200,000-character limit."));
+        finish(
+          new Error(
+            "Codex CLI result exceeded Relay's 200,000-character limit.",
+          ),
+        );
       }
     });
     child.stderr.on("data", (chunk) => {
       if (stderr.length < 50_000) stderr += chunk;
     });
     child.on("error", (error) => {
-      const message = error.code === "ENOENT"
-        ? "Codex CLI is unavailable at RELAY_CODEX_PATH."
-        : "Codex CLI could not be started.";
+      const message =
+        error.code === "ENOENT"
+          ? "Codex CLI is unavailable at RELAY_CODEX_PATH."
+          : "Codex CLI could not be started.";
       finish(new Error(message));
     });
     child.on("close", (code) => {
       if (settled) return;
       if (code !== 0) return finish(new Error(codexFailure(stderr, code)));
       const result = stdout.trim();
-      if (!result) return finish(new Error("Codex CLI returned an empty result."));
+      if (!result)
+        return finish(new Error("Codex CLI returned an empty result."));
       finish(null, result);
     });
     child.stdin.on("error", () => {});
@@ -130,10 +150,17 @@ async function execute(command, args, input, options) {
 
 function codexFailure(stderr, code) {
   const normalized = stderr.toLowerCase();
-  if (normalized.includes("not logged in") || normalized.includes("login required")) {
+  if (
+    normalized.includes("not logged in") ||
+    normalized.includes("login required")
+  ) {
     return "Codex CLI is not authenticated. Run `codex login` as the worker user.";
   }
-  if (normalized.includes("usage limit") || normalized.includes("rate limit") || normalized.includes("quota")) {
+  if (
+    normalized.includes("usage limit") ||
+    normalized.includes("rate limit") ||
+    normalized.includes("quota")
+  ) {
     return "Codex CLI usage limit reached. Check the signed-in ChatGPT workspace and try again later.";
   }
   return `Codex CLI exited with status ${code}. Run it interactively to inspect its diagnostics.`;
@@ -142,7 +169,9 @@ function codexFailure(stderr, code) {
 function parseTimeout(value) {
   const parsed = Number(value || DEFAULT_TIMEOUT_MS);
   if (!Number.isFinite(parsed) || parsed < 1000) {
-    throw new Error("RELAY_CODEX_TIMEOUT_MS must be a number of at least 1000 milliseconds.");
+    throw new Error(
+      "RELAY_CODEX_TIMEOUT_MS must be a number of at least 1000 milliseconds.",
+    );
   }
   return parsed;
 }

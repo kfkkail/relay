@@ -4,10 +4,15 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Relay — Tasks in motion",
-  description: "Capture a task on your phone, run it on your laptop, and keep the result attached.",
+  description:
+    "Capture a task on your phone, run it on your laptop, and keep the result attached.",
   applicationName: "Relay",
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Relay" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Relay",
+  },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
 
@@ -16,7 +21,9 @@ export const viewport: Viewport = {
   colorScheme: "light",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>

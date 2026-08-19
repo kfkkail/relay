@@ -11,7 +11,8 @@ export async function POST(
     const { runId } = await params;
     const { supabase, worker } = await requireWorker(request);
     const body = await request.json();
-    const resultMarkdown = typeof body.resultMarkdown === "string" ? body.resultMarkdown.trim() : "";
+    const resultMarkdown =
+      typeof body.resultMarkdown === "string" ? body.resultMarkdown.trim() : "";
     const artifacts = sanitizeArtifacts(body.artifacts);
     if (!resultMarkdown) throw new ApiError("Markdown result is required.");
 
@@ -22,7 +23,8 @@ export async function POST(
       .eq("worker_id", worker.id)
       .eq("status", "working")
       .maybeSingle();
-    if (runError || !run) throw new ApiError("Active run not found for this worker.", 404);
+    if (runError || !run)
+      throw new ApiError("Active run not found for this worker.", 404);
 
     const finishedAt = new Date().toISOString();
     const { error } = await supabase
@@ -35,7 +37,10 @@ export async function POST(
       })
       .eq("id", run.id);
     if (error) throw error;
-    await supabase.from("tasks").update({ status: "waiting" }).eq("id", run.task_id);
+    await supabase
+      .from("tasks")
+      .update({ status: "waiting" })
+      .eq("id", run.task_id);
     await supabase.from("events").insert({
       task_id: run.task_id,
       run_id: run.id,
@@ -68,23 +73,27 @@ function sanitizeArtifacts(input: unknown): ResultArtifact[] {
       !artifactTypes.has(artifact.type as ResultArtifact["type"]) ||
       typeof artifact.label !== "string" ||
       typeof artifact.value !== "string"
-    ) return [];
+    )
+      return [];
 
     let url: string | undefined;
     if (typeof artifact.url === "string") {
       try {
         const parsed = new URL(artifact.url);
-        if (parsed.protocol === "https:" || parsed.protocol === "http:") url = parsed.toString();
+        if (parsed.protocol === "https:" || parsed.protocol === "http:")
+          url = parsed.toString();
       } catch {
         // Invalid or non-web URLs are omitted rather than made clickable.
       }
     }
 
-    return [{
-      type: artifact.type as ResultArtifact["type"],
-      label: artifact.label.slice(0, 200),
-      value: artifact.value.slice(0, 2000),
-      ...(url ? { url } : {}),
-    }];
+    return [
+      {
+        type: artifact.type as ResultArtifact["type"],
+        label: artifact.label.slice(0, 200),
+        value: artifact.value.slice(0, 2000),
+        ...(url ? { url } : {}),
+      },
+    ];
   });
 }

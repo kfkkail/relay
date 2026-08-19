@@ -12,7 +12,11 @@ const label = "com.relay.worker";
 const envPath = join(root, ".env.worker");
 const workerPath = join(root, "worker/index.mjs");
 
-if (!command || process.argv.includes("--help") || process.argv.includes("-h")) {
+if (
+  !command ||
+  process.argv.includes("--help") ||
+  process.argv.includes("-h")
+) {
   printHelp();
   process.exit(command ? 0 : 1);
 }
@@ -79,7 +83,9 @@ async function manageLaunchd(action) {
   if (dryRun) return showDryRun(servicePath);
   runAllowFailure("launchctl", ["bootout", domain, servicePath]);
   await removeIfPresent(servicePath);
-  console.log("Relay worker service removed. Worker logs were kept in .relay/.");
+  console.log(
+    "Relay worker service removed. Worker logs were kept in .relay/.",
+  );
 }
 
 async function manageSystemd(action) {
@@ -108,7 +114,9 @@ WantedBy=default.target
     await writeFile(servicePath, unit, { mode: 0o644 });
     run("systemctl", ["--user", "daemon-reload"]);
     run("systemctl", ["--user", "enable", "--now", "relay-worker.service"]);
-    console.log("Relay worker installed and started as a systemd user service.");
+    console.log(
+      "Relay worker installed and started as a systemd user service.",
+    );
     console.log("For start-at-boot before login, an administrator can run:");
     console.log(`  sudo loginctl enable-linger ${userInfo().username}`);
     return;
@@ -120,7 +128,12 @@ WantedBy=default.target
   }
 
   if (dryRun) return showDryRun(servicePath);
-  runAllowFailure("systemctl", ["--user", "disable", "--now", "relay-worker.service"]);
+  runAllowFailure("systemctl", [
+    "--user",
+    "disable",
+    "--now",
+    "relay-worker.service",
+  ]);
   await removeIfPresent(servicePath);
   run("systemctl", ["--user", "daemon-reload"]);
   console.log("Relay worker service removed.");
@@ -131,28 +144,44 @@ async function validateWorkerEnv() {
   try {
     contents = await readFile(envPath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT") fail(".env.worker does not exist. Run npm run setup -- --mode worker first.");
+    if (error?.code === "ENOENT")
+      fail(
+        ".env.worker does not exist. Run npm run setup -- --mode worker first.",
+      );
     throw error;
   }
-  const env = Object.fromEntries(contents
-    .split(/\r?\n/)
-    .filter((line) => line && !line.trimStart().startsWith("#") && line.includes("="))
-    .map((line) => {
-      const index = line.indexOf("=");
-      return [line.slice(0, index).trim(), line.slice(index + 1).trim().replace(/^(["'])(.*)\1$/, "$2")];
-    }));
+  const env = Object.fromEntries(
+    contents
+      .split(/\r?\n/)
+      .filter(
+        (line) =>
+          line && !line.trimStart().startsWith("#") && line.includes("="),
+      )
+      .map((line) => {
+        const index = line.indexOf("=");
+        return [
+          line.slice(0, index).trim(),
+          line
+            .slice(index + 1)
+            .trim()
+            .replace(/^(["'])(.*)\1$/, "$2"),
+        ];
+      }),
+  );
   const backend = (env.RELAY_WORKER_BACKEND || "openai").toLowerCase();
   const required = ["RELAY_URL", "RELAY_WORKER_TOKEN"];
   if (backend === "openai") required.push("OPENAI_API_KEY");
-  else if (backend === "codex") required.push(
-    "RELAY_CODEX_PATH",
-    "RELAY_CODEX_WORKSPACE",
-    "RELAY_COMMAND_PATH",
-  );
+  else if (backend === "codex")
+    required.push(
+      "RELAY_CODEX_PATH",
+      "RELAY_CODEX_WORKSPACE",
+      "RELAY_COMMAND_PATH",
+    );
   else fail("RELAY_WORKER_BACKEND must be either codex or openai.");
 
   for (const name of required) {
-    if (!new RegExp(`^${name}=.+$`, "m").test(contents)) fail(`${name} is missing from .env.worker.`);
+    if (!new RegExp(`^${name}=.+$`, "m").test(contents))
+      fail(`${name} is missing from .env.worker.`);
   }
 }
 

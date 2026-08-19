@@ -12,7 +12,9 @@ export function latestCompletedRun(runs: Run[]) {
     .sort((left, right) => right.attempt - left.attempt)[0];
 }
 
-export function buildFollowUpInstructions(task: Pick<Task, "title" | "accepted_result">) {
+export function buildFollowUpInstructions(
+  task: Pick<Task, "title" | "accepted_result">,
+) {
   if (!task.accepted_result) {
     throw new Error("Accept a result before creating a follow-up task.");
   }
@@ -40,7 +42,10 @@ export function statusLabel(status: TaskStatus) {
 
 export type OwnerActionFilter = "active" | "snoozed" | "done";
 
-export function ownerActionFilter(action: OwnerAction, now = new Date()): OwnerActionFilter {
+export function ownerActionFilter(
+  action: OwnerAction,
+  now = new Date(),
+): OwnerActionFilter {
   if (action.status === "done") return "done";
   const snoozed = action.snoozed_until && new Date(action.snoozed_until) > now;
   const due = action.due_at && new Date(action.due_at) <= now;

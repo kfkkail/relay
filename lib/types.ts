@@ -1,7 +1,19 @@
-export const taskStatuses = ["inbox", "ready", "working", "waiting", "done"] as const;
+export const taskStatuses = [
+  "inbox",
+  "ready",
+  "working",
+  "waiting",
+  "done",
+] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
 
-export const runStatuses = ["queued", "working", "completed", "failed", "cancelled"] as const;
+export const runStatuses = [
+  "queued",
+  "working",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
 export type ResultArtifact = {

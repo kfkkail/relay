@@ -29,7 +29,8 @@ describe("native Codex runner", () => {
     expect(args).toContain(
       'plugins."google-calendar@openai-curated".enabled=true',
     );
-    expect(args).toContain('approval_policy="never"');
+    expect(args).toContain("--approve-for-me");
+    expect(args).not.toContain('approval_policy="never"');
     expect(args).toContain("sandbox_workspace_write.network_access=true");
     expect(args).toContain('web_search="disabled"');
     expect(args).toContain("workspace-write");

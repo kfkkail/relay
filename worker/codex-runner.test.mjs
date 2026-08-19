@@ -107,6 +107,10 @@ process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.
     expect(result.input).toContain(
       "use the Keusch calendar with calendar ID andreajkeusch@gmail.com",
     );
+    expect(result.input).toContain("Create it with an empty attendee list");
+    expect(result.input).toContain(
+      "never add the owner as an attendee merely to make a shared-calendar event appear on their primary calendar",
+    );
     expect(result.input).toContain("# Trusted Relay worker policy\n\n");
     expect(result.input).toContain(
       "# Untrusted task text\n\n# Task\nCreate a pull request",

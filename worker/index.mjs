@@ -12,7 +12,9 @@ let stopping = false;
 process.on("SIGINT", () => (stopping = true));
 process.on("SIGTERM", () => (stopping = true));
 
-console.log(`Relay worker started with ${taskRunner.backend}; polling ${new URL(relayUrl).origin}`);
+console.log(
+  `Relay worker started with ${taskRunner.backend}; polling ${new URL(relayUrl).origin}`,
+);
 
 while (!stopping) {
   let claimed;
@@ -37,24 +39,45 @@ while (!stopping) {
     if (attachments.length) {
       attachmentDirectory = await mkdtemp(join(tmpdir(), `relay-${run.id}-`));
       for (const attachment of attachments) {
-        const extension = attachment.mime_type === "image/jpeg" ? ".jpg" : attachment.mime_type === "image/png" ? ".png" : ".webp";
+        const extension =
+          attachment.mime_type === "image/jpeg"
+            ? ".jpg"
+            : attachment.mime_type === "image/png"
+              ? ".png"
+              : ".webp";
         const path = join(attachmentDirectory, `${attachment.id}${extension}`);
-        const data = await relayDownload(`/api/worker/runs/${run.id}/attachments/${attachment.id}`);
-        if (data.byteLength !== attachment.byte_size) throw new Error(`Attachment ${attachment.file_name} did not match its recorded size.`);
+        const data = await relayDownload(
+          `/api/worker/runs/${run.id}/attachments/${attachment.id}`,
+        );
+        if (data.byteLength !== attachment.byte_size)
+          throw new Error(
+            `Attachment ${attachment.file_name} did not match its recorded size.`,
+          );
         await writeFile(path, data, { flag: "wx" });
-        localAttachments.push({ path, mimeType: attachment.mime_type, fileName: attachment.file_name });
+        localAttachments.push({
+          path,
+          mimeType: attachment.mime_type,
+          fileName: attachment.file_name,
+        });
       }
     }
     const input = [
       `# Task\n${task.title}`,
       `# Instructions and context\n${task.instructions}`,
-      run.feedback ? `# Feedback on the previous attempt\n${run.feedback}` : null,
+      run.feedback
+        ? `# Feedback on the previous attempt\n${run.feedback}`
+        : null,
     ]
       .filter(Boolean)
       .join("\n\n");
 
-    const attachmentNote = localAttachments.length ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}` : "";
-    const resultMarkdown = await taskRunner.run({ text: input + attachmentNote, attachments: localAttachments });
+    const attachmentNote = localAttachments.length
+      ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}`
+      : "";
+    const resultMarkdown = await taskRunner.run({
+      text: input + attachmentNote,
+      attachments: localAttachments,
+    });
 
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
@@ -70,10 +93,13 @@ while (!stopping) {
         body: JSON.stringify({ error: message }),
       });
     } catch (reportError) {
-      console.error(`Could not report failure for ${run.id}: ${safeError(reportError)}`);
+      console.error(
+        `Could not report failure for ${run.id}: ${safeError(reportError)}`,
+      );
     }
   } finally {
-    if (attachmentDirectory) await rm(attachmentDirectory, { recursive: true, force: true });
+    if (attachmentDirectory)
+      await rm(attachmentDirectory, { recursive: true, force: true });
   }
 }
 
@@ -96,15 +122,21 @@ async function relayRequest(path, init) {
   });
   if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Relay returned HTTP ${response.status}.`);
+  if (!response.ok)
+    throw new Error(body.error || `Relay returned HTTP ${response.status}.`);
   return body;
 }
 
 async function relayDownload(path) {
-  const response = await fetch(`${relayUrl}${path}`, { headers: { Authorization: `Bearer ${workerToken}` } });
+  const response = await fetch(`${relayUrl}${path}`, {
+    headers: { Authorization: `Bearer ${workerToken}` },
+  });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `Relay could not download an attachment (HTTP ${response.status}).`);
+    throw new Error(
+      body.error ||
+        `Relay could not download an attachment (HTTP ${response.status}).`,
+    );
   }
   return Buffer.from(await response.arrayBuffer());
 }

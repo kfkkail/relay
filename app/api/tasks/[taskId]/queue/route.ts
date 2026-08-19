@@ -14,7 +14,11 @@ export async function POST(
       .eq("id", taskId)
       .single();
     if (taskError || !task) throw new ApiError("Task not found.", 404);
-    if (task.runs.some((run) => run.status === "queued" || run.status === "working")) {
+    if (
+      task.runs.some(
+        (run) => run.status === "queued" || run.status === "working",
+      )
+    ) {
       throw new ApiError("This task already has an active run.", 409);
     }
     const attempt = Math.max(0, ...task.runs.map((run) => run.attempt)) + 1;
@@ -24,7 +28,10 @@ export async function POST(
       .select("id")
       .single();
     if (error) throw error;
-    const { error: snapshotError } = await supabase.rpc("snapshot_run_attachments", { p_run_id: run.id });
+    const { error: snapshotError } = await supabase.rpc(
+      "snapshot_run_attachments",
+      { p_run_id: run.id },
+    );
     if (snapshotError) {
       await supabase.from("runs").delete().eq("id", run.id);
       throw snapshotError;

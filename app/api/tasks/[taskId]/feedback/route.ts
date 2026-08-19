@@ -9,7 +9,8 @@ export async function POST(
     const { taskId } = await params;
     const { supabase, user } = await requireUser();
     const body = await request.json();
-    const feedback = typeof body.feedback === "string" ? body.feedback.trim() : "";
+    const feedback =
+      typeof body.feedback === "string" ? body.feedback.trim() : "";
     if (!feedback) throw new ApiError("Feedback is required.");
 
     const { data: task, error: taskError } = await supabase
@@ -18,8 +19,15 @@ export async function POST(
       .eq("id", taskId)
       .single();
     if (taskError || !task) throw new ApiError("Task not found.", 404);
-    if (task.runs.some((run) => run.status === "queued" || run.status === "working")) {
-      throw new ApiError("Wait for the active run to finish before trying again.", 409);
+    if (
+      task.runs.some(
+        (run) => run.status === "queued" || run.status === "working",
+      )
+    ) {
+      throw new ApiError(
+        "Wait for the active run to finish before trying again.",
+        409,
+      );
     }
 
     const attempt = Math.max(0, ...task.runs.map((run) => run.attempt)) + 1;

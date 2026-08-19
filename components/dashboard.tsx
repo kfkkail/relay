@@ -568,7 +568,7 @@ function ImagePicker({ file, onChange, currentName }: { file: File | null; onCha
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
   return <div className="image-picker">
     <label htmlFor="task-image"><Paperclip size={15} />{currentName ? "Replace image" : "Attach image"}</label>
-    <input id="task-image" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
+    <input id="task-image" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => onChange(event.target.files?.[0] ?? null)} />
     {(file || currentName) && <div className="image-preview">
       {preview ? <>
         {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview */}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
+import { TASK_RUN_SUMMARY_SELECT } from "@/lib/task-select";
 
 export async function POST(
   _request: Request,
@@ -10,7 +11,7 @@ export async function POST(
     const { supabase, user } = await requireUser();
     const { data: task, error: taskError } = await supabase
       .from("tasks")
-      .select("id,status,runs(id,status,attempt)")
+      .select(TASK_RUN_SUMMARY_SELECT)
       .eq("id", taskId)
       .single();
     if (taskError || !task) throw new ApiError("Task not found.", 404);

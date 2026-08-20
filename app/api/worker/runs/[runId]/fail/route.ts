@@ -24,6 +24,23 @@ export async function POST(
     if (runError || !run)
       throw new ApiError("Active run not found for this worker.", 404);
 
+    const { data: stagedDocuments } = await supabase
+      .from("result_documents")
+      .select("storage_path")
+      .eq("run_id", run.id)
+      .eq("staged", true);
+    const stagedPaths = (stagedDocuments ?? []).map(
+      (item) => item.storage_path,
+    );
+    if (stagedPaths.length) {
+      await supabase.storage.from("result-documents").remove(stagedPaths);
+      await supabase
+        .from("result_documents")
+        .delete()
+        .eq("run_id", run.id)
+        .eq("staged", true);
+    }
+
     await supabase
       .from("runs")
       .update({

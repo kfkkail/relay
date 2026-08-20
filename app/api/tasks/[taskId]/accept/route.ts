@@ -22,7 +22,11 @@ export async function POST(
     }
     const { error } = await supabase
       .from("tasks")
-      .update({ accepted_result: run.result_markdown, status: "done" })
+      .update({
+        accepted_result: run.result_markdown,
+        accepted_run_id: run.id,
+        status: "done",
+      })
       .eq("id", taskId);
     if (error) throw error;
     await supabase.from("events").insert({

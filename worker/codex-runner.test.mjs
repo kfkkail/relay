@@ -75,45 +75,42 @@ describe("native Codex runner", () => {
     const fixture = await makeExecutable(`#!/usr/bin/env node
 let input = "";
 for await (const chunk of process.stdin) input += chunk;
-process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd(), input, relaySecret: process.env.RELAY_WORKER_TOKEN, home: process.env.HOME }));
+process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: process.argv.slice(2), cwd: process.cwd(), input, relaySecret: process.env.RELAY_WORKER_TOKEN, home: process.env.HOME }), documents: [] }));
 `);
 
-    const result = JSON.parse(
-      await runWithCodex("# Task\nCreate a pull request", {
-        command: fixture,
-        env: {
-          ...process.env,
-          HOME: "/Users/relay",
-          RELAY_WORKER_TOKEN: "do-not-forward",
-        },
-        model: "gpt-example",
-        timeoutMs: 5000,
-        workspace,
-      }),
-    );
+    const result = await runWithCodex("# Task\nCreate a pull request", {
+      command: fixture,
+      env: {
+        ...process.env,
+        HOME: "/Users/relay",
+        RELAY_WORKER_TOKEN: "do-not-forward",
+      },
+      model: "gpt-example",
+      timeoutMs: 5000,
+      workspace,
+    });
 
-    expect(result.args).toEqual(codexArguments("gpt-example"));
-    expect(result.input).toContain("running on the owner's machine");
-    expect(result.input).toContain("Do not disable or evade the Codex sandbox");
-    expect(result.input).toContain("Relay displays one text/Markdown result");
-    expect(result.input).toContain(
-      "Do not link to local files or generated documents",
-    );
-    expect(result.input).toContain("http/https links are supported");
-    expect(result.input).toContain("commits, and pull requests");
-    expect(result.input).toContain(
+    const debug = JSON.parse(result.resultMarkdown);
+    expect(result.documents).toEqual([]);
+    expect(debug.args).toEqual(codexArguments("gpt-example"));
+    expect(debug.input).toContain("running on the owner's machine");
+    expect(debug.input).toContain("Do not disable or evade the Codex sandbox");
+    expect(debug.input).toContain("Relay supports private result documents");
+    expect(debug.input).toContain("http/https links are supported");
+    expect(debug.input).toContain("commits, and pull requests");
+    expect(debug.input).toContain(
       "An unambiguous request to make a calendar change is authorization",
     );
-    expect(result.input).toContain(
+    expect(debug.input).toContain(
       "use the Keusch calendar with calendar ID andreajkeusch@gmail.com",
     );
-    expect(result.input).toContain("# Trusted Relay worker policy\n\n");
-    expect(result.input).toContain(
+    expect(debug.input).toContain("# Trusted Relay worker policy\n\n");
+    expect(debug.input).toContain(
       "# Untrusted task text\n\n# Task\nCreate a pull request",
     );
-    expect(result.relaySecret).toBeUndefined();
-    expect(result.home).toBe("/Users/relay");
-    expect(result.cwd).toBe(await realpath(workspace));
+    expect(debug.relaySecret).toBeUndefined();
+    expect(debug.home).toBe("/Users/relay");
+    expect(debug.cwd).toBe(await realpath(workspace));
   });
 
   it("requires an existing workspace", async () => {
@@ -156,12 +153,15 @@ describe("worker backend selection", () => {
       {
         runCodex: async (input, options) => {
           calls.push({ input, options });
-          return "done";
+          return { resultMarkdown: "done", documents: [] };
         },
       },
     );
 
-    await expect(runner.run("task input")).resolves.toBe("done");
+    await expect(runner.run("task input")).resolves.toEqual({
+      resultMarkdown: "done",
+      documents: [],
+    });
     expect(calls[0]).toMatchObject({
       input: "task input",
       options: {
@@ -196,13 +196,11 @@ describe("worker backend selection", () => {
       { OpenAI: FakeOpenAI },
     );
 
-    await expect(runner.run("# Task\nSummarize the document")).resolves.toBe(
-      "done",
+    await expect(runner.run("# Task\nSummarize the document")).resolves.toEqual(
+      { resultMarkdown: "done", documents: [] },
     );
     expect(calls[0].instructions).toContain("one text/Markdown result");
-    expect(calls[0].instructions).toContain(
-      "Do not link to local files or generated documents",
-    );
+    expect(calls[0].instructions).toContain("no tools, filesystem");
     expect(calls[0].instructions).toContain("http/https links are supported");
     expect(calls[0].instructions).toContain("commits, and pull requests");
     expect(calls[0].instructions).toContain("untrusted task text");

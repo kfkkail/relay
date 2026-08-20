@@ -22,9 +22,9 @@ export default async function Home() {
         .from("tasks")
         .select(
           `
-        id,title,status,instructions,accepted_result,parent_task_id,created_at,updated_at,
+        id,title,status,instructions,accepted_result,accepted_run_id,parent_task_id,created_at,updated_at,
         task_attachments(id,file_name,mime_type,byte_size,width,height),
-        runs(id,task_id,status,attempt,worker_id,feedback,result_markdown,result_artifacts,error,queued_at,started_at,finished_at)
+        runs(id,task_id,status,attempt,worker_id,feedback,result_markdown,result_artifacts,error,queued_at,started_at,finished_at,result_documents(id,display_filename,mime_type,byte_size,description))
       `,
         )
         .order("updated_at", { ascending: false })

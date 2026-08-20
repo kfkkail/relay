@@ -1,7 +1,9 @@
 # Relay laptop worker
 
 The worker makes outbound HTTPS requests to Relay. It never opens a listening
-port, so an offline laptop simply leaves runs in the queue.
+port, so an offline laptop simply leaves runs in the queue. A running worker
+claims and processes up to five runs at once; additional runs remain queued
+until an agent slot becomes available.
 
 ## Run it
 

@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 describe("native Codex runner", () => {
-  it("uses Codex's workspace sandbox with command network access", () => {
+  it("uses Codex's auto-reviewed workspace sandbox with command network access", () => {
     const args = codexArguments("gpt-example");
 
     expect(args).toContain("--ephemeral");
@@ -30,10 +30,10 @@ describe("native Codex runner", () => {
       'plugins."google-calendar@openai-curated".enabled=true',
     );
     expect(args).toContain("--approve-for-me");
+    expect(args).not.toContain("--sandbox");
     expect(args).not.toContain('approval_policy="never"');
     expect(args).toContain("sandbox_workspace_write.network_access=true");
     expect(args).toContain('web_search="disabled"');
-    expect(args).toContain("workspace-write");
     expect(args).not.toContain("danger-full-access");
     expect(args).toContain("--model");
     expect(args.at(-1)).toBe("-");
@@ -103,6 +103,10 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
     );
     expect(debug.input).toContain(
       "use the Keusch calendar with calendar ID andreajkeusch@gmail.com",
+    );
+    expect(debug.input).toContain("Create it with an empty attendee list");
+    expect(debug.input).toContain(
+      "never add the owner as an attendee merely to make a shared-calendar event appear on their primary calendar",
     );
     expect(debug.input).toContain("# Trusted Relay worker policy\n\n");
     expect(debug.input).toContain(

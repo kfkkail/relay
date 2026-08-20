@@ -70,7 +70,7 @@ export function Dashboard({
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
   const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
-  const [area, setArea] = useState<"tasks" | "my-work">("tasks");
+  const [area, setArea] = useState<"tasks" | "my-work">("my-work");
   const [filter, setFilter] = useState<TaskStatus>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(
     initialTasks[0]?.id ?? null,
@@ -374,16 +374,16 @@ export function Dashboard({
         </div>
         <nav className="area-nav" aria-label="Main navigation">
           <button
-            className={area === "tasks" ? "active" : ""}
-            onClick={() => setArea("tasks")}
-          >
-            Tasks
-          </button>
-          <button
             className={area === "my-work" ? "active" : ""}
             onClick={() => setArea("my-work")}
           >
             My Work
+          </button>
+          <button
+            className={area === "tasks" ? "active" : ""}
+            onClick={() => setArea("tasks")}
+          >
+            Tasks
           </button>
         </nav>
         <div className="topbar-actions">

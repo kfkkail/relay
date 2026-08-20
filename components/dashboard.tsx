@@ -70,7 +70,7 @@ export function Dashboard({
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
   const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
-  const [area, setArea] = useState<"tasks" | "my-work">("tasks");
+  const [area, setArea] = useState<"tasks" | "my-work">("my-work");
   const [filter, setFilter] = useState<TaskStatus>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(
     initialTasks[0]?.id ?? null,
@@ -374,16 +374,16 @@ export function Dashboard({
         </div>
         <nav className="area-nav" aria-label="Main navigation">
           <button
-            className={area === "tasks" ? "active" : ""}
-            onClick={() => setArea("tasks")}
-          >
-            Tasks
-          </button>
-          <button
             className={area === "my-work" ? "active" : ""}
             onClick={() => setArea("my-work")}
           >
             My Work
+          </button>
+          <button
+            className={area === "tasks" ? "active" : ""}
+            onClick={() => setArea("tasks")}
+          >
+            Tasks
           </button>
         </nav>
         <div className="topbar-actions">
@@ -434,7 +434,7 @@ export function Dashboard({
                 }}
               >
                 <Plus size={19} />
-                New
+                Task
               </button>
             </div>
 
@@ -601,7 +601,7 @@ export function Dashboard({
                 maxLength={160}
               />
               <label htmlFor="task-instructions">
-                Markdown instructions and context
+                Markdown instructions and context (optional)
               </label>
               <textarea
                 id="task-instructions"
@@ -612,7 +612,6 @@ export function Dashboard({
                 placeholder={
                   "## Outcome\nDescribe the result you want.\n\n## Context\nAdd useful constraints and background."
                 }
-                required
                 rows={14}
               />
               <div className="composer-hint">
@@ -667,13 +666,12 @@ export function Dashboard({
                 autoFocus
               />
               <label htmlFor="edit-task-instructions">
-                Markdown instructions and context
+                Markdown instructions and context (optional)
               </label>
               <textarea
                 id="edit-task-instructions"
                 value={editInstructions}
                 onChange={(event) => setEditInstructions(event.target.value)}
-                required
                 maxLength={100000}
                 rows={14}
               />
@@ -701,9 +699,7 @@ export function Dashboard({
                 </button>
                 <button
                   className="primary-button"
-                  disabled={
-                    busy || !editTitle.trim() || !editInstructions.trim()
-                  }
+                  disabled={busy || !editTitle.trim()}
                 >
                   {busy ? "Saving…" : "Save changes"}
                   <Check size={18} />
@@ -836,7 +832,7 @@ export function Dashboard({
                     }
                   >
                     <Plus size={17} />
-                    Create task
+                    Task
                   </button>
                   <button
                     className="primary-button"
@@ -1048,7 +1044,7 @@ function MyWork({
           }}
         >
           <Plus size={19} />
-          New action
+          Action
         </button>
       </div>
       <div className="filter-strip" aria-label="Filter owner actions">
@@ -1398,6 +1394,7 @@ function TaskDetail({
 }) {
   const [feedback, setFeedback] = useState("");
   const latest = latestCompletedRun(task.runs);
+  const acceptedRun = task.runs.find((run) => run.id === task.accepted_run_id);
   const active = task.runs.find(
     (run) => run.status === "working" || run.status === "queued",
   );
@@ -1646,6 +1643,10 @@ function TaskDetail({
               ))}
             </div>
           )}
+          <ResultDocuments
+            taskId={task.id}
+            documents={latest.result_documents}
+          />
           <div className="review-actions">
             <label htmlFor="feedback">Feedback for another run</label>
             <textarea
@@ -1694,8 +1695,42 @@ function TaskDetail({
               {task.accepted_result}
             </ReactMarkdown>
           </div>
+          {acceptedRun && (
+            <ResultDocuments
+              taskId={task.id}
+              documents={acceptedRun.result_documents}
+            />
+          )}
         </section>
       )}
+    </div>
+  );
+}
+
+function ResultDocuments({
+  taskId,
+  documents,
+}: {
+  taskId: string;
+  documents: import("@/lib/types").ResultDocument[];
+}) {
+  if (!documents?.length) return null;
+  return (
+    <div className="artifact-list">
+      <p className="eyebrow">Documents</p>
+      {documents.map((document) => (
+        <a
+          key={document.id}
+          href={`/api/tasks/${taskId}/documents/${document.id}`}
+        >
+          <span>
+            {document.mime_type.split("/").at(-1)} ·{" "}
+            {formatBytes(document.byte_size)}
+          </span>
+          <strong>{document.display_filename}</strong>
+          <ChevronRight size={17} />
+        </a>
+      ))}
     </div>
   );
 }

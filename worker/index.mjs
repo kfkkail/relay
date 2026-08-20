@@ -1,7 +1,8 @@
 import { createTaskRunner } from "./task-runner.mjs";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { collectResultDocuments } from "./result-documents.mjs";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
@@ -74,14 +75,41 @@ while (!stopping) {
     const attachmentNote = localAttachments.length
       ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}`
       : "";
-    const resultMarkdown = await taskRunner.run({
+    const result = await taskRunner.run({
       text: input + attachmentNote,
       attachments: localAttachments,
     });
 
+    const documents =
+      taskRunner.backend === "codex"
+        ? await collectResultDocuments(
+            process.env.RELAY_CODEX_WORKSPACE,
+            result.documents,
+          )
+        : [];
+    const documentIds = [];
+    for (const document of documents) {
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([await readFile(document.path)], document.fileName, {
+          type: document.mimeType,
+        }),
+      );
+      if (document.description) form.set("description", document.description);
+      const uploaded = await relayRequest(
+        `/api/worker/runs/${run.id}/documents`,
+        { method: "POST", body: form },
+      );
+      documentIds.push(uploaded.document.id);
+    }
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
-      body: JSON.stringify({ resultMarkdown, artifacts: [] }),
+      body: JSON.stringify({
+        resultMarkdown: result.resultMarkdown,
+        artifacts: [],
+        documentIds,
+      }),
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {
@@ -112,11 +140,12 @@ function required(name) {
 }
 
 async function relayRequest(path, init) {
+  const isForm = init?.body instanceof FormData;
   const response = await fetch(`${relayUrl}${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${workerToken}`,
-      "Content-Type": "application/json",
+      ...(isForm ? {} : { "Content-Type": "application/json" }),
       ...init?.headers,
     },
   });

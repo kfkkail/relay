@@ -84,11 +84,15 @@ are not logged.
 
 ## Task results
 
-Relay displays a single text/Markdown result for each run. Agents include
-important deliverables, validation, and limitations directly in that result.
+Relay displays a text/Markdown result for each run. Codex-backed workers may
+also declare up to 10 private result documents from inside their configured
+workspace: Markdown, plain text, PDF, CSV, or JSON. Each document is limited to
+10 MB and all documents together are limited to 25 MB. Agents include important
+deliverables, validation, and limitations directly in Markdown even when they
+attach documents. The direct OpenAI backend remains Markdown-only.
 Normal `http` and `https` links work, including links to websites, commits, and
-pull requests. Local file and generated-document links do not work in the
-frontend and should not be used as deliverables.
+pull requests. Local paths are never shown in Relay; uploaded documents appear
+under the result with authenticated download controls.
 
 For branch-based repository tasks, agents create a dedicated branch and linked
 worktree inside the configured workspace before editing. They first inspect the
@@ -101,8 +105,10 @@ All endpoints use `Authorization: Bearer <worker token>`.
 
 - `POST /api/worker/runs/claim` atomically claims the oldest queued run for the
   token owner, or returns `204` when no work is available.
-- `POST /api/worker/runs/:id/complete` accepts a Markdown result and optional
-  structured artifacts.
+- `POST /api/worker/runs/:id/documents` stages a validated document for the
+  worker's active run.
+- `POST /api/worker/runs/:id/complete` accepts a Markdown result, optional
+  structured artifacts, and the exact IDs of successfully staged documents.
 - `POST /api/worker/runs/:id/fail` records a bounded error message.
 
 Software tasks can edit repositories and use GitHub from the configured

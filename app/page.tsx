@@ -3,6 +3,7 @@ import { SetupPanel } from "@/components/setup-panel";
 import { SignIn } from "@/components/sign-in";
 import { hasPublicSupabaseConfig } from "@/lib/env";
 import { createClient } from "@/lib/supabase/server";
+import { TASK_SELECT } from "@/lib/task-select";
 import type { OwnerAction, Task, Worker } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +21,7 @@ export default async function Home() {
     await Promise.all([
       supabase
         .from("tasks")
-        .select(
-          `
-        id,title,status,instructions,accepted_result,parent_task_id,created_at,updated_at,
-        task_attachments(id,file_name,mime_type,byte_size,width,height),
-        runs(id,task_id,status,attempt,worker_id,feedback,result_markdown,result_artifacts,error,queued_at,started_at,finished_at)
-      `,
-        )
+        .select(TASK_SELECT)
         .order("updated_at", { ascending: false })
         .order("attempt", { referencedTable: "runs", ascending: false }),
       supabase

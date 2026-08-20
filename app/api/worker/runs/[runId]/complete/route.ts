@@ -14,6 +14,7 @@ export async function POST(
     const resultMarkdown =
       typeof body.resultMarkdown === "string" ? body.resultMarkdown.trim() : "";
     const artifacts = sanitizeArtifacts(body.artifacts);
+    const documentIds = sanitizeDocumentIds(body.documentIds);
     if (!resultMarkdown) throw new ApiError("Markdown result is required.");
 
     const { data: run, error: runError } = await supabase
@@ -26,32 +27,34 @@ export async function POST(
     if (runError || !run)
       throw new ApiError("Active run not found for this worker.", 404);
 
-    const finishedAt = new Date().toISOString();
-    const { error } = await supabase
-      .from("runs")
-      .update({
-        status: "completed",
-        result_markdown: resultMarkdown,
-        result_artifacts: artifacts,
-        finished_at: finishedAt,
-      })
-      .eq("id", run.id);
-    if (error) throw error;
-    await supabase
-      .from("tasks")
-      .update({ status: "waiting" })
-      .eq("id", run.task_id);
-    await supabase.from("events").insert({
-      task_id: run.task_id,
-      run_id: run.id,
-      user_id: run.user_id,
-      type: "run.completed",
-      payload: { attempt: run.attempt, artifactCount: artifacts.length },
+    const { error } = await supabase.rpc("complete_run_with_documents", {
+      p_run_id: run.id,
+      p_worker_id: worker.id,
+      p_result_markdown: resultMarkdown,
+      p_result_artifacts: artifacts,
+      p_document_ids: documentIds,
     });
+    if (error) throw error;
     return NextResponse.json({ completed: true });
   } catch (error) {
     return apiErrorResponse(error);
   }
+}
+
+function sanitizeDocumentIds(input: unknown) {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > 10)
+    throw new ApiError("Document IDs must be an array of at most 10 items.");
+  const ids = input.filter(
+    (value): value is string =>
+      typeof value === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        value,
+      ),
+  );
+  if (ids.length !== input.length || new Set(ids).size !== ids.length)
+    throw new ApiError("Document IDs are invalid.");
+  return ids;
 }
 
 const artifactTypes = new Set<ResultArtifact["type"]>([

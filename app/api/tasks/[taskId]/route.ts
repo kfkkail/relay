@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-
-const taskSelect = `
-  id,title,status,instructions,accepted_result,parent_task_id,created_at,updated_at,
-  task_attachments(id,file_name,mime_type,byte_size,width,height),
-  runs(id,task_id,status,attempt,worker_id,feedback,result_markdown,result_artifacts,error,queued_at,started_at,finished_at)
-`;
+import { TASK_SELECT } from "@/lib/task-select";
 
 export async function PATCH(
   request: Request,
@@ -22,8 +17,6 @@ export async function PATCH(
     if (title.length > 160) {
       throw new ApiError("Task title must be 160 characters or fewer.");
     }
-    if (!instructions.trim())
-      throw new ApiError("Markdown instructions are required.");
     if (instructions.length > 100000) {
       throw new ApiError(
         "Markdown instructions must be 100,000 characters or fewer.",
@@ -34,7 +27,7 @@ export async function PATCH(
       .from("tasks")
       .update({ title, instructions })
       .eq("id", taskId)
-      .select(taskSelect)
+      .select(TASK_SELECT)
       .single();
     if (error || !task) throw new ApiError("Task not found.", 404);
 

@@ -1,18 +1,13 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-
-const taskSelect = `
-  id,title,status,instructions,accepted_result,parent_task_id,created_at,updated_at,
-  task_attachments(id,file_name,mime_type,byte_size,width,height),
-  runs(id,task_id,status,attempt,worker_id,feedback,result_markdown,result_artifacts,error,queued_at,started_at,finished_at)
-`;
+import { TASK_SELECT } from "@/lib/task-select";
 
 export async function GET() {
   try {
     const { supabase } = await requireUser();
     const { data, error } = await supabase
       .from("tasks")
-      .select(taskSelect)
+      .select(TASK_SELECT)
       .order("updated_at", { ascending: false })
       .order("attempt", { referencedTable: "runs", ascending: false });
     if (error) throw error;
@@ -32,8 +27,6 @@ export async function POST(request: Request) {
     const parentTaskId =
       typeof body.parentTaskId === "string" ? body.parentTaskId : null;
     if (!title) throw new ApiError("Task title is required.");
-    if (!instructions)
-      throw new ApiError("Markdown instructions are required.");
 
     const { data, error } = await supabase
       .from("tasks")
@@ -43,7 +36,7 @@ export async function POST(request: Request) {
         instructions,
         parent_task_id: parentTaskId,
       })
-      .select(taskSelect)
+      .select(TASK_SELECT)
       .single();
     if (error) throw error;
 

@@ -18,6 +18,7 @@ const run = (overrides: Partial<Run>): Run => ({
   feedback: null,
   result_markdown: null,
   result_artifacts: [],
+  result_documents: [],
   error: null,
   queued_at: new Date().toISOString(),
   started_at: null,

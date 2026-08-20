@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ taskId: string; documentId: string }> },
 ) {
   try {
@@ -22,7 +22,10 @@ export async function GET(
       .download(document.storage_path);
     if (error || !data)
       throw new ApiError("Document could not be downloaded.", 404);
-    const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(document.display_filename)}`;
+    const dispositionType = new URL(request.url).searchParams.has("inline")
+      ? "inline"
+      : "attachment";
+    const disposition = `${dispositionType}; filename*=UTF-8''${encodeURIComponent(document.display_filename)}`;
     return new NextResponse(data, {
       headers: {
         "Content-Type": document.mime_type,

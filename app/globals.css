@@ -45,6 +45,127 @@ button,
 a {
   -webkit-tap-highlight-color: transparent;
 }
+
+.file-viewer {
+  min-height: 100dvh;
+  background: var(--paper);
+}
+.file-viewer-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 76px;
+  border-bottom: 1px solid var(--line);
+  padding: max(12px, env(safe-area-inset-top)) 20px 12px;
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(16px);
+}
+.file-viewer-back,
+.file-viewer-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+  text-decoration: none;
+}
+.file-viewer-download {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: var(--surface);
+}
+.file-viewer-title {
+  min-width: 0;
+  text-align: center;
+}
+.file-viewer-title p {
+  margin: 0 0 3px;
+  color: var(--ink-soft);
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.file-viewer-title h1 {
+  overflow: hidden;
+  margin: 0;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-viewer-content {
+  width: min(100%, 1040px);
+  min-height: calc(100dvh - 76px);
+  margin: 0 auto;
+  padding: 24px;
+}
+.file-viewer-markdown {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.file-viewer-text {
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+  color: var(--ink);
+  background: var(--surface);
+  font:
+    13px/1.6 "SFMono-Regular",
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.file-viewer-pdf {
+  width: 100%;
+  height: calc(100dvh - 124px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: white;
+}
+.file-viewer-image {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100dvh - 124px);
+  margin: 0 auto;
+  border-radius: 14px;
+  object-fit: contain;
+}
+.file-viewer-error {
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .file-viewer-header {
+    gap: 9px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+  .file-viewer-back span,
+  .file-viewer-download span {
+    display: none;
+  }
+  .file-viewer-content {
+    padding: 12px;
+  }
+  .file-viewer-markdown {
+    border: 0;
+    border-radius: 0;
+    padding: 18px 12px 40px;
+    box-shadow: none;
+  }
+}
 .sr-only {
   position: absolute;
   width: 1px;

@@ -1464,11 +1464,7 @@ function TaskDetail({
             <span>Attached image</span>
             <span>{formatBytes(attachment.byte_size)}</span>
           </div>
-          <a
-            href={`/api/tasks/${task.id}/attachments/${attachment.id}`}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={`/tasks/${task.id}/attachments/${attachment.id}`}>
             {/* Authenticated endpoint; filename is rendered as plain text and never used as markup. */}
             {/* eslint-disable-next-line @next/next/no-img-element -- authenticated dynamic image endpoint */}
             <img
@@ -1477,7 +1473,7 @@ function TaskDetail({
             />
             <span>
               <ImageIcon size={16} />
-              {attachment.file_name} · Open full size
+              {attachment.file_name} · View full size
             </span>
           </a>
         </section>
@@ -1719,10 +1715,7 @@ function ResultDocuments({
     <div className="artifact-list">
       <p className="eyebrow">Documents</p>
       {documents.map((document) => (
-        <a
-          key={document.id}
-          href={`/api/tasks/${taskId}/documents/${document.id}`}
-        >
+        <a key={document.id} href={`/tasks/${taskId}/documents/${document.id}`}>
           <span>
             {document.mime_type.split("/").at(-1)} ·{" "}
             {formatBytes(document.byte_size)}

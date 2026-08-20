@@ -55,7 +55,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
           instructions: OPENAI_INSTRUCTIONS,
           input: [{ role: "user", content }],
         });
-        return response.output_text;
+        return { resultMarkdown: response.output_text, documents: [] };
       },
     };
   }

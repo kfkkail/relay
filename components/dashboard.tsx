@@ -1398,6 +1398,7 @@ function TaskDetail({
 }) {
   const [feedback, setFeedback] = useState("");
   const latest = latestCompletedRun(task.runs);
+  const acceptedRun = task.runs.find((run) => run.id === task.accepted_run_id);
   const active = task.runs.find(
     (run) => run.status === "working" || run.status === "queued",
   );
@@ -1646,6 +1647,10 @@ function TaskDetail({
               ))}
             </div>
           )}
+          <ResultDocuments
+            taskId={task.id}
+            documents={latest.result_documents}
+          />
           <div className="review-actions">
             <label htmlFor="feedback">Feedback for another run</label>
             <textarea
@@ -1694,8 +1699,42 @@ function TaskDetail({
               {task.accepted_result}
             </ReactMarkdown>
           </div>
+          {acceptedRun && (
+            <ResultDocuments
+              taskId={task.id}
+              documents={acceptedRun.result_documents}
+            />
+          )}
         </section>
       )}
+    </div>
+  );
+}
+
+function ResultDocuments({
+  taskId,
+  documents,
+}: {
+  taskId: string;
+  documents: import("@/lib/types").ResultDocument[];
+}) {
+  if (!documents?.length) return null;
+  return (
+    <div className="artifact-list">
+      <p className="eyebrow">Documents</p>
+      {documents.map((document) => (
+        <a
+          key={document.id}
+          href={`/api/tasks/${taskId}/documents/${document.id}`}
+        >
+          <span>
+            {document.mime_type.split("/").at(-1)} ·{" "}
+            {formatBytes(document.byte_size)}
+          </span>
+          <strong>{document.display_filename}</strong>
+          <ChevronRight size={17} />
+        </a>
+      ))}
     </div>
   );
 }

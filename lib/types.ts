@@ -32,10 +32,24 @@ export type Run = {
   feedback: string | null;
   result_markdown: string | null;
   result_artifacts: ResultArtifact[];
+  result_documents: ResultDocument[];
   error: string | null;
   queued_at: string;
   started_at: string | null;
   finished_at: string | null;
+};
+
+export type ResultDocument = {
+  id: string;
+  display_filename: string;
+  mime_type:
+    | "text/markdown"
+    | "text/plain"
+    | "application/pdf"
+    | "text/csv"
+    | "application/json";
+  byte_size: number;
+  description: string | null;
 };
 
 export type TaskAttachment = {
@@ -53,6 +67,7 @@ export type Task = {
   status: TaskStatus;
   instructions: string;
   accepted_result: string | null;
+  accepted_run_id: string | null;
   parent_task_id: string | null;
   created_at: string;
   updated_at: string;

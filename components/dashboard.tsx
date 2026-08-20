@@ -836,7 +836,7 @@ export function Dashboard({
                     }
                   >
                     <Plus size={17} />
-                    Create task
+                    Task
                   </button>
                   <button
                     className="primary-button"

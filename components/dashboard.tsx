@@ -601,7 +601,7 @@ export function Dashboard({
                 maxLength={160}
               />
               <label htmlFor="task-instructions">
-                Markdown instructions and context
+                Markdown instructions and context (optional)
               </label>
               <textarea
                 id="task-instructions"
@@ -612,7 +612,6 @@ export function Dashboard({
                 placeholder={
                   "## Outcome\nDescribe the result you want.\n\n## Context\nAdd useful constraints and background."
                 }
-                required
                 rows={14}
               />
               <div className="composer-hint">
@@ -667,13 +666,12 @@ export function Dashboard({
                 autoFocus
               />
               <label htmlFor="edit-task-instructions">
-                Markdown instructions and context
+                Markdown instructions and context (optional)
               </label>
               <textarea
                 id="edit-task-instructions"
                 value={editInstructions}
                 onChange={(event) => setEditInstructions(event.target.value)}
-                required
                 maxLength={100000}
                 rows={14}
               />
@@ -701,9 +699,7 @@ export function Dashboard({
                 </button>
                 <button
                   className="primary-button"
-                  disabled={
-                    busy || !editTitle.trim() || !editInstructions.trim()
-                  }
+                  disabled={busy || !editTitle.trim()}
                 >
                   {busy ? "Saving…" : "Save changes"}
                   <Check size={18} />

@@ -27,8 +27,6 @@ export async function POST(request: Request) {
     const parentTaskId =
       typeof body.parentTaskId === "string" ? body.parentTaskId : null;
     if (!title) throw new ApiError("Task title is required.");
-    if (!instructions)
-      throw new ApiError("Markdown instructions are required.");
 
     const { data, error } = await supabase
       .from("tasks")

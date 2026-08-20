@@ -1,7 +1,7 @@
-import Link from "next/link";
-import { ArrowLeft, Download } from "lucide-react";
+import { Download } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { FileViewerBackButton } from "./file-viewer-back-button";
 
 export function FileViewerShell({
   title,
@@ -17,10 +17,7 @@ export function FileViewerShell({
   return (
     <main className="file-viewer">
       <header className="file-viewer-header">
-        <Link className="file-viewer-back" href="/">
-          <ArrowLeft size={19} />
-          <span>Back to Relay</span>
-        </Link>
+        <FileViewerBackButton />
         <div className="file-viewer-title">
           <p>{detail}</p>
           <h1>{title}</h1>

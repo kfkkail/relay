@@ -74,6 +74,12 @@ a {
   font-weight: 750;
   text-decoration: none;
 }
+.file-viewer-back {
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  background: none;
+}
 .file-viewer-download {
   border: 1px solid var(--line);
   border-radius: 10px;

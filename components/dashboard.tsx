@@ -102,6 +102,14 @@ export function Dashboard({
   const selected = tasks.find((task) => task.id === selectedId) ?? null;
   const selectedOwnerAction =
     ownerActions.find((action) => action.id === selectedOwnerActionId) ?? null;
+  const availableTasksForOwnerAction = selectedOwnerAction
+    ? tasks.filter(
+        (task) =>
+          !selectedOwnerAction.owner_action_tasks.some(
+            (link) => link.task_id === task.id,
+          ),
+      )
+    : [];
   const hasLiveRun = tasks.some(
     (task) => task.status === "ready" || task.status === "working",
   );
@@ -821,6 +829,34 @@ export function Dashboard({
                     </div>
                   ) : (
                     <p>No linked tasks.</p>
+                  )}
+                  {availableTasksForOwnerAction.length > 0 && (
+                    <label className="owner-action-link-existing">
+                      Link existing task
+                      <select
+                        defaultValue=""
+                        disabled={busy}
+                        onChange={(event) => {
+                          if (event.target.value)
+                            void runAction(() =>
+                              linkOwnerAction(
+                                selectedOwnerAction.id,
+                                event.target.value,
+                              ),
+                            );
+                          event.target.value = "";
+                        }}
+                      >
+                        <option value="" disabled>
+                          Choose a task…
+                        </option>
+                        {availableTasksForOwnerAction.map((task) => (
+                          <option key={task.id} value={task.id}>
+                            {task.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   )}
                 </section>
                 <div className="edit-actions">

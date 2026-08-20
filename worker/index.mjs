@@ -3,6 +3,10 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectResultDocuments } from "./result-documents.mjs";
+import {
+  DEFAULT_MAX_CONCURRENT_RUNS,
+  fillAvailableSlots,
+} from "./run-scheduler.mjs";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
@@ -14,24 +18,33 @@ process.on("SIGINT", () => (stopping = true));
 process.on("SIGTERM", () => (stopping = true));
 
 console.log(
-  `Relay worker started with ${taskRunner.backend}; polling ${new URL(relayUrl).origin}`,
+  `Relay worker started with ${taskRunner.backend}; polling ${new URL(relayUrl).origin}; running up to ${DEFAULT_MAX_CONCURRENT_RUNS} agents`,
 );
 
+const activeRuns = new Set();
 while (!stopping) {
-  let claimed;
   try {
-    claimed = await relayRequest("/api/worker/runs/claim", { method: "POST" });
+    await fillAvailableSlots({
+      activeRuns,
+      claim: () => relayRequest("/api/worker/runs/claim", { method: "POST" }),
+      run: processClaimedRun,
+    });
   } catch (error) {
     console.error(`Claim failed: ${safeError(error)}`);
+  }
+
+  if (!activeRuns.size) {
     await sleep(pollInterval);
     continue;
   }
 
-  if (!claimed) {
-    await sleep(pollInterval);
-    continue;
-  }
+  await Promise.race([...activeRuns, sleep(pollInterval)]);
+}
 
+await Promise.allSettled([...activeRuns]);
+console.log("Relay worker stopped");
+
+async function processClaimedRun(claimed) {
   const { run, task, attachments = [] } = claimed;
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
@@ -130,8 +143,6 @@ while (!stopping) {
       await rm(attachmentDirectory, { recursive: true, force: true });
   }
 }
-
-console.log("Relay worker stopped");
 
 function required(name) {
   const value = process.env[name];

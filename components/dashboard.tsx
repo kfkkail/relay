@@ -434,7 +434,7 @@ export function Dashboard({
                 }}
               >
                 <Plus size={19} />
-                New
+                Task
               </button>
             </div>
 
@@ -1048,7 +1048,7 @@ function MyWork({
           }}
         >
           <Plus size={19} />
-          New action
+          Action
         </button>
       </div>
       <div className="filter-strip" aria-label="Filter owner actions">

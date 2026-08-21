@@ -126,10 +126,24 @@ describe("Relay task rules", () => {
   it("copies accepted output into an editable follow-up context", () => {
     const instructions = buildFollowUpInstructions({
       title: "Research a move",
+      instructions: "Compare the tax impact of both options.",
       accepted_result: "# Recommendation\n\nChoose option B.",
     });
+    expect(instructions).toContain("Original task document");
+    expect(instructions).toContain("Compare the tax impact of both options.");
     expect(instructions).toContain("Context from Research a move");
     expect(instructions).toContain("Choose option B.");
     expect(instructions).toContain("Describe what should be done next.");
+  });
+
+  it("omits the original task document section when it is empty", () => {
+    const instructions = buildFollowUpInstructions({
+      title: "Research a move",
+      instructions: "   ",
+      accepted_result: "Choose option B.",
+    });
+
+    expect(instructions).not.toContain("Original task document");
+    expect(instructions).toContain("Choose option B.");
   });
 });

@@ -13,13 +13,18 @@ export function latestCompletedRun(runs: Run[]) {
 }
 
 export function buildFollowUpInstructions(
-  task: Pick<Task, "title" | "accepted_result">,
+  task: Pick<Task, "title" | "instructions" | "accepted_result">,
 ) {
   if (!task.accepted_result) {
     throw new Error("Accept a result before creating a follow-up task.");
   }
 
+  const sourceDocument = task.instructions.trim()
+    ? ["## Original task document", "", task.instructions.trim(), ""]
+    : [];
+
   return [
+    ...sourceDocument,
     `## Context from ${task.title}`,
     "",
     task.accepted_result.trim(),

@@ -23,19 +23,19 @@ Normalize the color layer in `app/globals.css` before adding the dark override. 
 
 Introduce or standardize tokens by role rather than component:
 
-| Role | Light | Proposed dark | Used for |
-| --- | --- | --- | --- |
-| `--canvas` | `#f3f0e8` | `#111714` | page background |
-| `--canvas-muted` | `#e9e4d8` | `#18211d` | inset and subdued backgrounds |
-| `--surface` | `#fbfaf6` | `#1d2723` | cards, panels, sheets |
-| `--surface-raised` | `#ffffff` | `#25312c` | controls and emphasized result areas |
-| `--text` | `#17352e` | `#edf3ef` | primary text |
-| `--text-muted` | `#52635e` | `#aab8b1` | secondary text |
-| `--border` | `#d8d3c7` | `#3a4842` | dividers and control borders |
-| `--primary` | `#173f35` | `#9bc8b3` | primary action and selected state |
-| `--on-primary` | `#fffaf0` | `#10251d` | content on primary actions |
-| `--accent` | `#e76f51` | `#ff8e72` | waiting and attention accents |
-| `--link` | `#3f6e81` | `#83bed4` | links and interactive text |
+| Role               | Light     | Proposed dark | Used for                             |
+| ------------------ | --------- | ------------- | ------------------------------------ |
+| `--canvas`         | `#f3f0e8` | `#111714`     | page background                      |
+| `--canvas-muted`   | `#e9e4d8` | `#18211d`     | inset and subdued backgrounds        |
+| `--surface`        | `#fbfaf6` | `#1d2723`     | cards, panels, sheets                |
+| `--surface-raised` | `#ffffff` | `#25312c`     | controls and emphasized result areas |
+| `--text`           | `#17352e` | `#edf3ef`     | primary text                         |
+| `--text-muted`     | `#52635e` | `#aab8b1`     | secondary text                       |
+| `--border`         | `#d8d3c7` | `#3a4842`     | dividers and control borders         |
+| `--primary`        | `#173f35` | `#9bc8b3`     | primary action and selected state    |
+| `--on-primary`     | `#fffaf0` | `#10251d`     | content on primary actions           |
+| `--accent`         | `#e76f51` | `#ff8e72`     | waiting and attention accents        |
+| `--link`           | `#3f6e81` | `#83bed4`     | links and interactive text           |
 
 Add semantic tokens for the four status foreground/background pairs, danger foreground/background, focus ring, scrim, translucent sticky bars, and shadows. Exact colors should be adjusted during visual review to meet WCAG AA; the table is the implementation starting point, not a reason to preserve a failing contrast value.
 

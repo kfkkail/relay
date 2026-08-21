@@ -1260,6 +1260,14 @@ textarea {
   text-align: left;
   cursor: pointer;
 }
+.owner-action-link-existing {
+  margin-top: 5px;
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+.owner-action-link-existing select {
+  margin-top: 6px;
+}
 .your-actions-section {
   border-top: 1px solid var(--line);
   padding-bottom: 20px;

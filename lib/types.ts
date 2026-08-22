@@ -6,6 +6,8 @@ export const taskStatuses = [
   "done",
 ] as const;
 export type TaskStatus = (typeof taskStatuses)[number];
+export type { Deliverable } from "@/lib/deliverables";
+import type { Deliverable } from "@/lib/deliverables";
 
 export const runStatuses = [
   "queued",
@@ -30,6 +32,7 @@ export type Run = {
   attempt: number;
   worker_id: string | null;
   feedback: string | null;
+  deliverable: Deliverable;
   result_markdown: string | null;
   result_artifacts: ResultArtifact[];
   result_documents: ResultDocument[];
@@ -66,6 +69,7 @@ export type Task = {
   title: string;
   status: TaskStatus;
   instructions: string;
+  deliverable: Deliverable;
   accepted_result: string | null;
   accepted_run_id: string | null;
   parent_task_id: string | null;

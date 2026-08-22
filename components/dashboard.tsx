@@ -42,18 +42,26 @@ import {
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
 import type { MyWorkFilter } from "@/lib/routing";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import {
+  defaultDeliverable,
+  deliverables,
+  deliverableValues,
+  type Deliverable,
+} from "@/lib/deliverables";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
 
 type Draft = {
   title: string;
   instructions: string;
+  deliverable: Deliverable;
   parentTaskId: string | null;
   ownerActionId: string | null;
 };
 const emptyDraft: Draft = {
   title: "",
   instructions: "",
+  deliverable: defaultDeliverable,
   parentTaskId: null,
   ownerActionId: null,
 };
@@ -62,6 +70,7 @@ function taskDraftFromOwnerAction(action: OwnerAction): Draft {
   return {
     title: action.title,
     instructions: action.notes || `Complete the owner action: ${action.title}`,
+    deliverable: defaultDeliverable,
     parentTaskId: null,
     ownerActionId: action.id,
   };
@@ -121,6 +130,8 @@ export function Dashboard({
   const [ownerActionDueAt, setOwnerActionDueAt] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
+  const [editDeliverable, setEditDeliverable] =
+    useState<Deliverable>(defaultDeliverable);
   const [editImage, setEditImage] = useState<File | null>(null);
   const [workerOpen, setWorkerOpen] = useState(false);
   const [workerToken, setWorkerToken] = useState("");
@@ -282,6 +293,7 @@ export function Dashboard({
     setEditingTask(task);
     setEditTitle(task.title);
     setEditInstructions(task.instructions);
+    setEditDeliverable(task.deliverable);
     setEditImage(null);
   }
 
@@ -343,6 +355,7 @@ export function Dashboard({
         body: JSON.stringify({
           title: editTitle,
           instructions: editInstructions,
+          deliverable: editDeliverable,
         }),
       });
       if (editImage) {
@@ -387,6 +400,7 @@ export function Dashboard({
     setDraft({
       title: `Follow up: ${task.title}`,
       instructions: buildFollowUpInstructions(task),
+      deliverable: task.deliverable,
       parentTaskId: task.id,
       ownerActionId: null,
     });
@@ -647,6 +661,11 @@ export function Dashboard({
                 required
                 maxLength={160}
               />
+              <DeliverableField
+                id="task-deliverable"
+                value={draft.deliverable}
+                onChange={(deliverable) => setDraft({ ...draft, deliverable })}
+              />
               <label htmlFor="task-instructions">
                 Markdown instructions and context (optional)
               </label>
@@ -656,9 +675,7 @@ export function Dashboard({
                 onChange={(event) =>
                   setDraft({ ...draft, instructions: event.target.value })
                 }
-                placeholder={
-                  "## Outcome\nDescribe the result you want.\n\n## Context\nAdd useful constraints and background."
-                }
+                placeholder="Add constraints, background, links, and acceptance criteria."
                 rows={14}
               />
               <div className="composer-hint">
@@ -711,6 +728,11 @@ export function Dashboard({
                 required
                 maxLength={160}
                 autoFocus
+              />
+              <DeliverableField
+                id="edit-task-deliverable"
+                value={editDeliverable}
+                onChange={setEditDeliverable}
               />
               <label htmlFor="edit-task-instructions">
                 Markdown instructions and context (optional)
@@ -1507,6 +1529,9 @@ function TaskDetail({
             Updated {formatDate(task.updated_at)}
             {task.parent_task_id ? " · Follow-up task" : ""}
           </p>
+          <span className="deliverable-pill">
+            {deliverables[task.deliverable].label}
+          </span>
         </div>
         {(task.status === "inbox" ||
           (task.status === "waiting" && !latest)) && (
@@ -1524,14 +1549,16 @@ function TaskDetail({
       <section className="document-section">
         <div className="section-label">
           <span>Task document</span>
-          <button
-            className="document-edit-button"
-            disabled={busy}
-            onClick={onEdit}
-          >
-            <Pencil size={14} />
-            Edit
-          </button>
+          {task.status === "inbox" && (
+            <button
+              className="document-edit-button"
+              disabled={busy}
+              onClick={onEdit}
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+          )}
         </div>
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1824,6 +1851,35 @@ function StatusPill({ status }: { status: TaskStatus }) {
       <Icon size={13} />
       {statusLabel(status)}
     </span>
+  );
+}
+
+function DeliverableField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: Deliverable;
+  onChange: (value: Deliverable) => void;
+}) {
+  return (
+    <>
+      <label htmlFor={id}>Deliverable</label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value as Deliverable)}
+        required
+      >
+        {deliverableValues.map((item) => (
+          <option key={item} value={item}>
+            {deliverables[item].label}
+          </option>
+        ))}
+      </select>
+      <p className="field-helper">{deliverables[value].helperText}</p>
+    </>
   );
 }
 

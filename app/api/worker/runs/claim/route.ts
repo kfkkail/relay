@@ -25,6 +25,7 @@ export async function POST(request: Request) {
           id: claimed.task_id,
           title: claimed.title,
           instructions: claimed.instructions,
+          deliverable: claimed.deliverable,
         },
         attachments: claimed.attachments ?? [],
       },

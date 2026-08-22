@@ -34,7 +34,13 @@ export async function POST(
     const attempt = Math.max(0, ...task.runs.map((run) => run.attempt)) + 1;
     const { data: run, error } = await supabase
       .from("runs")
-      .insert({ task_id: task.id, user_id: user.id, attempt, feedback })
+      .insert({
+        task_id: task.id,
+        user_id: user.id,
+        attempt,
+        feedback,
+        deliverable: task.deliverable,
+      })
       .select("id")
       .single();
     if (error) throw error;

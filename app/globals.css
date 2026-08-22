@@ -133,6 +133,23 @@ textarea,
 select {
   font: inherit;
 }
+.field-helper {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.deliverable-pill {
+  display: inline-flex;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--forest);
+  background: var(--forest-soft);
+  font-size: 11px;
+  font-weight: 750;
+}
 button {
   color: inherit;
 }

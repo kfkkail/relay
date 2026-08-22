@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { TASK_SELECT } from "@/lib/task-select";
+import { parseDeliverable } from "@/lib/deliverables";
 
 export async function GET() {
   try {
@@ -26,6 +27,12 @@ export async function POST(request: Request) {
       typeof body.instructions === "string" ? body.instructions.trim() : "";
     const parentTaskId =
       typeof body.parentTaskId === "string" ? body.parentTaskId : null;
+    let deliverable;
+    try {
+      deliverable = parseDeliverable(body.deliverable);
+    } catch {
+      throw new ApiError("Choose a valid deliverable.");
+    }
     if (!title) throw new ApiError("Task title is required.");
 
     const { data, error } = await supabase
@@ -34,6 +41,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         title,
         instructions,
+        deliverable,
         parent_task_id: parentTaskId,
       })
       .select(TASK_SELECT)
@@ -44,7 +52,7 @@ export async function POST(request: Request) {
       task_id: data.id,
       user_id: user.id,
       type: "task.created",
-      payload: parentTaskId ? { parentTaskId } : {},
+      payload: { ...(parentTaskId ? { parentTaskId } : {}), deliverable },
     });
     return NextResponse.json({ task: data }, { status: 201 });
   } catch (error) {

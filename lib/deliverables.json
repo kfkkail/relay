@@ -1,0 +1,17 @@
+{
+  "implementation_pr": {
+    "label": "Implement and create PR",
+    "helperText": "Change the code, validate it, and open a pull request.",
+    "contract": "Inspect and modify the repository as needed. Run validation appropriate to the change. Create a task-scoped branch and commits using repository conventions, push the branch, and open a pull request. Return the PR link, a concise change summary, validation performed, and any limitations. If a PR cannot be created, report the exact blocker. This authorizes only the task-scoped branch push and pull-request creation; it does not authorize merges, releases, deployments, destructive actions, or changes outside the configured workspace."
+  },
+  "proposal": {
+    "label": "Proposal only",
+    "helperText": "Produce a proposal document without changing product code.",
+    "contract": "Inspect relevant code and documentation. Produce a Markdown proposal as a result document, including the recommendation, user experience, technical design, tradeoffs, rollout, and acceptance criteria where relevant. Do not modify product code, push a branch, or open a pull request."
+  },
+  "investigation": {
+    "label": "Investigate and report",
+    "helperText": "Return evidence and recommendations without implementing a fix.",
+    "contract": "Reproduce or inspect the issue where practical. Return an evidence-backed diagnosis, impact, and recommended next step, attaching logs or a report when useful. Do not implement a fix, push a branch, or open a pull request."
+  }
+}

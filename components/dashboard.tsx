@@ -1,6 +1,14 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -11,6 +19,7 @@ import {
   Clock3,
   Copy,
   Laptop,
+  LoaderCircle,
   Image as ImageIcon,
   LogOut,
   Pencil,
@@ -81,6 +90,13 @@ function currentPath(pathname: string, searchParams: { toString(): string }) {
   return query ? `${pathname}?${query}` : pathname;
 }
 
+type NavigationMode = "area" | "task" | "filter" | "action" | "close";
+type PendingNavigation = {
+  destination: string;
+  label: string;
+  mode: NavigationMode;
+};
+
 export function Dashboard({
   initialTasks,
   initialWorkers,
@@ -112,6 +128,12 @@ export function Dashboard({
   const initialTaskAction = initialOwnerActions.find(
     (action) => action.id === initialTaskActionId,
   );
+  const [isNavigating, startNavigation] = useTransition();
+  const [pendingNavigation, setPendingNavigation] =
+    useState<PendingNavigation | null>(null);
+  const [showPendingNavigation, setShowPendingNavigation] = useState(false);
+  const navigationSequence = useRef(0);
+  const pendingShownAt = useRef(0);
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
   const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
@@ -137,6 +159,41 @@ export function Dashboard({
   const [workerToken, setWorkerToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const navigate = useCallback(
+    (
+      destination: string,
+      label: string,
+      mode: NavigationMode,
+      method: "push" | "replace" = "push",
+    ) => {
+      const sequence = ++navigationSequence.current;
+      setShowPendingNavigation(false);
+      setPendingNavigation({ destination, label, mode });
+      window.setTimeout(() => {
+        if (navigationSequence.current !== sequence) return;
+        pendingShownAt.current = Date.now();
+        setShowPendingNavigation(true);
+      }, 150);
+      startNavigation(() => router[method](destination));
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    if (isNavigating || !pendingNavigation) return;
+    const sequence = navigationSequence.current;
+    const elapsed = Date.now() - pendingShownAt.current;
+    const delay = showPendingNavigation ? Math.max(0, 200 - elapsed) : 0;
+    const timer = window.setTimeout(() => {
+      if (navigationSequence.current !== sequence) return;
+      setShowPendingNavigation(false);
+      setPendingNavigation(null);
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [isNavigating, pendingNavigation, showPendingNavigation]);
+
+  const visiblePending = showPendingNavigation ? pendingNavigation : null;
 
   const selected = tasks.find((task) => task.id === initialTaskId) ?? null;
   const filter = selected?.status ?? initialTaskFilter;
@@ -278,7 +335,7 @@ export function Dashboard({
       setDraftImage(null);
       setPendingTask(null);
       setComposerOpen(false);
-      router.push(`/tasks/${task.id}`);
+      navigate(`/tasks/${task.id}`, "Loading task details", "task");
     });
   }
 
@@ -303,7 +360,7 @@ export function Dashboard({
       status: task?.status ?? filter,
       from: currentPath(pathname, searchParams),
     });
-    router.push(`/tasks/${taskId}?${params}`);
+    navigate(`/tasks/${taskId}?${params}`, "Loading task details", "task");
   }
 
   function openOwnerAction(actionId: string) {
@@ -312,17 +369,31 @@ export function Dashboard({
       status: initialMyWorkFilter,
       from: currentPath(pathname, searchParams),
     });
-    router.push(`/my-work/${actionId}?${params}`);
+    navigate(
+      `/my-work/${actionId}?${params}`,
+      "Loading owner action",
+      "action",
+    );
   }
 
   function closeDetail(fallback: string) {
-    router.replace(initialReturnTo ?? fallback);
+    navigate(
+      initialReturnTo ?? fallback,
+      "Closing details",
+      "close",
+      "replace",
+    );
   }
 
   function closeTaskComposer() {
     setComposerOpen(false);
     if (initialTaskActionId)
-      router.replace(`/my-work?status=${initialMyWorkFilter}`);
+      navigate(
+        `/my-work?status=${initialMyWorkFilter}`,
+        "Closing task composer",
+        "close",
+        "replace",
+      );
   }
 
   function startEditingOwnerAction() {
@@ -412,7 +483,12 @@ export function Dashboard({
       status: initialMyWorkFilter,
       createTaskFor: action.id,
     });
-    router.replace(`/my-work?${params}`);
+    navigate(
+      `/my-work?${params}`,
+      "Loading task composer",
+      "action",
+      "replace",
+    );
   }
 
   async function createWorker(event: FormEvent<HTMLFormElement>) {
@@ -437,14 +513,16 @@ export function Dashboard({
         </div>
         <nav className="area-nav" aria-label="Main navigation">
           <button
-            className={initialArea === "my-work" ? "active" : ""}
-            onClick={() => router.push("/my-work")}
+            className={`${initialArea === "my-work" ? "active" : ""} ${visiblePending?.destination === "/my-work" ? "pending" : ""}`}
+            aria-current={initialArea === "my-work" ? "page" : undefined}
+            onClick={() => navigate("/my-work", "Loading My Work", "area")}
           >
             My Work
           </button>
           <button
-            className={initialArea === "tasks" ? "active" : ""}
-            onClick={() => router.push("/tasks")}
+            className={`${initialArea === "tasks" ? "active" : ""} ${visiblePending?.destination === "/tasks" ? "pending" : ""}`}
+            aria-current={initialArea === "tasks" ? "page" : undefined}
+            onClick={() => navigate("/tasks", "Loading Tasks", "area")}
           >
             Tasks
           </button>
@@ -468,6 +546,13 @@ export function Dashboard({
         </div>
       </header>
 
+      {visiblePending?.mode === "area" && (
+        <div className="navigation-progress" aria-hidden="true" />
+      )}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {visiblePending?.label ?? ""}
+      </span>
+
       {initialArea === "my-work" ? (
         <MyWork
           actions={ownerActions}
@@ -479,8 +564,15 @@ export function Dashboard({
           onOpenAction={openOwnerAction}
           onOpenTask={openTask}
           filter={initialMyWorkFilter}
+          requestedNavigation={pendingNavigation}
+          visiblePendingNavigation={visiblePending}
           onFilterChange={(nextFilter) =>
-            router.replace(`/my-work?status=${nextFilter}`)
+            navigate(
+              `/my-work?status=${nextFilter}`,
+              "Loading filtered owner actions",
+              "filter",
+              "replace",
+            )
           }
         />
       ) : (
@@ -509,8 +601,16 @@ export function Dashboard({
               {filters.map((item) => (
                 <button
                   key={item}
-                  className={filter === item ? "active" : ""}
-                  onClick={() => router.replace(`/tasks?status=${item}`)}
+                  className={`${pendingNavigation?.mode === "filter" ? (pendingNavigation.destination === `/tasks?status=${item}` ? "active" : "") : filter === item ? "active" : ""} ${visiblePending?.destination === `/tasks?status=${item}` ? "pending" : ""}`}
+                  aria-current={filter === item ? "page" : undefined}
+                  onClick={() =>
+                    navigate(
+                      `/tasks?status=${item}`,
+                      `Loading ${statusLabel(item)} tasks`,
+                      "filter",
+                      "replace",
+                    )
+                  }
                 >
                   {statusLabel(item)}
                   <span>
@@ -520,12 +620,15 @@ export function Dashboard({
               ))}
             </div>
 
-            <div className="task-list">
+            <div
+              className={`task-list ${visiblePending?.mode === "filter" ? "navigation-pending" : ""}`}
+              aria-busy={visiblePending?.mode === "filter" || undefined}
+            >
               {visibleTasks.length ? (
                 visibleTasks.map((task) => (
                   <button
                     key={task.id}
-                    className={`task-card ${initialTaskId === task.id ? "selected" : ""}`}
+                    className={`task-card ${initialTaskId === task.id ? "selected" : ""} ${visiblePending?.destination === `/tasks/${task.id}` ? "navigation-pending" : ""}`}
                     onClick={() => openTask(task.id)}
                   >
                     <div className="task-card-top">
@@ -540,7 +643,14 @@ export function Dashboard({
                           ? `${task.runs.length} ${task.runs.length === 1 ? "run" : "runs"}`
                           : "Not run yet"}
                       </span>
-                      <ChevronRight size={18} />
+                      {visiblePending?.destination === `/tasks/${task.id}` ? (
+                        <LoaderCircle
+                          className="navigation-spinner"
+                          size={16}
+                        />
+                      ) : (
+                        <ChevronRight size={18} />
+                      )}
                     </div>
                   </button>
                 ))
@@ -573,7 +683,10 @@ export function Dashboard({
             </div>
           </aside>
 
-          <section className={`detail-panel ${selected ? "open" : ""}`}>
+          <section
+            className={`detail-panel ${selected ? "open" : ""}`}
+            aria-busy={visiblePending?.mode === "task" || undefined}
+          >
             {selected ? (
               <TaskDetail
                 key={`${selected.id}-${selected.updated_at}`}
@@ -1046,6 +1159,8 @@ function MyWork({
   onOpenAction,
   onOpenTask,
   filter,
+  requestedNavigation,
+  visiblePendingNavigation,
   onFilterChange,
 }: {
   actions: OwnerAction[];
@@ -1064,6 +1179,8 @@ function MyWork({
   onOpenAction: (actionId: string) => void;
   onOpenTask: (taskId: string) => void;
   filter: MyWorkFilter;
+  requestedNavigation: PendingNavigation | null;
+  visiblePendingNavigation: PendingNavigation | null;
   onFilterChange: (filter: MyWorkFilter) => void;
 }) {
   const [composerOpen, setComposerOpen] = useState(false);
@@ -1155,7 +1272,8 @@ function MyWork({
         {(["active", "snoozed", "done"] as const).map((item) => (
           <button
             key={item}
-            className={filter === item ? "active" : ""}
+            className={`${requestedNavigation?.mode === "filter" ? (requestedNavigation.destination === `/my-work?status=${item}` ? "active" : "") : filter === item ? "active" : ""} ${visiblePendingNavigation?.destination === `/my-work?status=${item}` ? "pending" : ""}`}
+            aria-current={filter === item ? "page" : undefined}
             onClick={() => onFilterChange(item)}
           >
             {item[0].toUpperCase() + item.slice(1)}
@@ -1178,10 +1296,16 @@ function MyWork({
           placeholder="Search actions and linked tasks"
         />
       </label>
-      <div className="owner-action-list">
+      <div
+        className={`owner-action-list ${visiblePendingNavigation?.mode === "filter" ? "navigation-pending" : ""}`}
+        aria-busy={visiblePendingNavigation?.mode === "filter" || undefined}
+      >
         {visible.length ? (
           visible.map((action) => (
-            <article className="owner-action-card" key={action.id}>
+            <article
+              className={`owner-action-card ${visiblePendingNavigation?.destination === `/my-work/${action.id}` ? "navigation-pending" : ""}`}
+              key={action.id}
+            >
               <button
                 className="completion-button"
                 aria-label={
@@ -1206,6 +1330,10 @@ function MyWork({
                   onClick={() => onOpenAction(action.id)}
                 >
                   <h2>{action.title}</h2>
+                  {visiblePendingNavigation?.destination ===
+                    `/my-work/${action.id}` && (
+                    <LoaderCircle className="navigation-spinner" size={16} />
+                  )}
                 </button>
                 {action.notes && <p>{action.notes}</p>}
                 <div className="action-meta">

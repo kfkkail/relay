@@ -343,6 +343,33 @@ a {
   backdrop-filter: blur(14px);
 }
 
+.navigation-progress {
+  position: fixed;
+  z-index: 21;
+  top: calc(64px + env(safe-area-inset-top, 0px));
+  left: 0;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--coral) 22%, transparent);
+}
+.navigation-progress::after {
+  position: absolute;
+  inset: 0;
+  width: 42%;
+  background: var(--coral);
+  content: "";
+  animation: navigation-progress 1.1s ease-in-out infinite;
+}
+@keyframes navigation-progress {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(350%);
+  }
+}
+
 .topbar-actions {
   display: flex;
   gap: 6px;
@@ -372,6 +399,10 @@ a {
 .area-nav button.active {
   background: var(--surface);
   box-shadow: var(--nav-shadow);
+}
+.area-nav button.pending,
+.filter-strip button.pending {
+  opacity: 0.68;
 }
 
 .icon-button,
@@ -539,6 +570,14 @@ button:disabled {
 .task-card.selected {
   border-color: var(--border-strong);
   box-shadow: var(--card-shadow-selected);
+}
+.navigation-pending {
+  opacity: 0.62;
+  transition: opacity 0.16s ease;
+}
+.navigation-spinner {
+  flex: 0 0 auto;
+  animation: spin 0.85s linear infinite;
 }
 .task-card-top,
 .task-card-bottom,
@@ -1262,6 +1301,11 @@ textarea {
   text-align: left;
   cursor: pointer;
 }
+.owner-action-title:has(.navigation-spinner) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .owner-action-title:hover h2,
 .owner-action-title:focus-visible h2 {
   color: var(--blue);
@@ -1647,6 +1691,9 @@ textarea {
     padding-right: 28px;
     padding-left: 28px;
   }
+  .navigation-progress {
+    top: calc(72px + env(safe-area-inset-top, 0px));
+  }
   .workspace {
     display: grid;
     min-height: calc(100dvh - 72px);
@@ -1754,6 +1801,16 @@ textarea {
   .attachment-section > a {
     margin-right: 42px;
     margin-left: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-progress::after {
+    width: 100%;
+    animation: none;
+  }
+  .navigation-spinner {
+    animation: none;
   }
 }
 

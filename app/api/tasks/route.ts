@@ -28,7 +28,11 @@ export async function POST(request: Request) {
     const parentTaskId =
       typeof body.parentTaskId === "string" ? body.parentTaskId : null;
     let deliverable;
-    try { deliverable = parseDeliverable(body.deliverable); } catch { throw new ApiError("Choose a valid deliverable."); }
+    try {
+      deliverable = parseDeliverable(body.deliverable);
+    } catch {
+      throw new ApiError("Choose a valid deliverable.");
+    }
     if (!title) throw new ApiError("Task title is required.");
 
     const { data, error } = await supabase

@@ -90,11 +90,17 @@ async function processClaimedRun(claimed) {
       ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}`
       : "";
     const definition = deliverables[task.deliverable];
-    if (!definition) throw new Error(`Relay returned an unsupported deliverable: ${task.deliverable}`);
-    const result = await taskRunner.run({
-      text: input + attachmentNote,
-      attachments: localAttachments,
-    }, definition.contract);
+    if (!definition)
+      throw new Error(
+        `Relay returned an unsupported deliverable: ${task.deliverable}`,
+      );
+    const result = await taskRunner.run(
+      {
+        text: input + attachmentNote,
+        attachments: localAttachments,
+      },
+      definition.contract,
+    );
 
     const documents =
       taskRunner.backend === "codex"

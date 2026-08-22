@@ -110,7 +110,9 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
       "never add the owner as an attendee merely to make a shared-calendar event appear on their primary calendar",
     );
     expect(debug.input).toContain("# Trusted Relay worker policy\n\n");
-    expect(debug.input).toContain("# Trusted completion contract\n\nOpen a pull request and return its URL.");
+    expect(debug.input).toContain(
+      "# Trusted completion contract\n\nOpen a pull request and return its URL.",
+    );
     expect(debug.input).toContain(
       "# Untrusted task text\n\n# Task\nCreate a pull request",
     );
@@ -165,7 +167,9 @@ describe("worker backend selection", () => {
       },
     );
 
-    await expect(runner.run("task input", "Trusted test contract")).resolves.toEqual({
+    await expect(
+      runner.run("task input", "Trusted test contract"),
+    ).resolves.toEqual({
       resultMarkdown: "done",
       documents: [],
     });
@@ -204,9 +208,12 @@ describe("worker backend selection", () => {
       { OpenAI: FakeOpenAI },
     );
 
-    await expect(runner.run("# Task\nSummarize the document", "Return an investigation report.")).resolves.toEqual(
-      { resultMarkdown: "done", documents: [] },
-    );
+    await expect(
+      runner.run(
+        "# Task\nSummarize the document",
+        "Return an investigation report.",
+      ),
+    ).resolves.toEqual({ resultMarkdown: "done", documents: [] });
     expect(calls[0].instructions).toContain("one text/Markdown result");
     expect(calls[0].instructions).toContain("no tools, filesystem");
     expect(calls[0].instructions).toContain("http/https links are supported");
@@ -244,10 +251,13 @@ describe("worker backend selection", () => {
       { OpenAI: FakeOpenAI },
     );
 
-    await runner.run({
-      text: "inspect it",
-      attachments: [{ path: imagePath, mimeType: "image/png" }],
-    }, "Return an investigation report.");
+    await runner.run(
+      {
+        text: "inspect it",
+        attachments: [{ path: imagePath, mimeType: "image/png" }],
+      },
+      "Return an investigation report.",
+    );
 
     expect(calls[0].input[0].content[1]).toMatchObject({
       type: "input_image",

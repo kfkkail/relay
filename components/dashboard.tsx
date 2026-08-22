@@ -42,7 +42,12 @@ import {
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
 import type { MyWorkFilter } from "@/lib/routing";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
-import { defaultDeliverable, deliverables, deliverableValues, type Deliverable } from "@/lib/deliverables";
+import {
+  defaultDeliverable,
+  deliverables,
+  deliverableValues,
+  type Deliverable,
+} from "@/lib/deliverables";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
 
@@ -125,7 +130,8 @@ export function Dashboard({
   const [ownerActionDueAt, setOwnerActionDueAt] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
-  const [editDeliverable, setEditDeliverable] = useState<Deliverable>(defaultDeliverable);
+  const [editDeliverable, setEditDeliverable] =
+    useState<Deliverable>(defaultDeliverable);
   const [editImage, setEditImage] = useState<File | null>(null);
   const [workerOpen, setWorkerOpen] = useState(false);
   const [workerToken, setWorkerToken] = useState("");
@@ -655,7 +661,11 @@ export function Dashboard({
                 required
                 maxLength={160}
               />
-              <DeliverableField id="task-deliverable" value={draft.deliverable} onChange={(deliverable) => setDraft({ ...draft, deliverable })} />
+              <DeliverableField
+                id="task-deliverable"
+                value={draft.deliverable}
+                onChange={(deliverable) => setDraft({ ...draft, deliverable })}
+              />
               <label htmlFor="task-instructions">
                 Markdown instructions and context (optional)
               </label>
@@ -719,7 +729,11 @@ export function Dashboard({
                 maxLength={160}
                 autoFocus
               />
-              <DeliverableField id="edit-task-deliverable" value={editDeliverable} onChange={setEditDeliverable} />
+              <DeliverableField
+                id="edit-task-deliverable"
+                value={editDeliverable}
+                onChange={setEditDeliverable}
+              />
               <label htmlFor="edit-task-instructions">
                 Markdown instructions and context (optional)
               </label>
@@ -1515,7 +1529,9 @@ function TaskDetail({
             Updated {formatDate(task.updated_at)}
             {task.parent_task_id ? " · Follow-up task" : ""}
           </p>
-          <span className="deliverable-pill">{deliverables[task.deliverable].label}</span>
+          <span className="deliverable-pill">
+            {deliverables[task.deliverable].label}
+          </span>
         </div>
         {(task.status === "inbox" ||
           (task.status === "waiting" && !latest)) && (
@@ -1533,7 +1549,16 @@ function TaskDetail({
       <section className="document-section">
         <div className="section-label">
           <span>Task document</span>
-          {task.status === "inbox" && <button className="document-edit-button" disabled={busy} onClick={onEdit}><Pencil size={14} />Edit</button>}
+          {task.status === "inbox" && (
+            <button
+              className="document-edit-button"
+              disabled={busy}
+              onClick={onEdit}
+            >
+              <Pencil size={14} />
+              Edit
+            </button>
+          )}
         </div>
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1829,8 +1854,33 @@ function StatusPill({ status }: { status: TaskStatus }) {
   );
 }
 
-function DeliverableField({ id, value, onChange }: { id: string; value: Deliverable; onChange: (value: Deliverable) => void }) {
-  return <><label htmlFor={id}>Deliverable</label><select id={id} value={value} onChange={(event) => onChange(event.target.value as Deliverable)} required>{deliverableValues.map((item) => <option key={item} value={item}>{deliverables[item].label}</option>)}</select><p className="field-helper">{deliverables[value].helperText}</p></>;
+function DeliverableField({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: Deliverable;
+  onChange: (value: Deliverable) => void;
+}) {
+  return (
+    <>
+      <label htmlFor={id}>Deliverable</label>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value as Deliverable)}
+        required
+      >
+        {deliverableValues.map((item) => (
+          <option key={item} value={item}>
+            {deliverables[item].label}
+          </option>
+        ))}
+      </select>
+      <p className="field-helper">{deliverables[value].helperText}</p>
+    </>
+  );
 }
 
 function ImagePicker({

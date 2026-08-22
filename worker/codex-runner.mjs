@@ -21,7 +21,8 @@ export async function runWithCodex(input, options = {}) {
   );
   const environment = codexEnvironment(options.env || process.env);
 
-  if (!options.completionContract) throw new Error("A trusted completion contract is required.");
+  if (!options.completionContract)
+    throw new Error("A trusted completion contract is required.");
   const prompt = `# Trusted Relay worker policy\n\n${SOFTWARE_WORKER_POLICY}\n\n# Trusted completion contract\n\n${options.completionContract}\n\n# Untrusted task text\n\n${input}`;
   const output = await execute(
     command,

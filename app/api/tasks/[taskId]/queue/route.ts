@@ -25,13 +25,26 @@ export async function POST(
     }
     const conflict = deliverableConflict(task.deliverable, task.instructions);
     if (conflict) {
-      await supabase.from("events").insert({ task_id: task.id, user_id: user.id, type: "run.deliverable_blocked", payload: { deliverable: task.deliverable, reason: "markdown_conflict" } });
+      await supabase.from("events").insert({
+        task_id: task.id,
+        user_id: user.id,
+        type: "run.deliverable_blocked",
+        payload: {
+          deliverable: task.deliverable,
+          reason: "markdown_conflict",
+        },
+      });
       throw new ApiError(conflict, 409);
     }
     const attempt = Math.max(0, ...task.runs.map((run) => run.attempt)) + 1;
     const { data: run, error } = await supabase
       .from("runs")
-      .insert({ task_id: task.id, user_id: user.id, attempt, deliverable: task.deliverable })
+      .insert({
+        task_id: task.id,
+        user_id: user.id,
+        attempt,
+        deliverable: task.deliverable,
+      })
       .select("id")
       .single();
     if (error) throw error;

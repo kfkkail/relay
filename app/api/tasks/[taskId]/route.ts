@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { TASK_SELECT } from "@/lib/task-select";
-import { parseDeliverable } from "@/lib/deliverables";
+import { parseDeliverableUpdate } from "@/lib/deliverables";
 
 export async function PATCH(
   request: Request,
@@ -15,7 +15,11 @@ export async function PATCH(
     const instructions =
       typeof body.instructions === "string" ? body.instructions : "";
     let deliverable;
-    try { deliverable = parseDeliverable(body.deliverable); } catch { throw new ApiError("Choose a valid deliverable."); }
+    try {
+      deliverable = parseDeliverableUpdate(body.deliverable);
+    } catch {
+      throw new ApiError("Choose a valid deliverable.");
+    }
     if (!title) throw new ApiError("Task title is required.");
     if (title.length > 160) {
       throw new ApiError("Task title must be 160 characters or fewer.");
@@ -28,7 +32,11 @@ export async function PATCH(
 
     const { data: task, error } = await supabase
       .from("tasks")
-      .update({ title, instructions, deliverable })
+      .update({
+        title,
+        instructions,
+        ...(deliverable === undefined ? {} : { deliverable }),
+      })
       .eq("id", taskId)
       .eq("status", "inbox")
       .select(TASK_SELECT)

@@ -8,11 +8,16 @@ import {
   DEFAULT_MAX_CONCURRENT_RUNS,
   fillAvailableSlots,
 } from "./run-scheduler.mjs";
+import { createAutoUpdater } from "./auto-update.mjs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
 const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
 const taskRunner = createTaskRunner();
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const checkForUpdate = createAutoUpdater({ root });
 
 let stopping = false;
 process.on("SIGINT", () => (stopping = true));
@@ -35,6 +40,16 @@ while (!stopping) {
   }
 
   if (!activeRuns.size) {
+    const update = await checkForUpdate();
+    if (update.status === "updated") {
+      console.log(`Worker updated to ${update.revision}; restarting`);
+      process.exit(0);
+    }
+    if (["dirty", "diverged", "error"].includes(update.status)) {
+      console.error(
+        `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
+      );
+    }
     await sleep(pollInterval);
     continue;
   }

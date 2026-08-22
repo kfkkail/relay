@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   buildFollowUpInstructions,
   compareOwnerActions,
@@ -39,6 +40,7 @@ import {
   utcToLocalDateTime,
 } from "@/lib/date-time";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
+import type { MyWorkFilter } from "@/lib/routing";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { defaultDeliverable, deliverables, deliverableValues, type Deliverable } from "@/lib/deliverables";
 
@@ -59,33 +61,64 @@ const emptyDraft: Draft = {
   ownerActionId: null,
 };
 
+function taskDraftFromOwnerAction(action: OwnerAction): Draft {
+  return {
+    title: action.title,
+    instructions: action.notes || `Complete the owner action: ${action.title}`,
+    deliverable: defaultDeliverable,
+    parentTaskId: null,
+    ownerActionId: action.id,
+  };
+}
+
+function currentPath(pathname: string, searchParams: { toString(): string }) {
+  const query = searchParams.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function Dashboard({
   initialTasks,
   initialWorkers,
   initialOwnerActions,
   userEmail,
+  initialArea,
+  initialTaskFilter,
+  initialMyWorkFilter,
+  initialTaskId,
+  initialActionId,
+  initialReturnTo,
+  initialTaskActionId,
 }: {
   initialTasks: Task[];
   initialWorkers: Worker[];
   initialOwnerActions: OwnerAction[];
   userEmail: string;
+  initialArea: "tasks" | "my-work";
+  initialTaskFilter: TaskStatus;
+  initialMyWorkFilter: MyWorkFilter;
+  initialTaskId: string | null;
+  initialActionId: string | null;
+  initialReturnTo: string | null;
+  initialTaskActionId: string | null;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialTaskAction = initialOwnerActions.find(
+    (action) => action.id === initialTaskActionId,
+  );
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
   const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
-  const [area, setArea] = useState<"tasks" | "my-work">("my-work");
-  const [filter, setFilter] = useState<TaskStatus>("inbox");
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialTasks[0]?.id ?? null,
+  const [draft, setDraft] = useState<Draft>(() =>
+    initialTaskAction
+      ? taskDraftFromOwnerAction(initialTaskAction)
+      : emptyDraft,
   );
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(Boolean(initialTaskAction));
   const [draftImage, setDraftImage] = useState<File | null>(null);
   const [pendingTask, setPendingTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [selectedOwnerActionId, setSelectedOwnerActionId] = useState<
-    string | null
-  >(null);
   const [editingOwnerAction, setEditingOwnerAction] = useState(false);
   const [ownerActionTitle, setOwnerActionTitle] = useState("");
   const [ownerActionNotes, setOwnerActionNotes] = useState("");
@@ -99,13 +132,14 @@ export function Dashboard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const selected = tasks.find((task) => task.id === initialTaskId) ?? null;
+  const filter = selected?.status ?? initialTaskFilter;
   const visibleTasks = useMemo(
     () => tasks.filter((task) => task.status === filter),
     [filter, tasks],
   );
-  const selected = tasks.find((task) => task.id === selectedId) ?? null;
   const selectedOwnerAction =
-    ownerActions.find((action) => action.id === selectedOwnerActionId) ?? null;
+    ownerActions.find((action) => action.id === initialActionId) ?? null;
   const availableTasksForOwnerAction = selectedOwnerAction
     ? tasks.filter(
         (task) =>
@@ -226,7 +260,6 @@ export function Dashboard({
         task,
         ...current.filter((item) => item.id !== task.id),
       ]);
-      setSelectedId(task.id);
       if (draftImage)
         task.task_attachments = [await uploadAttachment(task.id, draftImage)];
       if (draft.ownerActionId)
@@ -239,6 +272,7 @@ export function Dashboard({
       setDraftImage(null);
       setPendingTask(null);
       setComposerOpen(false);
+      router.push(`/tasks/${task.id}`);
     });
   }
 
@@ -259,16 +293,30 @@ export function Dashboard({
 
   function openTask(taskId: string) {
     const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-    setArea("tasks");
-    setFilter(task.status);
-    setSelectedId(task.id);
-    setSelectedOwnerActionId(null);
+    const params = new URLSearchParams({
+      status: task?.status ?? filter,
+      from: currentPath(pathname, searchParams),
+    });
+    router.push(`/tasks/${taskId}?${params}`);
   }
 
   function openOwnerAction(actionId: string) {
-    setSelectedOwnerActionId(actionId);
     setEditingOwnerAction(false);
+    const params = new URLSearchParams({
+      status: initialMyWorkFilter,
+      from: currentPath(pathname, searchParams),
+    });
+    router.push(`/my-work/${actionId}?${params}`);
+  }
+
+  function closeDetail(fallback: string) {
+    router.replace(initialReturnTo ?? fallback);
+  }
+
+  function closeTaskComposer() {
+    setComposerOpen(false);
+    if (initialTaskActionId)
+      router.replace(`/my-work?status=${initialMyWorkFilter}`);
   }
 
   function startEditingOwnerAction() {
@@ -354,18 +402,11 @@ export function Dashboard({
   }
 
   function startTaskFromOwnerAction(action: OwnerAction) {
-    setDraft({
-      title: action.title,
-      instructions:
-        action.notes || `Complete the owner action: ${action.title}`,
-      deliverable: defaultDeliverable,
-      parentTaskId: null,
-      ownerActionId: action.id,
+    const params = new URLSearchParams({
+      status: initialMyWorkFilter,
+      createTaskFor: action.id,
     });
-    setDraftImage(null);
-    setPendingTask(null);
-    setSelectedOwnerActionId(null);
-    setComposerOpen(true);
+    router.replace(`/my-work?${params}`);
   }
 
   async function createWorker(event: FormEvent<HTMLFormElement>) {
@@ -390,14 +431,14 @@ export function Dashboard({
         </div>
         <nav className="area-nav" aria-label="Main navigation">
           <button
-            className={area === "my-work" ? "active" : ""}
-            onClick={() => setArea("my-work")}
+            className={initialArea === "my-work" ? "active" : ""}
+            onClick={() => router.push("/my-work")}
           >
             My Work
           </button>
           <button
-            className={area === "tasks" ? "active" : ""}
-            onClick={() => setArea("tasks")}
+            className={initialArea === "tasks" ? "active" : ""}
+            onClick={() => router.push("/tasks")}
           >
             Tasks
           </button>
@@ -421,7 +462,7 @@ export function Dashboard({
         </div>
       </header>
 
-      {area === "my-work" ? (
+      {initialArea === "my-work" ? (
         <MyWork
           actions={ownerActions}
           busy={busy}
@@ -431,6 +472,10 @@ export function Dashboard({
           onDelete={deleteOwnerAction}
           onOpenAction={openOwnerAction}
           onOpenTask={openTask}
+          filter={initialMyWorkFilter}
+          onFilterChange={(nextFilter) =>
+            router.replace(`/my-work?status=${nextFilter}`)
+          }
         />
       ) : (
         <section className="workspace">
@@ -459,7 +504,7 @@ export function Dashboard({
                 <button
                   key={item}
                   className={filter === item ? "active" : ""}
-                  onClick={() => setFilter(item)}
+                  onClick={() => router.replace(`/tasks?status=${item}`)}
                 >
                   {statusLabel(item)}
                   <span>
@@ -474,8 +519,8 @@ export function Dashboard({
                 visibleTasks.map((task) => (
                   <button
                     key={task.id}
-                    className={`task-card ${selectedId === task.id ? "selected" : ""}`}
-                    onClick={() => setSelectedId(task.id)}
+                    className={`task-card ${initialTaskId === task.id ? "selected" : ""}`}
+                    onClick={() => openTask(task.id)}
                   >
                     <div className="task-card-top">
                       <StatusPill status={task.status} />
@@ -528,7 +573,7 @@ export function Dashboard({
                 key={`${selected.id}-${selected.updated_at}`}
                 task={selected}
                 busy={busy}
-                onBack={() => setSelectedId(null)}
+                onBack={() => closeDetail(`/tasks?status=${filter}`)}
                 onQueue={() => queueTask(selected.id)}
                 onFeedback={(feedback) => sendFeedback(selected.id, feedback)}
                 onAccept={() => acceptTask(selected.id)}
@@ -572,10 +617,7 @@ export function Dashboard({
       )}
 
       {composerOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={() => setComposerOpen(false)}
-        >
+        <div className="modal-backdrop" onMouseDown={closeTaskComposer}>
           <section
             className="sheet composer"
             role="dialog"
@@ -596,10 +638,7 @@ export function Dashboard({
                   {draft.parentTaskId ? "Create follow-up" : "New task"}
                 </h2>
               </div>
-              <button
-                className="icon-button"
-                onClick={() => setComposerOpen(false)}
-              >
+              <button className="icon-button" onClick={closeTaskComposer}>
                 <X size={20} />
               </button>
             </div>
@@ -729,7 +768,9 @@ export function Dashboard({
       {selectedOwnerAction && (
         <div
           className="modal-backdrop"
-          onMouseDown={() => setSelectedOwnerActionId(null)}
+          onMouseDown={() =>
+            closeDetail(`/my-work?status=${initialMyWorkFilter}`)
+          }
         >
           <section
             className="sheet owner-action-sheet"
@@ -749,7 +790,9 @@ export function Dashboard({
               </div>
               <button
                 className="icon-button"
-                onClick={() => setSelectedOwnerActionId(null)}
+                onClick={() =>
+                  closeDetail(`/my-work?status=${initialMyWorkFilter}`)
+                }
                 aria-label="Close action"
               >
                 <X size={20} />
@@ -988,6 +1031,8 @@ function MyWork({
   onDelete,
   onOpenAction,
   onOpenTask,
+  filter,
+  onFilterChange,
 }: {
   actions: OwnerAction[];
   busy: boolean;
@@ -1004,8 +1049,9 @@ function MyWork({
   onDelete: (actionId: string) => Promise<void>;
   onOpenAction: (actionId: string) => void;
   onOpenTask: (taskId: string) => void;
+  filter: MyWorkFilter;
+  onFilterChange: (filter: MyWorkFilter) => void;
 }) {
-  const [filter, setFilter] = useState<"active" | "snoozed" | "done">("active");
   const [composerOpen, setComposerOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -1096,7 +1142,7 @@ function MyWork({
           <button
             key={item}
             className={filter === item ? "active" : ""}
-            onClick={() => setFilter(item)}
+            onClick={() => onFilterChange(item)}
           >
             {item[0].toUpperCase() + item.slice(1)}
             <span>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { TASK_RUN_SUMMARY_SELECT } from "@/lib/task-select";
+import { deliverableConflict } from "@/lib/deliverables";
 
 export async function POST(
   _request: Request,
@@ -22,10 +23,15 @@ export async function POST(
     ) {
       throw new ApiError("This task already has an active run.", 409);
     }
+    const conflict = deliverableConflict(task.deliverable, task.instructions);
+    if (conflict) {
+      await supabase.from("events").insert({ task_id: task.id, user_id: user.id, type: "run.deliverable_blocked", payload: { deliverable: task.deliverable, reason: "markdown_conflict" } });
+      throw new ApiError(conflict, 409);
+    }
     const attempt = Math.max(0, ...task.runs.map((run) => run.attempt)) + 1;
     const { data: run, error } = await supabase
       .from("runs")
-      .insert({ task_id: task.id, user_id: user.id, attempt })
+      .insert({ task_id: task.id, user_id: user.id, attempt, deliverable: task.deliverable })
       .select("id")
       .single();
     if (error) throw error;

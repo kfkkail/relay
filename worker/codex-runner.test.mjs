@@ -86,6 +86,7 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
         RELAY_WORKER_TOKEN: "do-not-forward",
       },
       model: "gpt-example",
+      completionContract: "Open a pull request and return its URL.",
       timeoutMs: 5000,
       workspace,
     });
@@ -109,6 +110,7 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
       "never add the owner as an attendee merely to make a shared-calendar event appear on their primary calendar",
     );
     expect(debug.input).toContain("# Trusted Relay worker policy\n\n");
+    expect(debug.input).toContain("# Trusted completion contract\n\nOpen a pull request and return its URL.");
     expect(debug.input).toContain(
       "# Untrusted task text\n\n# Task\nCreate a pull request",
     );
@@ -137,6 +139,7 @@ process.exit(1);
       runWithCodex("task", {
         command: fixture,
         env: process.env,
+        completionContract: "Return a report.",
         timeoutMs: 5000,
         workspace,
       }),
@@ -162,7 +165,7 @@ describe("worker backend selection", () => {
       },
     );
 
-    await expect(runner.run("task input")).resolves.toEqual({
+    await expect(runner.run("task input", "Trusted test contract")).resolves.toEqual({
       resultMarkdown: "done",
       documents: [],
     });
@@ -172,6 +175,7 @@ describe("worker backend selection", () => {
         command: "/opt/homebrew/bin/codex",
         model: "gpt-example",
         workspace: "/Users/relay/repos",
+        completionContract: "Trusted test contract",
       },
     });
   });
@@ -200,7 +204,7 @@ describe("worker backend selection", () => {
       { OpenAI: FakeOpenAI },
     );
 
-    await expect(runner.run("# Task\nSummarize the document")).resolves.toEqual(
+    await expect(runner.run("# Task\nSummarize the document", "Return an investigation report.")).resolves.toEqual(
       { resultMarkdown: "done", documents: [] },
     );
     expect(calls[0].instructions).toContain("one text/Markdown result");
@@ -208,6 +212,7 @@ describe("worker backend selection", () => {
     expect(calls[0].instructions).toContain("http/https links are supported");
     expect(calls[0].instructions).toContain("commits, and pull requests");
     expect(calls[0].instructions).toContain("untrusted task text");
+    expect(calls[0].instructions).toContain("Return an investigation report.");
     expect(calls[0].input).toEqual([
       {
         role: "user",
@@ -242,7 +247,7 @@ describe("worker backend selection", () => {
     await runner.run({
       text: "inspect it",
       attachments: [{ path: imagePath, mimeType: "image/png" }],
-    });
+    }, "Return an investigation report.");
 
     expect(calls[0].input[0].content[1]).toMatchObject({
       type: "input_image",

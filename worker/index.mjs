@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectResultDocuments } from "./result-documents.mjs";
+import deliverables from "../lib/deliverables.json" with { type: "json" };
 import {
   DEFAULT_MAX_CONCURRENT_RUNS,
   fillAvailableSlots,
@@ -88,10 +89,12 @@ async function processClaimedRun(claimed) {
     const attachmentNote = localAttachments.length
       ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}`
       : "";
+    const definition = deliverables[task.deliverable];
+    if (!definition) throw new Error(`Relay returned an unsupported deliverable: ${task.deliverable}`);
     const result = await taskRunner.run({
       text: input + attachmentNote,
       attachments: localAttachments,
-    });
+    }, definition.contract);
 
     const documents =
       taskRunner.backend === "codex"

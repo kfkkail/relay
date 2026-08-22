@@ -16,6 +16,7 @@ const run = (overrides: Partial<Run>): Run => ({
   attempt: 1,
   worker_id: null,
   feedback: null,
+  deliverable: "implementation_pr",
   result_markdown: null,
   result_artifacts: [],
   result_documents: [],

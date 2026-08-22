@@ -18,7 +18,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
     const runCodex = dependencies.runCodex || runWithCodex;
     return {
       backend,
-      run(input) {
+      run(input, completionContract) {
         const payload = normalizeInput(input);
         return runCodex(payload.text, {
           command: env.RELAY_CODEX_PATH || "codex",
@@ -27,6 +27,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
           workspace: env.RELAY_CODEX_WORKSPACE,
           env,
           attachments: payload.attachments,
+          completionContract,
         });
       },
     };
@@ -39,7 +40,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
     const client = new Client({ apiKey });
     return {
       backend,
-      async run(input) {
+      async run(input, completionContract) {
         const payload = normalizeInput(input);
         const content = [{ type: "input_text", text: payload.text }];
         for (const attachment of payload.attachments) {
@@ -52,7 +53,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
         }
         const response = await client.responses.create({
           model,
-          instructions: OPENAI_INSTRUCTIONS,
+          instructions: `${OPENAI_INSTRUCTIONS}\n\nTrusted completion contract for this run:\n${completionContract}`,
           input: [{ role: "user", content }],
         });
         return { resultMarkdown: response.output_text, documents: [] };

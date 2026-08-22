@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   buildFollowUpInstructions,
   compareOwnerActions,
@@ -58,6 +58,20 @@ const emptyDraft: Draft = {
   ownerActionId: null,
 };
 
+function taskDraftFromOwnerAction(action: OwnerAction): Draft {
+  return {
+    title: action.title,
+    instructions: action.notes || `Complete the owner action: ${action.title}`,
+    parentTaskId: null,
+    ownerActionId: action.id,
+  };
+}
+
+function currentPath(pathname: string, searchParams: { toString(): string }) {
+  const query = searchParams.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function Dashboard({
   initialTasks,
   initialWorkers,
@@ -68,6 +82,8 @@ export function Dashboard({
   initialMyWorkFilter,
   initialTaskId,
   initialActionId,
+  initialReturnTo,
+  initialTaskActionId,
 }: {
   initialTasks: Task[];
   initialWorkers: Worker[];
@@ -78,13 +94,24 @@ export function Dashboard({
   initialMyWorkFilter: MyWorkFilter;
   initialTaskId: string | null;
   initialActionId: string | null;
+  initialReturnTo: string | null;
+  initialTaskActionId: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const initialTaskAction = initialOwnerActions.find(
+    (action) => action.id === initialTaskActionId,
+  );
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
   const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [draft, setDraft] = useState<Draft>(() =>
+    initialTaskAction
+      ? taskDraftFromOwnerAction(initialTaskAction)
+      : emptyDraft,
+  );
+  const [composerOpen, setComposerOpen] = useState(Boolean(initialTaskAction));
   const [draftImage, setDraftImage] = useState<File | null>(null);
   const [pendingTask, setPendingTask] = useState<Task | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -259,18 +286,31 @@ export function Dashboard({
   }
 
   function openTask(taskId: string) {
-    router.push(`/tasks/${taskId}`);
+    const task = tasks.find((item) => item.id === taskId);
+    const params = new URLSearchParams({
+      status: task?.status ?? filter,
+      from: currentPath(pathname, searchParams),
+    });
+    router.push(`/tasks/${taskId}?${params}`);
   }
 
   function openOwnerAction(actionId: string) {
     setEditingOwnerAction(false);
-    router.push(`/my-work/${actionId}`);
+    const params = new URLSearchParams({
+      status: initialMyWorkFilter,
+      from: currentPath(pathname, searchParams),
+    });
+    router.push(`/my-work/${actionId}?${params}`);
   }
 
   function closeDetail(fallback: string) {
-    const state = window.history.state as { idx?: number } | null;
-    if ((state?.idx ?? 0) > 0) router.back();
-    else router.push(fallback);
+    router.replace(initialReturnTo ?? fallback);
+  }
+
+  function closeTaskComposer() {
+    setComposerOpen(false);
+    if (initialTaskActionId)
+      router.replace(`/my-work?status=${initialMyWorkFilter}`);
   }
 
   function startEditingOwnerAction() {
@@ -354,17 +394,11 @@ export function Dashboard({
   }
 
   function startTaskFromOwnerAction(action: OwnerAction) {
-    setDraft({
-      title: action.title,
-      instructions:
-        action.notes || `Complete the owner action: ${action.title}`,
-      parentTaskId: null,
-      ownerActionId: action.id,
+    const params = new URLSearchParams({
+      status: initialMyWorkFilter,
+      createTaskFor: action.id,
     });
-    setDraftImage(null);
-    setPendingTask(null);
-    router.push("/my-work");
-    setComposerOpen(true);
+    router.replace(`/my-work?${params}`);
   }
 
   async function createWorker(event: FormEvent<HTMLFormElement>) {
@@ -575,10 +609,7 @@ export function Dashboard({
       )}
 
       {composerOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={() => setComposerOpen(false)}
-        >
+        <div className="modal-backdrop" onMouseDown={closeTaskComposer}>
           <section
             className="sheet composer"
             role="dialog"
@@ -599,10 +630,7 @@ export function Dashboard({
                   {draft.parentTaskId ? "Create follow-up" : "New task"}
                 </h2>
               </div>
-              <button
-                className="icon-button"
-                onClick={() => setComposerOpen(false)}
-              >
+              <button className="icon-button" onClick={closeTaskComposer}>
                 <X size={20} />
               </button>
             </div>

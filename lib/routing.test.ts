@@ -17,4 +17,11 @@ describe("route parsing", () => {
     expect(safeReturnPath("//evil.example/tasks")).toBe("/tasks");
     expect(safeReturnPath(null)).toBe("/tasks");
   });
+
+  it("supports route-specific fallbacks and array query values", () => {
+    expect(safeReturnPath(["/my-work?status=done"], "/my-work")).toBe(
+      "/my-work?status=done",
+    );
+    expect(safeReturnPath("https://evil.example", "/my-work")).toBe("/my-work");
+  });
 });

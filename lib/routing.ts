@@ -25,17 +25,21 @@ export function parseMyWorkFilter(value: string | string[] | undefined) {
     : "active";
 }
 
-export function safeReturnPath(value: string | null | undefined) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/tasks";
+export function safeReturnPath(
+  value: string | string[] | null | undefined,
+  fallback = "/tasks",
+) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate || !candidate.startsWith("/") || candidate.startsWith("//")) {
+    return fallback;
   }
 
   try {
-    const parsed = new URL(value, "https://relay.local");
+    const parsed = new URL(candidate, "https://relay.local");
     return parsed.origin === "https://relay.local"
       ? `${parsed.pathname}${parsed.search}${parsed.hash}`
-      : "/tasks";
+      : fallback;
   } catch {
-    return "/tasks";
+    return fallback;
   }
 }

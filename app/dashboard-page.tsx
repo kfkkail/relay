@@ -14,12 +14,16 @@ export async function DashboardPage({
   myWorkFilter = "active",
   taskId,
   actionId,
+  returnTo,
+  createTaskForActionId,
 }: {
   area: "tasks" | "my-work";
   taskFilter?: TaskStatus;
   myWorkFilter?: MyWorkFilter;
   taskId?: string;
   actionId?: string;
+  returnTo?: string;
+  createTaskForActionId?: string;
 }) {
   if (!hasPublicSupabaseConfig()) return <SetupPanel />;
 
@@ -57,6 +61,11 @@ export async function DashboardPage({
   if (taskId && !initialTasks.some((task) => task.id === taskId)) notFound();
   if (actionId && !initialOwnerActions.some((action) => action.id === actionId))
     notFound();
+  const initialTaskActionId =
+    createTaskForActionId &&
+    initialOwnerActions.some((action) => action.id === createTaskForActionId)
+      ? createTaskForActionId
+      : null;
 
   return (
     <Dashboard
@@ -69,6 +78,8 @@ export async function DashboardPage({
       initialMyWorkFilter={myWorkFilter}
       initialTaskId={taskId ?? null}
       initialActionId={actionId ?? null}
+      initialReturnTo={returnTo ?? null}
+      initialTaskActionId={initialTaskActionId}
     />
   );
 }

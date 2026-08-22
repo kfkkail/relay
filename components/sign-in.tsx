@@ -15,7 +15,9 @@ export function SignIn() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`,
+      },
     });
 
     if (!error) return;

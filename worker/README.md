@@ -50,6 +50,17 @@ Raspberry Pi OS):
 npm run worker:service:install
 ```
 
+The service installer creates a dedicated worker clone, separate from your
+project workspaces and the checkout used to install it. While idle, that clone
+checks `origin/main` every five minutes. A clean fast-forward is applied and the
+native service restarts the worker, so merged worker changes require no manual
+update. Active runs are never interrupted.
+
+Set `RELAY_WORKER_AUTO_UPDATE=off` in `.env.worker` before installing to disable
+updates. Run `npm run worker:service:update` from the managed clone to check
+immediately. Updates are refused if the clone is dirty or diverged; network and
+validation failures leave the current process running and retry later.
+
 `npm run worker` remains available when the required values are already
 exported into the current shell or supplied by another secret manager.
 

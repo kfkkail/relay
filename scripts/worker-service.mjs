@@ -1,16 +1,26 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import {
+  access,
+  chmod,
+  copyFile,
+  mkdir,
+  readFile,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+let root = sourceRoot;
+let workerEnvContents = "";
 const command = process.argv[2];
 const dryRun = process.argv.includes("--dry-run");
 const label = "com.relay.worker";
-const envPath = join(root, ".env.worker");
-const workerPath = join(root, "worker/index.mjs");
+let envPath = join(root, ".env.worker");
+let workerPath = join(root, "worker/index.mjs");
 
 if (
   !command ||
@@ -23,6 +33,13 @@ if (
 
 if (!new Set(["install", "status", "uninstall"]).has(command)) {
   fail(`Unknown command: ${command}.`);
+}
+
+if (command === "install" && !dryRun) {
+  await validateWorkerEnv();
+  root = await prepareManagedInstall();
+  envPath = join(root, ".env.worker");
+  workerPath = join(root, "worker/index.mjs");
 }
 
 if (process.platform === "darwin") {
@@ -40,7 +57,6 @@ async function manageLaunchd(action) {
   const service = `${domain}/${label}`;
 
   if (action === "install") {
-    await validateWorkerEnv();
     const logs = join(root, ".relay");
     const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -56,6 +72,8 @@ async function manageLaunchd(action) {
   <key>WorkingDirectory</key><string>${xml(root)}</string>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
+  <key>EnvironmentVariables</key>
+  <dict><key>RELAY_WORKER_AUTO_UPDATE</key><string>${autoUpdateSetting()}</string></dict>
   <key>ThrottleInterval</key><integer>5</integer>
   <key>StandardOutPath</key><string>${xml(join(logs, "worker.stdout.log"))}</string>
   <key>StandardErrorPath</key><string>${xml(join(logs, "worker.stderr.log"))}</string>
@@ -93,7 +111,6 @@ async function manageSystemd(action) {
   const servicePath = join(directory, "relay-worker.service");
 
   if (action === "install") {
-    await validateWorkerEnv();
     const unit = `[Unit]
 Description=Relay worker
 Wants=network-online.target
@@ -105,6 +122,7 @@ WorkingDirectory=${systemdQuote(root)}
 ExecStart=${systemdQuote(process.execPath)} ${systemdQuote(`--env-file=${envPath}`)} ${systemdQuote(workerPath)}
 Restart=always
 RestartSec=5
+Environment=RELAY_WORKER_AUTO_UPDATE=${autoUpdateSetting()}
 
 [Install]
 WantedBy=default.target
@@ -150,6 +168,7 @@ async function validateWorkerEnv() {
       );
     throw error;
   }
+  workerEnvContents = contents;
   const env = Object.fromEntries(
     contents
       .split(/\r?\n/)
@@ -185,9 +204,76 @@ async function validateWorkerEnv() {
   }
 }
 
-function run(executable, args, inherit = false) {
+async function prepareManagedInstall() {
+  const installationRoot =
+    process.platform === "darwin"
+      ? join(homedir(), "Library/Application Support/Relay Worker/app")
+      : join(homedir(), ".local/share/relay-worker/app");
+  const remote = commandOutput("git", [
+    "-C",
+    sourceRoot,
+    "config",
+    "--get",
+    "remote.origin.url",
+  ]);
+
+  if (!(await pathExists(join(installationRoot, ".git")))) {
+    await mkdir(dirname(installationRoot), { recursive: true });
+    run("git", [
+      "clone",
+      "--branch",
+      "main",
+      "--single-branch",
+      remote,
+      installationRoot,
+    ]);
+  } else {
+    run("git", ["-C", installationRoot, "fetch", "--quiet", "origin", "main"]);
+    run("git", ["-C", installationRoot, "merge", "--ff-only", "origin/main"]);
+  }
+
+  await copyFile(
+    join(sourceRoot, ".env.worker"),
+    join(installationRoot, ".env.worker"),
+  );
+  await chmod(join(installationRoot, ".env.worker"), 0o600);
+  run("npm", ["ci", "--omit=dev", "--ignore-scripts"], false, installationRoot);
+  return installationRoot;
+}
+
+function autoUpdateSetting() {
+  const configured = workerEnvContents
+    .match(/^RELAY_WORKER_AUTO_UPDATE=(.+)$/m)?.[1]
+    ?.trim()
+    .replace(/^(?:"|')(.*)(?:"|')$/, "$1")
+    .toLowerCase();
+  return configured === "off" ? "off" : "on";
+}
+
+async function pathExists(path) {
   try {
-    execFileSync(executable, args, { stdio: inherit ? "inherit" : "pipe" });
+    await access(path);
+    return true;
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+function run(executable, args, inherit = false, cwd) {
+  try {
+    execFileSync(executable, args, {
+      cwd,
+      stdio: inherit ? "inherit" : "pipe",
+    });
+  } catch (error) {
+    fail(error.stderr?.toString().trim() || error.message);
+  }
+}
+
+function commandOutput(executable, args) {
+  try {
+    return execFileSync(executable, args, { encoding: "utf8" }).trim();
   } catch (error) {
     fail(error.stderr?.toString().trim() || error.message);
   }

@@ -863,13 +863,11 @@ export function Dashboard({
                   {editInstructions.length.toLocaleString()} characters
                 </span>
               </div>
-              {editingTask.status === "inbox" && (
-                <ImagePicker
-                  file={editImage}
-                  onChange={setEditImage}
-                  currentName={editingTask.task_attachments[0]?.file_name}
-                />
-              )}
+              <ImagePicker
+                file={editImage}
+                onChange={setEditImage}
+                currentName={editingTask.task_attachments[0]?.file_name}
+              />
               <div className="edit-actions">
                 <button
                   type="button"

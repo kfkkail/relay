@@ -23,15 +23,10 @@ export async function POST(
     );
     const { data: task } = await supabase
       .from("tasks")
-      .select("id,status,task_attachments(id)")
+      .select("id,task_attachments(id)")
       .eq("id", taskId)
       .single();
     if (!task) throw new ApiError("Task not found.", 404);
-    if (task.status !== "inbox")
-      throw new ApiError(
-        "Attachments can only be changed while a task is in Inbox.",
-        409,
-      );
     if (task.task_attachments.length)
       throw new ApiError(
         "This task already has an image. Remove it before adding another.",
@@ -74,18 +69,11 @@ export async function PATCH(
     const { attachmentId } = await request.json();
     const { data: attachment } = await supabase
       .from("task_attachments")
-      .select(
-        "id,task_id,storage_path,file_name,mime_type,byte_size,tasks!inner(status)",
-      )
+      .select("id,task_id,storage_path,file_name,mime_type,byte_size")
       .eq("id", attachmentId)
       .eq("task_id", taskId)
       .single();
     if (!attachment) throw new ApiError("Attachment not found.", 404);
-    if ((attachment.tasks as unknown as { status: string }).status !== "inbox")
-      throw new ApiError(
-        "Attachments can only be changed while a task is in Inbox.",
-        409,
-      );
     const admin = createAdminClient();
     const { data: object, error: downloadError } = await admin.storage
       .from(ATTACHMENT_BUCKET)

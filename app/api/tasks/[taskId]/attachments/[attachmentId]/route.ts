@@ -45,16 +45,11 @@ export async function DELETE(
     const { supabase, user } = await requireUser();
     const { data } = await supabase
       .from("task_attachments")
-      .select("storage_path,tasks!inner(status)")
+      .select("storage_path")
       .eq("id", attachmentId)
       .eq("task_id", taskId)
       .single();
     if (!data) throw new ApiError("Attachment not found.", 404);
-    if ((data.tasks as unknown as { status: string }).status !== "inbox")
-      throw new ApiError(
-        "Attachments can only be changed while a task is in Inbox.",
-        409,
-      );
     const { error: storageError } = await createAdminClient()
       .storage.from(ATTACHMENT_BUCKET)
       .remove([data.storage_path]);

@@ -30,6 +30,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <main className="launch-splash launch-splash--initial" aria-busy="true">
+          <div
+            className="launch-splash__content"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="launch-splash__mark" aria-hidden="true">
+              R
+            </div>
+            <div className="launch-splash__indicator" aria-hidden="true" />
+            <p>Loading your Relay…</p>
+          </div>
+        </main>
         {children}
         <ServiceWorkerRegistration />
       </body>

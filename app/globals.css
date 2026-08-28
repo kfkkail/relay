@@ -139,6 +139,16 @@ body {
   background: var(--paper);
 }
 
+/*
+ * The root shell streams before the first page is ready, so it can provide the
+ * startup splash without installing a route-level loading boundary. Once page
+ * content exists, keep the splash out of both initial render and client-side
+ * navigations so the dashboard's inline loading UI remains visible.
+ */
+body:has(> main:not(.launch-splash--initial)) > .launch-splash--initial {
+  display: none;
+}
+
 .launch-splash__content {
   display: flex;
   flex-direction: column;

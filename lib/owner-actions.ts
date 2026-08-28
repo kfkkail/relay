@@ -1,7 +1,10 @@
 export const ownerActionSelect = `
   id,title,notes,status,due_at,snoozed_until,position,completed_at,created_at,updated_at,
+  owner_action_attachments(id,file_name,mime_type,byte_size,width,height),
   owner_action_tasks(task_id,tasks(id,title,status))
 `;
+
+export const MAX_OWNER_ACTION_ATTACHMENTS = 10;
 
 export function optionalDate(value: unknown, field: string) {
   if (value === null || value === "" || value === undefined) return null;

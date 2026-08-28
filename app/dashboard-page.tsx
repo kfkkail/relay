@@ -7,7 +7,10 @@ import type { MyWorkFilter } from "@/lib/routing";
 import { createClient } from "@/lib/supabase/server";
 import { TASK_SELECT } from "@/lib/task-select";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
-import { ownerActionSelect } from "@/lib/owner-actions";
+import {
+  onlyFinalizedOwnerActionAttachments,
+  ownerActionSelect,
+} from "@/lib/owner-actions";
 
 export async function DashboardPage({
   area,
@@ -53,7 +56,9 @@ export async function DashboardPage({
     ]);
 
   const initialTasks = (tasks ?? []) as Task[];
-  const initialOwnerActions = (ownerActions ?? []) as unknown as OwnerAction[];
+  const initialOwnerActions = (ownerActions ?? []).map(
+    onlyFinalizedOwnerActionAttachments,
+  ) as unknown as OwnerAction[];
   if (taskId && !initialTasks.some((task) => task.id === taskId)) notFound();
   if (actionId && !initialOwnerActions.some((action) => action.id === actionId))
     notFound();

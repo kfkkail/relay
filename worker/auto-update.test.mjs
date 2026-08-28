@@ -25,7 +25,10 @@ describe("worker auto updates", () => {
 
   it("refuses to modify a dirty clone", async () => {
     const root = await fixture();
-    const result = await updateManagedClone(root, fakeGit({ dirty: " M worker/index.mjs" }));
+    const result = await updateManagedClone(
+      root,
+      fakeGit({ dirty: " M worker/index.mjs" }),
+    );
     expect(result).toEqual({ status: "dirty" });
   });
 
@@ -38,9 +41,7 @@ describe("worker auto updates", () => {
     );
     expect(result).toEqual({ status: "updated", revision: "new" });
     expect(
-      calls.some(
-        ([command, args]) => command === "git" && args[0] === "merge",
-      ),
+      calls.some(([command, args]) => command === "git" && args[0] === "merge"),
     ).toBe(true);
     expect(
       calls.some(
@@ -90,7 +91,12 @@ async function fixture() {
   return root;
 }
 
-function fakeGit({ dirty = "", local = "old", remote = "new", calls = [] } = {}) {
+function fakeGit({
+  dirty = "",
+  local = "old",
+  remote = "new",
+  calls = [],
+} = {}) {
   let head = local;
   return async (command, args) => {
     calls.push([command, args]);

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushConfig, pushPayload, pushStatus, sendPush } from "@/lib/push";
 
+import { deliveryUpdate } from "@/lib/push-delivery";
+
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
@@ -43,31 +45,20 @@ export async function GET(request: Request) {
           } catch (error) {
             status = pushStatus(error);
           }
+          const { error: updateError } = await db
+            .from("push_deliveries")
+            .update(deliveryUpdate(status, delivery.attempts))
+            .eq("id", delivery.id)
+            .eq("attempts", delivery.attempts);
+          if (updateError) throw updateError;
           if (status === 404 || status === 410) {
+            // Preserve outcome rows while removing a dead endpoint.
             const { error } = await db
               .from("push_subscriptions")
               .delete()
               .eq("id", delivery.subscription_id);
             if (error) throw error;
-            return;
           }
-          const done =
-            (status >= 200 && status < 300) || delivery.attempts >= 6;
-          const { error: updateError } = await db
-            .from("push_deliveries")
-            .update(
-              done
-                ? { finished_at: new Date().toISOString() }
-                : {
-                    available_at: new Date(
-                      Date.now() +
-                        Math.min(3600, 60 * 2 ** delivery.attempts) * 1000,
-                    ).toISOString(),
-                  },
-            )
-            .eq("id", delivery.id)
-            .eq("attempts", delivery.attempts);
-          if (updateError) throw updateError;
         },
       ),
     );
@@ -76,7 +67,18 @@ export async function GET(request: Request) {
       .delete()
       .lt("created_at", new Date(Date.now() - 7 * 86400000).toISOString());
     if (cleanupError) throw cleanupError;
-    return NextResponse.json({ processed: data?.length ?? 0 });
+    const { count: failedLast24Hours, error: countError } = await db
+      .from("push_deliveries")
+      .select("id", { count: "exact", head: true })
+      .gte("failed_at", new Date(Date.now() - 86400000).toISOString());
+    if (countError) throw countError;
+    return NextResponse.json(
+      {
+        processed: data?.length ?? 0,
+        failedLast24Hours: failedLast24Hours ?? 0,
+      },
+      { status: failedLast24Hours ? 503 : 200 },
+    );
   } catch {
     // Provider errors can contain subscription credentials; never log them.
     return NextResponse.json(

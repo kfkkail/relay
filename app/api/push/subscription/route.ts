@@ -40,7 +40,23 @@ export async function DELETE(request: Request) {
     const { user } = await requireUser();
     const { endpoint } = await request.json();
     if (typeof endpoint !== "string") throw new ApiError("Endpoint required.");
-    const { error } = await createAdminClient()
+    const db = createAdminClient();
+    const { data: subscription, error: lookupError } = await db
+      .from("push_subscriptions")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("endpoint", endpoint)
+      .maybeSingle();
+    if (lookupError) throw lookupError;
+    if (subscription) {
+      const { error: cancelError } = await db
+        .from("push_deliveries")
+        .delete()
+        .eq("subscription_id", subscription.id)
+        .is("finished_at", null);
+      if (cancelError) throw cancelError;
+    }
+    const { error } = await db
       .from("push_subscriptions")
       .delete()
       .eq("user_id", user.id)

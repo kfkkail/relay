@@ -3,24 +3,7 @@
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
 
-async function subscriptionRequest(
-  method: string,
-  subscription: PushSubscription,
-) {
-  const response = await fetch("/api/push/subscription", {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      method === "POST"
-        ? subscription.toJSON()
-        : { endpoint: subscription.endpoint },
-    ),
-  });
-  if (!response.ok)
-    throw new Error(
-      (await response.json()).error || "Could not save notification settings.",
-    );
-}
+import { reconcileSubscription, subscriptionRequest } from "@/lib/push-client";
 
 export function PushSettings() {
   const [open, setOpen] = useState(false);
@@ -29,6 +12,7 @@ export function PushSettings() {
   );
   const [supported, setSupported] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 
@@ -39,13 +23,29 @@ export function PushSettings() {
       !("Notification" in window)
     )
       return;
+    let cancelled = false;
     navigator.serviceWorker.ready
-      .then((registration) => registration.pushManager.getSubscription())
-      .then((current) => {
-        setSupported(true);
-        setSubscription(current);
+      .then(async (registration) => {
+        if (!cancelled) setSupported(true);
+        return reconcileSubscription(registration);
       })
-      .catch(() => setMessage("Could not load notification settings."));
+      .then((current) => {
+        if (!cancelled) setSubscription(current);
+      })
+      .catch((error) => {
+        if (!cancelled)
+          setMessage(
+            error instanceof Error
+              ? error.message
+              : "Could not verify notification settings. Try enabling again.",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function enable() {
@@ -155,13 +155,18 @@ export function PushSettings() {
           )}
           {supported && publicKey && (
             <div className="push-settings-buttons">
-              <button disabled={busy} onClick={subscription ? disable : enable}>
-                {subscription
-                  ? "Disable on this device"
-                  : "Enable notifications"}
+              <button
+                disabled={busy || loading}
+                onClick={subscription ? disable : enable}
+              >
+                {loading
+                  ? "Checking notifications…"
+                  : subscription
+                    ? "Disable on this device"
+                    : "Enable notifications"}
               </button>
               {subscription && (
-                <button disabled={busy} onClick={test}>
+                <button disabled={busy || loading} onClick={test}>
                   Send test notification
                 </button>
               )}

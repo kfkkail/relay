@@ -27,8 +27,11 @@ or native app is needed. Android and desktop standards-based push also work.
    complete and fail test runs. Tap each notification and verify its task opens.
    Check Notification Center and Focus settings if no banner appears.
 
-The endpoint returns 401 without the secret, 503 on configuration/database
-failure, and a processed count on success. Alert on repeated scheduler errors.
+The endpoint returns 401 without the secret and 503 on configuration/database
+failure or any terminal delivery failure in the last 24 hours. Responses after
+processing include `processed` and `failedLast24Hours`; alert on a nonzero failure
+count or repeated scheduler errors. Delivery continues even while this signal is
+nonzero, so an empty subsequent batch does not hide a prior failure.
 Without the scheduler, test pushes work but run notifications stay queued.
 Cloud delivery does not require the laptop to remain online after finishing.
 
@@ -39,7 +42,11 @@ in the same transaction as the status transition. Subscribing does not replay
 old runs. Claims use row locks and a five-minute lease, allowing safe concurrent
 scheduler calls and recovery after crashes. Each batch handles up to 20 devices.
 Transient failures use exponential backoff, capped at six attempts and a 24-hour
-age limit. Provider 404/410 responses remove expired subscriptions. Outbox rows
+age limit. `delivered_at` records provider acceptance; `failed_at` records terminal
+failures, expired work, or abandoned final attempts after their lease expires.
+`last_status_code` stores only an HTTP code (0 when unavailable), never response
+bodies or credentials. Existing finished rows without these fields have unknown
+outcomes, not presumed success. Provider 404/410 responses remove expired subscriptions. Outbox rows
 are deleted after seven days. Delivery is at least once; stable notification tags
 reduce duplicate presentation after a crash between sending and recording success.
 A processed count indicates attempted work, not confirmed device presentation.
@@ -49,7 +56,9 @@ client grants. API requests are authenticated and scoped to the current user.
 The sender accepts only known browser push service hosts. Push content contains
 generic text and task identifiers, never task titles, instructions, results, or
 raw errors. Disable removes the subscription and pending deliveries for this
-device. Sign-out does not automatically disable OS notifications; disable first
+device, retaining completed outcome records. On mount, Relay reconciles an existing
+browser subscription with the server before displaying it as enabled. A failed
+reconciliation leaves enable/retry available and does not show a false enabled state. Sign-out does not automatically disable OS notifications; disable first
 on a shared device. Another account cannot overwrite an existing subscription.
 
 Every received push displays a notification, including while Relay is open;

@@ -127,3 +127,17 @@ npm run worker:service:install
 See [`docs/implementation-plan.md`](docs/implementation-plan.md) for scope and
 architecture, and [`worker/README.md`](worker/README.md) for the polling worker
 protocol.
+
+### Authentication redirects
+
+Allow the exact production URL `https://YOUR_PRODUCTION_DOMAIN/auth/callback`
+in Supabase Authentication → URL Configuration. Sign-in keeps its return
+path in a ten-minute HTTP-only cookie, so query strings for tasks and filters
+never change the OAuth callback URL. Existing callbacks with a `next` query
+remain supported while deployments roll over. Failed or expired callbacks show
+an error with a retry button instead of silently looping.
+
+The Supabase Site URL should also be the production origin. This PR does not
+change hosted auth settings; the exact callback allowlist entry is sufficient
+for app-initiated sign-in. The Site URL remains relevant for default redirects
+and other Supabase auth flows.

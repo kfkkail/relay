@@ -127,6 +127,113 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.launch-splash {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: max(24px, env(safe-area-inset-top))
+    max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom))
+    max(24px, env(safe-area-inset-left));
+  color: var(--ink);
+  background: var(--paper);
+}
+
+/*
+ * The root shell streams before the first page is ready, so it can provide the
+ * startup splash without installing a route-level loading boundary. Once page
+ * content exists, keep the splash out of both initial render and client-side
+ * navigations so the dashboard's inline loading UI remains visible.
+ */
+body:has(> main:not(.launch-splash--initial)) > .launch-splash--initial {
+  display: none;
+}
+
+.launch-splash__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 320px;
+  transform: translateY(-5vh);
+  text-align: center;
+}
+
+.launch-splash__mark {
+  display: grid;
+  width: 72px;
+  height: 72px;
+  place-items: center;
+  border-radius: 22px;
+  color: var(--on-forest);
+  background: var(--forest);
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.08em;
+  text-indent: -0.08em;
+  box-shadow: var(--button-shadow);
+}
+
+.launch-splash__indicator {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  margin-top: 26px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  animation: launch-splash-orbit 900ms linear infinite;
+}
+
+.launch-splash__indicator::after {
+  position: absolute;
+  top: -2px;
+  left: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--forest);
+  content: "";
+}
+
+.launch-splash p {
+  margin: 12px 0 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.launch-splash--error .launch-splash__content {
+  transform: none;
+}
+
+.launch-splash--error h1 {
+  margin: 24px 0 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.launch-splash--error p {
+  margin-top: 10px;
+}
+
+.launch-splash--error button {
+  cursor: pointer;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 12px;
+  padding: 11px 18px;
+  color: var(--on-forest);
+  background: var(--forest);
+  font-weight: 750;
+  box-shadow: var(--button-shadow);
+}
+
+@keyframes launch-splash-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 button,
 input,
 textarea,
@@ -333,10 +440,11 @@ a {
   position: sticky;
   z-index: 20;
   top: 0;
-  display: flex;
-  height: 64px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  height: calc(64px + env(safe-area-inset-top, 0px));
   align-items: center;
-  justify-content: space-between;
   padding: env(safe-area-inset-top, 0) 18px 0;
   border-bottom: 1px solid var(--border-soft);
   background: var(--topbar);
@@ -371,6 +479,7 @@ a {
 }
 
 .topbar-actions {
+  justify-self: end;
   display: flex;
   gap: 6px;
 }
@@ -378,14 +487,12 @@ a {
   display: contents;
 }
 .area-nav {
-  position: absolute;
-  left: 50%;
+  justify-self: center;
   display: flex;
   gap: 3px;
   border-radius: 12px;
   padding: 3px;
   background: var(--paper-deep);
-  transform: translateX(-50%);
 }
 .area-nav button {
   border: 0;
@@ -393,6 +500,7 @@ a {
   padding: 7px 11px;
   background: transparent;
   font-size: 12px;
+  white-space: nowrap;
   font-weight: 700;
   cursor: pointer;
 }
@@ -1178,6 +1286,15 @@ textarea {
 .worker-list strong {
   font-size: 14px;
 }
+.worker-list .revoke-worker {
+  margin-left: auto;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.worker-list > div > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .worker-list p {
   margin: 3px 0 0;
   color: var(--ink-soft);
@@ -1766,7 +1883,7 @@ textarea {
 
 @media (min-width: 940px) {
   .topbar {
-    height: 72px;
+    height: calc(72px + env(safe-area-inset-top, 0px));
     padding-right: 28px;
     padding-left: 28px;
   }
@@ -1884,6 +2001,9 @@ textarea {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .launch-splash__indicator {
+    animation: none;
+  }
   .navigation-progress::after {
     width: 100%;
     animation: none;
@@ -1901,5 +2021,122 @@ textarea {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.push-settings-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.push-settings-buttons button {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #aaa;
+}
+
+/* Anchor to the full-width topbar, not an icon partway across the viewport. */
+.settings-panel {
+  position: absolute;
+  inset-inline-end: max(12px, env(safe-area-inset-right, 0px));
+  top: calc(100% + 8px);
+  width: min(
+    360px,
+    calc(
+      100vw - 24px - env(safe-area-inset-left, 0px) -
+        env(safe-area-inset-right, 0px)
+    )
+  );
+  max-height: calc(
+    100dvh - 100px - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px)
+  );
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 40px #0002;
+}
+.settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings-heading h2 {
+  font-size: 18px;
+  margin: 0;
+  padding-inline-start: 8px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 46px;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: start;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.settings-row:hover {
+  background: var(--hover);
+}
+.settings-row svg {
+  flex-shrink: 0;
+}
+.settings-notifications summary {
+  list-style: none;
+}
+.settings-notifications summary::-webkit-details-marker {
+  display: none;
+}
+.settings-chevron {
+  margin-inline-start: auto;
+}
+.settings-notifications[open] .settings-chevron {
+  transform: rotate(180deg);
+}
+.push-settings-content {
+  padding: 0 8px 12px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.push-settings-content p {
+  margin: 8px 0 14px;
+}
+.push-settings-content p:empty {
+  display: none;
+}
+.push-settings-buttons button {
+  color: var(--ink);
+  background: var(--paper-deep);
+  border-color: var(--control-border);
+  min-height: 44px;
+  white-space: normal;
+}
+.settings-sign-out {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.settings-sign-out [role="alert"] {
+  display: block;
+  padding: 8px;
+  font-size: 14px;
+}
+@media (max-width: 380px) {
+  .topbar .brand-lockup > span:not(.brand-mark) {
+    display: none;
+  }
+  .topbar {
+    padding-inline: 12px;
   }
 }

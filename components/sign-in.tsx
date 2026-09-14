@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { ArrowRight, LogIn } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { useSearchParams } from "next/navigation";
 
 export function SignIn() {
+  const searchParams = useSearchParams();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -12,19 +13,33 @@ export function SignIn() {
     setBusy(true);
     setMessage("");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "github",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`,
-      },
-    });
-
-    if (!error) return;
-
-    setBusy(false);
-    setMessage(error.message);
+    try {
+      const response = await fetch("/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          next: `${window.location.pathname}${window.location.search}`,
+        }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.url)
+        throw new Error(body.error || "Could not start sign-in.");
+      window.location.assign(body.url);
+    } catch (error) {
+      setBusy(false);
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not start sign-in. Please try again.",
+      );
+    }
   }
+
+  const errorMessage =
+    message ||
+    (searchParams.has("auth_error")
+      ? "Sign-in could not be completed. Please try again."
+      : "");
 
   return (
     <main className="auth-shell">
@@ -60,9 +75,9 @@ export function SignIn() {
           {busy ? "Redirecting…" : "Continue with GitHub"}
           <ArrowRight size={18} />
         </button>
-        {message && (
+        {errorMessage && (
           <p className="form-message" role="alert">
-            {message}
+            {errorMessage}
           </p>
         )}
         <p className="privacy-note">

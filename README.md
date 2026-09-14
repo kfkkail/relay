@@ -55,6 +55,12 @@ The web application and worker can use separate environment files or shell
 sessions. Never put a real worker token, API key, task export, log, or database
 dump in this repository.
 
+To reject an existing worker token, open **Worker setup** and choose **Revoke
+token** beside that worker. Revocation is permanent and blocks subsequent API
+requests, including result submission for active runs. It does not stop a local
+process already running. Create a new token and update the worker environment to
+reconnect. Worker records are retained so existing run history remains intact.
+
 ## MacBook and Raspberry Pi workers
 
 Test the configured worker in the foreground with:
@@ -127,3 +133,17 @@ npm run worker:service:install
 See [`docs/implementation-plan.md`](docs/implementation-plan.md) for scope and
 architecture, and [`worker/README.md`](worker/README.md) for the polling worker
 protocol.
+
+### Authentication redirects
+
+Allow the exact production URL `https://YOUR_PRODUCTION_DOMAIN/auth/callback`
+in Supabase Authentication → URL Configuration. Sign-in keeps its return
+path in a ten-minute HTTP-only cookie, so query strings for tasks and filters
+never change the OAuth callback URL. Existing callbacks with a `next` query
+remain supported while deployments roll over. Failed or expired callbacks show
+an error with a retry button instead of silently looping.
+
+The Supabase Site URL should also be the production origin. This PR does not
+change hosted auth settings; the exact callback allowlist entry is sufficient
+for app-initiated sign-in. The Site URL remains relevant for default redirects
+and other Supabase auth flows.

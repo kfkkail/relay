@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { PUSH_DEVICE_COOKIE, pushCookieOptions } from "@/lib/push-cookie";
 import { NextResponse } from "next/server";
 import { requireUser, ApiError, apiErrorResponse } from "@/lib/http";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -29,7 +31,21 @@ export async function POST(request: Request) {
       { onConflict: "endpoint", ignoreDuplicates: true },
     );
     if (error) throw error;
-    return NextResponse.json({ enabled: true });
+    const { data: saved, error: savedError } = await db
+      .from("push_subscriptions")
+      .select("id")
+      .eq("endpoint", subscription.endpoint)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (savedError) throw savedError;
+    if (!saved)
+      throw new ApiError(
+        "Subscription registration could not be verified.",
+        409,
+      );
+    const response = NextResponse.json({ enabled: true });
+    response.cookies.set(PUSH_DEVICE_COOKIE, saved.id, pushCookieOptions);
+    return response;
   } catch (error) {
     return apiErrorResponse(error);
   }
@@ -49,20 +65,16 @@ export async function DELETE(request: Request) {
       .maybeSingle();
     if (lookupError) throw lookupError;
     if (subscription) {
-      const { error: cancelError } = await db
-        .from("push_deliveries")
-        .delete()
-        .eq("subscription_id", subscription.id)
-        .is("finished_at", null);
-      if (cancelError) throw cancelError;
+      const { error } = await db.rpc("remove_push_subscription", {
+        p_user_id: user.id,
+        p_subscription_id: subscription.id,
+      });
+      if (error) throw error;
     }
-    const { error } = await db
-      .from("push_subscriptions")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("endpoint", endpoint);
-    if (error) throw error;
-    return NextResponse.json({ enabled: false });
+    const response = NextResponse.json({ enabled: false });
+    if ((await cookies()).get(PUSH_DEVICE_COOKIE)?.value === subscription?.id)
+      response.cookies.delete(PUSH_DEVICE_COOKIE);
+    return response;
   } catch (error) {
     return apiErrorResponse(error);
   }

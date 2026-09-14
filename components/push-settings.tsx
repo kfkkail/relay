@@ -141,8 +141,8 @@ export function PushSettings() {
         >
           <h2>Notifications</h2>
           <p>
-            Get notified when a result is ready or a run needs attention. On
-            shared devices, disable notifications before signing out.
+            Get notified when a result is ready or a run needs attention.
+            Signing out disables notifications on this device.
           </p>
           {!supported && (
             <p>

@@ -15,14 +15,14 @@ or native app is needed. Android and desktop standards-based push also work.
    environment. Generate a long random `CRON_SECRET` for the scheduler.
    Keep this key pair stable; rotating it requires devices to resubscribe.
 3. Redeploy the application so the public key is included in its client bundle.
-4. Configure a cloud scheduler to call `GET https://YOUR_RELAY_HOST/api/push/deliver`
-   every minute with `Authorization: Bearer YOUR_CRON_SECRET`. Use a scheduler
-   that supports secret headers, such as Supabase Cron with pg_net and Vault.
-   Configure the URL and secret in that service, never in committed SQL or logs.
-   Vercel Pro can alternatively use a `/api/push/deliver` cron entry with schedule
-   `* * * * *`; Vercel supplies the configured CRON_SECRET header automatically.
-   Vercel Hobby's daily cron limit is unsuitable for prompt notifications.
-   No scheduler is created automatically by this PR.
+4. The migration installs Supabase Cron job `relay-push-delivery`, running every
+   minute. It sends no requests until both Vault entries exist:
+   - `relay_push_delivery_url`: the production HTTPS URL ending in `/api/push/deliver`.
+   - `relay_push_cron_secret`: exactly the production Vercel `CRON_SECRET`.
+     Add these values using Supabase Vault's Secrets UI after Vercel is deployed.
+     The job reads Vault at execution time; credentials never appear in the cron
+     command or committed SQL. Keep preview databases unconfigured. No Vercel cron
+     job or Vercel plan upgrade is needed.
 5. On a physical iPhone, enable notifications, send a test, close Relay, and
    complete and fail test runs. Tap each notification and verify its task opens.
    Check Notification Center and Focus settings if no banner appears.
@@ -32,7 +32,7 @@ failure or any terminal delivery failure in the last 24 hours. Responses after
 processing include `processed` and `failedLast24Hours`; alert on a nonzero failure
 count or repeated scheduler errors. Delivery continues even while this signal is
 nonzero, so an empty subsequent batch does not hide a prior failure.
-Without the scheduler, test pushes work but run notifications stay queued.
+Without the Vault values, test pushes work but run notifications stay queued.
 Cloud delivery does not require the laptop to remain online after finishing.
 
 ## Delivery behavior and limits
@@ -58,8 +58,13 @@ generic text and task identifiers, never task titles, instructions, results, or
 raw errors. Disable removes the subscription and pending deliveries for this
 device, retaining completed outcome records. On mount, Relay reconciles an existing
 browser subscription with the server before displaying it as enabled. A failed
-reconciliation leaves enable/retry available and does not show a false enabled state. Sign-out does not automatically disable OS notifications; disable first
-on a shared device. Another account cannot overwrite an existing subscription.
+reconciliation leaves enable/retry available and does not show a false enabled state. Signing out removes this device’s server subscription and pending deliveries,
+unsubscribes in the browser, and ends only the current session. Other devices stay
+signed in and subscribed. An HTTP-only device cookie also allows server-side cleanup
+when the sign-out form is submitted without JavaScript. Cleanup failures keep the
+session open so the user can retry. Already submitted OS notifications cannot be
+recalled. Signing back in requires enabling notifications again after browser
+unsubscription. Another account cannot overwrite an existing subscription.
 
 Every received push displays a notification, including while Relay is open;
 Safari does not permit silent push handling. In-app history, category settings,
@@ -68,3 +73,11 @@ due-date reminders, and foreground filtering before sending are future work.
 References: [WebKit iOS Web Push](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/),
 [Web Push sender](https://github.com/web-push-libs/web-push),
 [Vercel cron limits](https://vercel.com/docs/cron-jobs/usage-and-pricing).
+
+## Scheduler verification
+
+After deployment, inspect `relay-push-delivery` in Supabase Cron. A successful
+Cron execution only means the HTTP request was queued; verify the corresponding
+response in `net._http_response` has status 200. HTTP 503 is the delivery health
+signal described above. Monitor both failed responses and missing minute ticks.
+The job can be paused from Supabase Cron without changing application code.

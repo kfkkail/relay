@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { PushSettings } from "@/components/push-settings";
 import remarkGfm from "remark-gfm";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -528,6 +529,7 @@ export function Dashboard({
           </button>
         </nav>
         <div className="topbar-actions">
+          <PushSettings />
           <button
             className="icon-button"
             aria-label="Worker setup"

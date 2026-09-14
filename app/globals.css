@@ -1100,6 +1100,15 @@ textarea {
     border-color 0.15s,
     box-shadow 0.15s;
 }
+/* Keep native date controls within the form on iOS Safari. */
+input[type="datetime-local"] {
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+}
+input[type="datetime-local"]::-webkit-date-and-time-value {
+  min-width: 0;
+}
 select {
   width: 100%;
   border: 1px solid var(--control-border);

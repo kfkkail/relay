@@ -157,6 +157,7 @@ export function Dashboard({
   const [editImage, setEditImage] = useState<File | null>(null);
   const [workerOpen, setWorkerOpen] = useState(false);
   const [workerToken, setWorkerToken] = useState("");
+  const [workerTokenId, setWorkerTokenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -501,6 +502,24 @@ export function Dashboard({
       });
       setWorkers((current) => [body.worker, ...current]);
       setWorkerToken(body.token);
+      setWorkerTokenId(body.worker.id);
+    });
+  }
+
+  async function revokeWorker(worker: Worker) {
+    if (
+      !window.confirm(
+        `Revoke the token for “${worker.name}”? This cannot be undone. This worker will no longer be able to claim tasks or submit results, including for an active run.`,
+      )
+    )
+      return;
+    await runAction(async () => {
+      await requestJson(`/api/workers/${worker.id}`, { method: "DELETE" });
+      setWorkers((current) => current.filter((item) => item.id !== worker.id));
+      if (workerTokenId === worker.id) {
+        setWorkerToken("");
+        setWorkerTokenId(null);
+      }
     });
   }
 
@@ -1091,6 +1110,7 @@ export function Dashboard({
               Your laptop polls Relay securely. Nothing needs to connect inbound
               to your machine.
             </p>
+            {error && <p role="alert">{error}</p>}
             {workers.length > 0 && (
               <div className="worker-list">
                 {workers.map((worker) => (
@@ -1106,6 +1126,14 @@ export function Dashboard({
                           : "Not connected yet"}
                       </p>
                     </div>
+                    <button
+                      className="secondary-button revoke-worker"
+                      disabled={busy}
+                      aria-label={`Revoke token for ${worker.name}`}
+                      onClick={() => revokeWorker(worker)}
+                    >
+                      Revoke token
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1140,7 +1168,8 @@ export function Dashboard({
             )}
             <p className="privacy-note">
               Use this token only in the local worker environment. Never commit
-              it.
+              it. Revoking a token blocks future requests but does not stop work
+              already running on the machine.
             </p>
           </section>
         </div>

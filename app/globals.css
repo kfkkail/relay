@@ -1286,6 +1286,15 @@ textarea {
 .worker-list strong {
   font-size: 14px;
 }
+.worker-list .revoke-worker {
+  margin-left: auto;
+  color: var(--danger);
+  flex-shrink: 0;
+}
+.worker-list > div > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .worker-list p {
   margin: 3px 0 0;
   color: var(--ink-soft);

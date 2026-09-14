@@ -55,6 +55,12 @@ The web application and worker can use separate environment files or shell
 sessions. Never put a real worker token, API key, task export, log, or database
 dump in this repository.
 
+To reject an existing worker token, open **Worker setup** and choose **Revoke
+token** beside that worker. Revocation is permanent and blocks subsequent API
+requests, including result submission for active runs. It does not stop a local
+process already running. Create a new token and update the worker environment to
+reconnect. Worker records are retained so existing run history remains intact.
+
 ## MacBook and Raspberry Pi workers
 
 Test the configured worker in the foreground with:

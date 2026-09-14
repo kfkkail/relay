@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { ATTACHMENT_BUCKET } from "@/lib/attachments";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-import { ownerActionDateUpdates, ownerActionSelect } from "@/lib/owner-actions";
+import {
+  onlyFinalizedOwnerActionAttachments,
+  ownerActionDateUpdates,
+  ownerActionSelect,
+} from "@/lib/owner-actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ownerActionStatuses } from "@/lib/types";
 
 export async function PATCH(
@@ -54,7 +60,9 @@ export async function PATCH(
       .select(ownerActionSelect)
       .single();
     if (error || !data) throw new ApiError("Action not found.", 404);
-    return NextResponse.json({ action: data });
+    return NextResponse.json({
+      action: onlyFinalizedOwnerActionAttachments(data),
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }
@@ -67,6 +75,21 @@ export async function DELETE(
   try {
     const { actionId } = await params;
     const { supabase } = await requireUser();
+    const { data: action, error: actionError } = await supabase
+      .from("owner_actions")
+      .select("id,owner_action_attachments(storage_path)")
+      .eq("id", actionId)
+      .single();
+    if (actionError || !action) throw new ApiError("Action not found.", 404);
+    const storagePaths = action.owner_action_attachments.map(
+      (attachment) => attachment.storage_path,
+    );
+    if (storagePaths.length) {
+      const { error: storageError } = await createAdminClient()
+        .storage.from(ATTACHMENT_BUCKET)
+        .remove(storagePaths);
+      if (storageError) throw storageError;
+    }
     const { error, count } = await supabase
       .from("owner_actions")
       .delete({ count: "exact" })

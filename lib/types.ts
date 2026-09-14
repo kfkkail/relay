@@ -94,6 +94,8 @@ export type OwnerActionTaskLink = {
   tasks: Pick<Task, "id" | "title" | "status"> | null;
 };
 
+export type OwnerActionAttachment = TaskAttachment;
+
 export type OwnerAction = {
   id: string;
   title: string;
@@ -105,5 +107,6 @@ export type OwnerAction = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  owner_action_attachments: OwnerActionAttachment[];
   owner_action_tasks: OwnerActionTaskLink[];
 };

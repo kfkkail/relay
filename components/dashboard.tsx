@@ -33,8 +33,7 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { SignOutButton } from "@/components/sign-out-button";
-import { PushSettings } from "@/components/push-settings";
+import { SettingsMenu } from "@/components/settings-menu";
 import remarkGfm from "remark-gfm";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -529,15 +528,10 @@ export function Dashboard({
           </button>
         </nav>
         <div className="topbar-actions">
-          <PushSettings />
-          <button
-            className="icon-button"
-            aria-label="Worker setup"
-            onClick={() => setWorkerOpen(true)}
-          >
-            <Laptop size={20} />
-          </button>
-          <SignOutButton userEmail={userEmail} />
+          <SettingsMenu
+            userEmail={userEmail}
+            onWorkerSetup={() => setWorkerOpen(true)}
+          />
         </div>
       </header>
 

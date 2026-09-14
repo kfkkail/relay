@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
 
 import { reconcileSubscription, subscriptionRequest } from "@/lib/push-client";
 
 export function PushSettings() {
-  const [open, setOpen] = useState(false);
   const [subscription, setSubscription] = useState<PushSubscription | null>(
     null,
   );
@@ -125,56 +123,43 @@ export function PushSettings() {
   }
 
   return (
-    <div className="push-settings">
-      <button
-        className="icon-button"
-        aria-label="Notifications"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <Bell size={20} />
-      </button>
-      {open && (
-        <section
-          className="push-settings-panel"
-          aria-label="Notification settings"
-        >
-          <h2>Notifications</h2>
-          <p>
-            Get notified when a result is ready or a run needs attention.
-            Signing out disables notifications on this device.
-          </p>
-          {!supported && (
-            <p>
-              On iPhone, add Relay to your Home Screen, then open it from its
-              icon. Requires iOS 16.4 or later.
-            </p>
-          )}
-          {!publicKey && (
-            <p>Push notifications have not been configured on this server.</p>
-          )}
-          {supported && publicKey && (
-            <div className="push-settings-buttons">
-              <button
-                disabled={busy || loading}
-                onClick={subscription ? disable : enable}
-              >
-                {loading
-                  ? "Checking notifications…"
-                  : subscription
-                    ? "Disable on this device"
-                    : "Enable notifications"}
-              </button>
-              {subscription && (
-                <button disabled={busy || loading} onClick={test}>
-                  Send test notification
-                </button>
-              )}
-            </div>
-          )}
-          <p role="status">{message}</p>
-        </section>
+    <section
+      className="push-settings-content"
+      aria-label="Notification settings"
+    >
+      <p>
+        Get notified when a result is ready or a run needs attention. Signing
+        out disables notifications on this device.
+      </p>
+      {!supported && (
+        <p>
+          On iPhone, add Relay to your Home Screen, then open it from its icon.
+          Requires iOS 16.4 or later.
+        </p>
       )}
-    </div>
+      {!publicKey && (
+        <p>Push notifications have not been configured on this server.</p>
+      )}
+      {supported && publicKey && (
+        <div className="push-settings-buttons">
+          <button
+            disabled={busy || loading}
+            onClick={subscription ? disable : enable}
+          >
+            {loading
+              ? "Checking notifications…"
+              : subscription
+                ? "Disable on this device"
+                : "Enable notifications"}
+          </button>
+          {subscription && (
+            <button disabled={busy || loading} onClick={test}>
+              Send test notification
+            </button>
+          )}
+        </div>
+      )}
+      <p role="status">{message}</p>
+    </section>
   );
 }

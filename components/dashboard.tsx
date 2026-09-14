@@ -21,7 +21,6 @@ import {
   Laptop,
   LoaderCircle,
   Image as ImageIcon,
-  LogOut,
   Pencil,
   Paperclip,
   Plus,
@@ -34,6 +33,8 @@ import {
   X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { SignOutButton } from "@/components/sign-out-button";
+import { PushSettings } from "@/components/push-settings";
 import remarkGfm from "remark-gfm";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -528,6 +529,7 @@ export function Dashboard({
           </button>
         </nav>
         <div className="topbar-actions">
+          <PushSettings />
           <button
             className="icon-button"
             aria-label="Worker setup"
@@ -535,14 +537,7 @@ export function Dashboard({
           >
             <Laptop size={20} />
           </button>
-          <form action="/auth/sign-out" method="post">
-            <button
-              className="icon-button"
-              aria-label={`Sign out ${userEmail}`}
-            >
-              <LogOut size={19} />
-            </button>
-          </form>
+          <SignOutButton userEmail={userEmail} />
         </div>
       </header>
 

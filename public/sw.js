@@ -46,3 +46,59 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    payload = event.data?.json() || {};
+  } catch {
+    /* Display a safe fallback. */
+  }
+  event.waitUntil(
+    self.registration.showNotification(
+      payload.title || "Relay needs your attention",
+      {
+        body: payload.body || "Open Relay to review your tasks.",
+        icon: "/icon.svg",
+        tag: payload.tag || "relay",
+        data: { url: payload.url || "/tasks" },
+      },
+    ),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      let url = new URL("/tasks", self.location.origin);
+      try {
+        const candidate = new URL(
+          event.notification.data?.url || "/tasks",
+          self.location.origin,
+        );
+        if (
+          candidate.origin === self.location.origin &&
+          /^\/tasks(?:\/[a-f0-9-]+)?$/.test(candidate.pathname)
+        )
+          url = candidate;
+      } catch {
+        /* Use the task list for malformed destinations. */
+      }
+      const windows = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      for (const client of windows) {
+        if (new URL(client.url).origin === self.location.origin) {
+          const navigated = await client.navigate(url.href);
+          if (navigated) {
+            await navigated.focus();
+            return;
+          }
+        }
+      }
+      await self.clients.openWindow(url.href);
+    })(),
+  );
+});

@@ -1934,3 +1934,38 @@ textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+.push-settings {
+  position: relative;
+}
+.push-settings-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 12px);
+  z-index: 50;
+  width: min(320px, calc(100vw - 48px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  box-shadow: 0 12px 40px #0002;
+}
+.push-settings-panel h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+.push-settings-panel p {
+  font-size: 14px;
+  margin: 12px 0;
+}
+.push-settings-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.push-settings-buttons button {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #aaa;
+}

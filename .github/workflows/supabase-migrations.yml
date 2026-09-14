@@ -34,6 +34,9 @@ jobs:
       - name: Lint database schema
         run: supabase db lint --level warning
 
+      - name: Test database behavior
+        run: supabase test db
+
       - name: Run application tests
         run: npm ci && npm test
 

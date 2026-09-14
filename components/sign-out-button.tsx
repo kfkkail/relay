@@ -3,7 +3,13 @@ import { FormEvent, useState } from "react";
 import { LogOut } from "lucide-react";
 import { signOutDevice } from "@/lib/sign-out-device";
 
-export function SignOutButton({ userEmail }: { userEmail: string }) {
+export function SignOutButton({
+  userEmail,
+  showLabel = false,
+}: {
+  userEmail: string;
+  showLabel?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -23,11 +29,12 @@ export function SignOutButton({ userEmail }: { userEmail: string }) {
   return (
     <form action="/auth/sign-out" method="post" onSubmit={submit}>
       <button
-        className="icon-button"
+        className={showLabel ? "settings-row" : "icon-button"}
         disabled={busy}
         aria-label={`Sign out ${userEmail}`}
       >
         <LogOut size={19} />
+        {showLabel && (busy ? "Signing out…" : "Sign out")}
       </button>
       {error && <span role="alert">{error}</span>}
     </form>

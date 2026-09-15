@@ -27,8 +27,8 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { buildFollowUpInstructions, compareOwnerActions, latestCompletedRun, ownerActionFilter, statusLabel } from "@/lib/domain";
-import { localDateTimeToUtc, utcToLocalDateTime } from "@/lib/date-time";
-import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
+import { localDateTimeToUtc, nextLocalDateTimeMinute, utcToLocalDateTime } from "@/lib/date-time";
+import type { OwnerAction, Run, Task, TaskStatus, Worker } from "@/lib/types";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 
 const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
@@ -50,7 +50,7 @@ export function Dashboard({
   const [tasks, setTasks] = useState(initialTasks);
   const [workers, setWorkers] = useState(initialWorkers);
   const [ownerActions, setOwnerActions] = useState(initialOwnerActions);
-  const [area, setArea] = useState<"tasks" | "my-work">("tasks");
+  const [area, setArea] = useState<"tasks" | "my-work">("my-work");
   const [filter, setFilter] = useState<TaskStatus>("inbox");
   const [selectedId, setSelectedId] = useState<string | null>(initialTasks[0]?.id ?? null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -349,8 +349,8 @@ export function Dashboard({
             <form onSubmit={createTask}>
               <label htmlFor="task-title">Task title</label>
               <input id="task-title" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="What needs to be true?" autoFocus required maxLength={160} />
-              <label htmlFor="task-instructions">Markdown instructions and context</label>
-              <textarea id="task-instructions" value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder={"## Outcome\nDescribe the result you want.\n\n## Context\nAdd useful constraints and background."} required rows={14} />
+              <label htmlFor="task-instructions">Markdown instructions and context (optional)</label>
+              <textarea id="task-instructions" value={draft.instructions} onChange={(event) => setDraft({ ...draft, instructions: event.target.value })} placeholder={"## Outcome\nDescribe the result you want.\n\n## Context\nAdd useful constraints and background."} rows={14} />
               <div className="composer-hint"><span>Markdown supported</span><span>{draft.instructions.length.toLocaleString()} characters</span></div>
               <ImagePicker file={draftImage} onChange={setDraftImage} />
               <button className="primary-button" disabled={busy}>{busy ? "Saving and uploading…" : "Save to Inbox"}<ArrowRight size={18} /></button>
@@ -366,11 +366,11 @@ export function Dashboard({
             <form onSubmit={updateTask}>
               <label htmlFor="edit-task-name">Task title</label>
               <input id="edit-task-name" value={editTitle} onChange={(event) => setEditTitle(event.target.value)} required maxLength={160} autoFocus />
-              <label htmlFor="edit-task-instructions">Markdown instructions and context</label>
-              <textarea id="edit-task-instructions" value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} required maxLength={100000} rows={14} />
+              <label htmlFor="edit-task-instructions">Markdown instructions and context (optional)</label>
+              <textarea id="edit-task-instructions" value={editInstructions} onChange={(event) => setEditInstructions(event.target.value)} maxLength={100000} rows={14} />
               <div className="composer-hint"><span>Markdown supported</span><span>{editInstructions.length.toLocaleString()} characters</span></div>
               {editingTask.status === "inbox" && <ImagePicker file={editImage} onChange={setEditImage} currentName={editingTask.task_attachments[0]?.file_name} />}
-              <div className="edit-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingTask(null)}>Cancel</button><button className="primary-button" disabled={busy || !editTitle.trim() || !editInstructions.trim()}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button></div>
+              <div className="edit-actions"><button type="button" className="secondary-button" disabled={busy} onClick={() => setEditingTask(null)}>Cancel</button><button className="primary-button" disabled={busy || !editTitle.trim()}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button></div>
             </form>
           </section>
         </div>
@@ -471,12 +471,12 @@ function MyWork({ actions, busy, runAction, onCreate, onUpdate, onDelete, onOpen
     <div className="filter-strip" aria-label="Filter owner actions">{(["active", "snoozed", "done"] as const).map((item) => <button key={item} className={filter === item ? "active" : ""} onClick={() => setFilter(item)}>{item[0].toUpperCase() + item.slice(1)}<span>{actions.filter((action) => ownerActionFilter(action) === item).length}</span></button>)}</div>
     <label className="owner-action-search"><Search size={17} /><span className="sr-only">Search My Work</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search actions and linked tasks" /></label>
     <div className="owner-action-list">{visible.length ? visible.map((action) => <article className="owner-action-card" key={action.id}>
-      <button className="completion-button" aria-label={action.status === "done" ? `Reopen ${action.title}` : `Complete ${action.title}`} disabled={busy} onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "done" ? "todo" : "done" }))}>{action.status === "done" ? <Check size={18} /> : <CircleDot size={18} />}</button>
+      <button className="completion-button" aria-label={action.status === "done" ? `Reopen ${action.title}` : `Complete ${action.title}`} disabled={busy} onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "done" ? "todo" : "done" }))}>{action.status === "done" && <Check size={18} />}</button>
       <div className="owner-action-copy"><button className="owner-action-title" onClick={() => onOpenAction(action.id)}><h2>{action.title}</h2></button>{action.notes && <p>{action.notes}</p>}<div className="action-meta"><span className={`owner-status ${action.status}`}>{ownerActionStatusLabel(action)}</span>{filter === "snoozed" && action.snoozed_until && <span><Clock3 size={13} />Returns {formatDate(action.snoozed_until)}</span>}{action.due_at && <span className={new Date(action.due_at) <= new Date() && action.status !== "done" ? "overdue" : ""}><CalendarDays size={13} />Due {formatDate(action.due_at)}</span>}<span>{action.owner_action_tasks.length} linked {action.owner_action_tasks.length === 1 ? "task" : "tasks"}</span></div>{action.owner_action_tasks.length > 0 && <div className="linked-task-titles">{action.owner_action_tasks.map((link) => link.tasks && <button key={link.task_id} onClick={() => onOpenTask(link.task_id)}>{link.tasks.title}</button>)}</div>}</div>
       <div className="action-controls">{action.status !== "done" && <button onClick={() => runAction(() => onUpdate(action.id, { status: action.status === "todo" ? "in_progress" : "todo" }))}>{action.status === "todo" ? "Start" : "To do"}</button>}{filter === "snoozed" ? <button onClick={() => runAction(() => onUpdate(action.id, { snoozedUntil: null }))}>Show now</button> : action.status !== "done" && <button disabled={Boolean(action.due_at && new Date(action.due_at) <= new Date())} title={action.due_at && new Date(action.due_at) <= new Date() ? "This action is already due and must stay visible." : undefined} onClick={() => startHiding(action)}>Hide until</button>}<button className="danger-control" aria-label={`Delete ${action.title}`} onClick={() => remove(action)}><Trash2 size={13} /></button>{filter !== "snoozed" && action.status !== "done" && action.due_at && new Date(action.due_at) <= new Date() && <span className="hide-disabled-note">Already due — cannot be hidden.</span>}</div>
     </article>) : <div className="empty-state"><div className="empty-orbit"><UserRoundCheck size={24} /></div><h2>{query ? "No actions match your search." : "Nothing needs you right now."}</h2></div>}</div>
     {composerOpen && <div className="modal-backdrop" onMouseDown={() => setComposerOpen(false)}><section className="sheet" role="dialog" aria-modal="true" aria-labelledby="new-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">My Work</p><h2 id="new-action-title">New action</h2></div><button className="icon-button" onClick={() => setComposerOpen(false)}><X size={20} /></button></div><form onSubmit={create}><label htmlFor="owner-action-title">Action title</label><input id="owner-action-title" value={title} onChange={(event) => setTitle(event.target.value)} required maxLength={160} autoFocus /><label htmlFor="owner-action-notes">Notes (optional)</label><textarea id="owner-action-notes" value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={20000} rows={5} /><label htmlFor="owner-action-due">Due date (optional)</label><input id="owner-action-due" type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} /><button className="primary-button" disabled={busy}>Create action<ArrowRight size={18} /></button></form></section></div>}
-    {snoozing && <div className="modal-backdrop" onMouseDown={() => setSnoozing(null)}><section className="sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="hide-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">Remind me on</p><h2 id="hide-action-title">Hide {snoozing.title}</h2></div><button className="icon-button" onClick={() => setSnoozing(null)}><X size={20} /></button></div><form onSubmit={(event) => { event.preventDefault(); void runAction(async () => { await onUpdate(snoozing.id, { snoozedUntil: localDateTimeToUtc(snoozeUntil) }); setSnoozing(null); }); }}><p className="sheet-intro">The due date will not change. This action returns to Active at the selected time or when it is due, whichever comes first.</p><div className="hide-quick-choices"><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(1)}>Tomorrow</button><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 7 * 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(7)}>Next week</button></div><label htmlFor="hide-until">Pick date and time</label><input id="hide-until" type="datetime-local" min={utcToLocalDateTime(new Date(hideStartedAt).toISOString())} max={utcToLocalDateTime(snoozing.due_at)} value={snoozeUntil} onChange={(event) => setSnoozeUntil(event.target.value)} required autoFocus /><button className="primary-button" disabled={busy}>Hide action<Clock3 size={18} /></button></form></section></div>}
+    {snoozing && <div className="modal-backdrop" onMouseDown={() => setSnoozing(null)}><section className="sheet small-sheet" role="dialog" aria-modal="true" aria-labelledby="hide-action-title" onMouseDown={(event) => event.stopPropagation()}><div className="sheet-heading"><div><p className="eyebrow">Remind me on</p><h2 id="hide-action-title">Hide {snoozing.title}</h2></div><button className="icon-button" onClick={() => setSnoozing(null)}><X size={20} /></button></div><form onSubmit={(event) => { event.preventDefault(); void runAction(async () => { await onUpdate(snoozing.id, { snoozedUntil: localDateTimeToUtc(snoozeUntil) }); setSnoozing(null); }); }}><p className="sheet-intro">The due date will not change. This action returns to Active at the selected time or when it is due, whichever comes first.</p><div className="hide-quick-choices"><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(1)}>Tomorrow</button><button type="button" disabled={Boolean(snoozing.due_at && new Date(hideStartedAt + 7 * 86400000) > new Date(snoozing.due_at))} onClick={() => quickHide(7)}>Next week</button></div><label htmlFor="hide-until">Pick date and time</label><input id="hide-until" type="datetime-local" min={nextLocalDateTimeMinute(new Date(hideStartedAt))} max={utcToLocalDateTime(snoozing.due_at)} value={snoozeUntil} onChange={(event) => setSnoozeUntil(event.target.value)} required autoFocus /><button className="primary-button" disabled={busy}>Hide action<Clock3 size={18} /></button></form></section></div>}
   </section>;
 }
 
@@ -533,14 +533,21 @@ function TaskDetail({ task, busy, onBack, onQueue, onFeedback, onAccept, onFollo
           <div className="section-label"><span>Result · attempt {latest.attempt}</span><span>{latest.finished_at ? formatDate(latest.finished_at) : "Ready to review"}</span></div>
           <div className="markdown result-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{latest.result_markdown}</ReactMarkdown></div>
           <div className="result-handoff"><button className="secondary-button compact" disabled={busy} onClick={() => onCreateOwnerAction(`Review ${task.title}`)}><UserRoundCheck size={17} />Add to My Work</button></div>
-          {latest.result_artifacts.length > 0 && <div className="artifact-list">{latest.result_artifacts.map((artifact, index) => <a key={`${artifact.type}-${index}`} href={artifact.url} target="_blank" rel="noreferrer"><span>{artifact.type.replace("_", " ")}</span><strong>{artifact.label}</strong><ChevronRight size={17} /></a>)}</div>}
+          <ResultArtifacts artifacts={latest.result_artifacts} />
           <div className="review-actions"><label htmlFor="feedback">Feedback for another run</label><textarea id="feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} placeholder="What should change or be explored next?" rows={4} /><div><button className="secondary-button" disabled={busy || !feedback.trim()} onClick={() => onFeedback(feedback)}><RefreshCw size={17} />Run again</button><button className="accept-button" disabled={busy} onClick={onAccept}><Check size={18} />Accept</button></div></div>
         </section>
       )}
 
-      {task.status === "done" && task.accepted_result && <section className="result-section accepted"><div className="accepted-heading"><div><Check size={18} /><span>Accepted result</span></div><button className="secondary-button compact" onClick={onFollowUp}><Plus size={17} />Follow-up</button></div><div className="markdown result-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.accepted_result}</ReactMarkdown></div></section>}
+      {task.status === "done" && task.accepted_result && <section className="result-section accepted"><div className="accepted-heading"><div><Check size={18} /><span>Accepted result</span></div><button className="secondary-button compact" onClick={onFollowUp}><Plus size={17} />Follow-up</button></div><div className="markdown result-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{task.accepted_result}</ReactMarkdown></div><ResultArtifacts artifacts={latest?.result_artifacts ?? []} /></section>}
     </div>
   );
+}
+
+function ResultArtifacts({ artifacts }: { artifacts: Run["result_artifacts"] }) {
+  if (!artifacts.length) return null;
+  return <div className="artifact-list">{artifacts.map((artifact, index) => artifact.type === "file" && !artifact.url
+    ? <details className="document-artifact" key={`${artifact.type}-${index}`}><summary><span>document</span><strong>{artifact.label}</strong><ChevronRight size={17} /></summary><div className="markdown"><ReactMarkdown remarkPlugins={[remarkGfm]}>{artifact.value}</ReactMarkdown></div></details>
+    : <a key={`${artifact.type}-${index}`} href={artifact.url} target="_blank" rel="noreferrer"><span>{artifact.type.replace("_", " ")}</span><strong>{artifact.label}</strong><ChevronRight size={17} /></a>)}</div>;
 }
 
 function StatusPill({ status }: { status: TaskStatus }) {

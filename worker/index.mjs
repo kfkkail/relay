@@ -1,4 +1,5 @@
 import { createTaskRunner } from "./task-runner.mjs";
+import { changedDocuments, documentSnapshot } from "./document-artifacts.mjs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,6 +34,8 @@ while (!stopping) {
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
   try {
+    const documentRoot = process.env.RELAY_CODEX_WORKSPACE || process.cwd();
+    const documentsBefore = taskRunner.backend === "codex" ? await documentSnapshot(documentRoot) : new Map();
     const localAttachments = [];
     if (attachments.length) {
       attachmentDirectory = await mkdtemp(join(tmpdir(), `relay-${run.id}-`));
@@ -56,9 +59,10 @@ while (!stopping) {
     const attachmentNote = localAttachments.length ? `\n\n# Attached images\n${localAttachments.map((item) => `- ${item.fileName}`).join("\n")}` : "";
     const resultMarkdown = await taskRunner.run({ text: input + attachmentNote, attachments: localAttachments });
 
+    const artifacts = taskRunner.backend === "codex" ? await changedDocuments(documentRoot, documentsBefore) : [];
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
-      body: JSON.stringify({ resultMarkdown, artifacts: [] }),
+      body: JSON.stringify({ resultMarkdown, artifacts }),
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {

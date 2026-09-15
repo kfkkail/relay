@@ -23,6 +23,15 @@ describe("owner action dates", () => {
     )).toThrow("Hide until date cannot be after the due date.");
   });
 
+  it("allows hiding an action until less than an hour before its due date", () => {
+    const now = new Date("2026-08-18T12:00:00.000Z");
+    expect(ownerActionDateUpdates(
+      { snoozedUntil: "2026-08-18T13:30:00.000Z" },
+      "2026-08-18T14:00:00.000Z",
+      now,
+    )).toEqual({ snoozed_until: "2026-08-18T13:30:00.000Z" });
+  });
+
   it("does not allow overdue actions to be hidden", () => {
     const now = new Date("2026-08-18T12:00:00.000Z");
     expect(() => ownerActionDateUpdates(

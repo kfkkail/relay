@@ -291,8 +291,13 @@ button:disabled { cursor: not-allowed; opacity: .55; transform: none !important;
 .accepted-heading { padding: 16px 20px; border-bottom: 1px solid var(--line); }
 .accepted-heading > div { display: flex; align-items: center; gap: 8px; color: var(--forest); font-size: 13px; font-weight: 750; }
 .artifact-list { display: grid; gap: 8px; padding: 0 20px 22px; }
-.artifact-list a { display: grid; grid-template-columns: 75px 1fr auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 13px; padding: 12px; color: inherit; text-decoration: none; }
-.artifact-list a span { color: var(--ink-soft); font-size: 10px; font-weight: 750; text-transform: uppercase; }
+.artifact-list a, .document-artifact { border: 1px solid var(--line); border-radius: 13px; color: inherit; text-decoration: none; }
+.artifact-list a, .document-artifact summary { display: grid; grid-template-columns: 75px 1fr auto; align-items: center; gap: 10px; padding: 12px; }
+.artifact-list a span, .document-artifact summary span { color: var(--ink-soft); font-size: 10px; font-weight: 750; text-transform: uppercase; }
+.document-artifact summary { cursor: pointer; list-style: none; }
+.document-artifact summary::-webkit-details-marker { display: none; }
+.document-artifact[open] summary svg { transform: rotate(90deg); }
+.document-artifact > .markdown { max-height: 520px; overflow: auto; border-top: 1px solid var(--line); padding: 16px; }
 
 label { display: block; margin: 17px 0 7px; font-size: 13px; font-weight: 700; }
 input, textarea { width: 100%; min-width: 0; border: 1px solid #c8c4ba; border-radius: 13px; padding: 13px 14px; outline: none; color: var(--ink); background: #fff; line-height: 1.5; transition: border-color .15s, box-shadow .15s; }

@@ -86,7 +86,7 @@ process.stdout.write(JSON.stringify({ args: process.argv.slice(2), cwd: process.
     expect(result.input).toContain("running on the owner's machine");
     expect(result.input).toContain("Do not disable or evade the Codex sandbox");
     expect(result.input).toContain("Relay displays one text/Markdown result");
-    expect(result.input).toContain("Do not link to local files or generated documents");
+    expect(result.input).toContain("can show Markdown or plain-text documents");
     expect(result.input).toContain("http/https links are supported");
     expect(result.input).toContain("commits, and pull requests");
     expect(result.input).toContain(

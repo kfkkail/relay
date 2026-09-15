@@ -83,7 +83,7 @@ function sanitizeArtifacts(input: unknown): ResultArtifact[] {
     return [{
       type: artifact.type as ResultArtifact["type"],
       label: artifact.label.slice(0, 200),
-      value: artifact.value.slice(0, 2000),
+      value: artifact.value.slice(0, artifact.type === "file" ? 100_000 : 2000),
       ...(url ? { url } : {}),
     }];
   });

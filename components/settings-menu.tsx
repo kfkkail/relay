@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { Bell, ChevronDown, Laptop, Settings, X } from "lucide-react";
 import { PushSettings } from "@/components/push-settings";
@@ -91,6 +92,9 @@ export function SettingsMenu({
           <Laptop size={20} />
           Worker setup
         </button>
+        <Link className="settings-row" href="/schedules">
+          Schedules
+        </Link>
         <details className="settings-notifications">
           <summary className="settings-row">
             <Bell size={20} />

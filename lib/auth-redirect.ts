@@ -16,7 +16,7 @@ export function authReturnPath(value: unknown) {
   );
   // Return only to dashboard routes, never back into the auth flow.
   if (
-    !/^\/(tasks|my-work)(\/|\?|#|$)/.test(path) ||
+    !/^\/(tasks|my-work|schedules)(\/|\?|#|$)/.test(path) ||
     encodeURIComponent(path).length > 2048
   )
     return "/my-work";

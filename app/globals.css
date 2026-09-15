@@ -2070,3 +2070,103 @@ textarea {
     padding-inline: 12px;
   }
 }
+
+.schedule-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--line);
+}
+.schedule-header nav {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.schedule-content {
+  max-width: 900px;
+  margin: auto;
+  padding: 24px 16px;
+}
+.schedule-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 20px;
+  margin: 20px 0;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.schedule-form {
+  display: grid;
+  gap: 16px;
+}
+.schedule-form label {
+  display: grid;
+  gap: 8px;
+}
+.schedule-form input:not([type="checkbox"]),
+.schedule-form textarea,
+.schedule-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.schedule-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.schedule-times > label {
+  flex: 1;
+  min-width: 120px;
+}
+.schedule-days,
+.schedule-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule-form .schedule-check,
+.schedule-days label {
+  display: flex;
+  align-items: center;
+}
+.schedule-actions {
+  margin: 16px 0;
+}
+.schedule-actions button {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.schedule-card li {
+  margin: 12px 0;
+}
+.schedule-header a {
+  color: var(--ink);
+  text-decoration: none;
+}
+.schedule-header nav a {
+  padding: 6px 0;
+}
+.schedule-header nav a[aria-current="page"] {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+.schedule-card a {
+  color: var(--accent-text);
+}

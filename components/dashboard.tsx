@@ -545,6 +545,12 @@ export function Dashboard({
           >
             Tasks
           </button>
+          <button
+            className={`${visiblePending?.destination === "/schedules" ? "pending" : ""}`}
+            onClick={() => navigate("/schedules", "Loading Schedules", "area")}
+          >
+            Schedules
+          </button>
         </nav>
         <div className="topbar-actions">
           <SettingsMenu

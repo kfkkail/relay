@@ -11,5 +11,5 @@ export default async function Page() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return <SignIn />;
-  return <Schedules />;
+  return <Schedules userEmail={user.email ?? ""} />;
 }

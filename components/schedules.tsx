@@ -2,6 +2,15 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { deliverables, type Deliverable } from "@/lib/deliverables";
+import { SettingsMenu } from "@/components/settings-menu";
+
+const timezones: string[] =
+  typeof (Intl as { supportedValuesOf?: (key: string) => string[] })
+    .supportedValuesOf === "function"
+    ? (
+        Intl as { supportedValuesOf: (key: string) => string[] }
+      ).supportedValuesOf("timeZone")
+    : [];
 
 type Schedule = {
   id?: string;
@@ -47,7 +56,7 @@ const minutes = (value: string) => {
 const date = (value: string, zone: string) =>
   new Date(value).toLocaleString(undefined, { timeZone: zone });
 
-export function Schedules() {
+export function Schedules({ userEmail }: { userEmail: string }) {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [draft, setDraft] = useState<Schedule | null>(null);
@@ -103,17 +112,21 @@ export function Schedules() {
   }
   return (
     <main className="app-shell schedules-page">
-      <header className="schedule-header">
+      <header className="topbar">
         <Link href="/my-work" className="brand-lockup">
-          <span className="brand-mark">R</span>Relay
+          <span className="brand-mark">R</span>
+          <span>Relay</span>
         </Link>
-        <nav aria-label="Main navigation">
+        <nav className="area-nav" aria-label="Main navigation">
           <Link href="/my-work">My Work</Link>
           <Link href="/tasks">Tasks</Link>
           <Link href="/schedules" aria-current="page">
             Schedules
           </Link>
         </nav>
+        <div className="topbar-actions">
+          <SettingsMenu userEmail={userEmail} />
+        </div>
       </header>
       <section className="schedule-content">
         <div className="schedule-heading">
@@ -232,11 +245,19 @@ export function Schedules() {
               Timezone
               <input
                 required
+                list="schedule-timezones"
                 value={draft.timezone}
                 onChange={(e) =>
                   setDraft({ ...draft, timezone: e.target.value })
                 }
               />
+              {timezones.length > 0 && (
+                <datalist id="schedule-timezones">
+                  {timezones.map((zone) => (
+                    <option key={zone} value={zone} />
+                  ))}
+                </datalist>
+              )}
             </label>
             <fieldset>
               <legend>Days</legend>
@@ -385,8 +406,11 @@ export function Schedules() {
                         date(o.due_at, s.timezone)
                       )}{" "}
                       · {o.trigger} ·{" "}
-                      {o.tasks?.runs.map((r) => r.status).join(", ") ||
-                        "Task removed"}
+                      {!o.task_id
+                        ? "Task removed"
+                        : o.tasks?.runs.length
+                          ? o.tasks.runs.map((r) => r.status).join(", ")
+                          : "Pending"}
                     </li>
                   ))}
               </ul>

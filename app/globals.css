@@ -492,7 +492,13 @@ a {
   gap: 3px;
   border-radius: 12px;
   padding: 3px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
   background: var(--paper-deep);
+}
+.area-nav::-webkit-scrollbar {
+  display: none;
 }
 .area-nav button {
   border: 0;
@@ -2062,11 +2068,109 @@ textarea {
   padding: 8px;
   font-size: 14px;
 }
-@media (max-width: 380px) {
+@media (max-width: 480px) {
   .topbar .brand-lockup > span:not(.brand-mark) {
     display: none;
   }
+  .area-nav {
+    gap: 2px;
+    padding: 2px;
+  }
+  .area-nav button,
+  .area-nav a {
+    padding: 7px 8px;
+  }
+}
+@media (max-width: 380px) {
   .topbar {
     padding-inline: 12px;
   }
+}
+
+.area-nav a {
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-size: 12px;
+  white-space: nowrap;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+}
+.area-nav a[aria-current="page"] {
+  background: var(--surface);
+  box-shadow: var(--nav-shadow);
+}
+.schedule-content {
+  max-width: 900px;
+  margin: auto;
+  padding: 24px 16px;
+}
+.schedule-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule-card {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 20px;
+  margin: 20px 0;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+.schedule-form {
+  display: grid;
+  gap: 16px;
+}
+.schedule-form label {
+  display: grid;
+  gap: 8px;
+}
+.schedule-form input:not([type="checkbox"]),
+.schedule-form textarea,
+.schedule-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  color: inherit;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+}
+.schedule-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.schedule-times > label {
+  flex: 1;
+  min-width: 120px;
+}
+.schedule-days,
+.schedule-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.schedule-form .schedule-check,
+.schedule-days label {
+  display: flex;
+  align-items: center;
+}
+.schedule-actions {
+  margin: 16px 0;
+}
+.schedule-actions button {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.schedule-card li {
+  margin: 12px 0;
+}
+.schedule-card a {
+  color: var(--accent-text);
 }

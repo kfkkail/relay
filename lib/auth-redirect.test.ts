@@ -3,6 +3,7 @@ import { authReturnPath } from "./auth-redirect";
 
 it.each([
   "/my-work",
+  "/schedules",
   "/tasks/123?from=%2Ftasks%3Fstatus%3Dwaiting",
   "/my-work/123#notes",
 ])("preserves a local dashboard destination: %s", (path) => {

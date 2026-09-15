@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { Bell, ChevronDown, Laptop, Settings, X } from "lucide-react";
 import { PushSettings } from "@/components/push-settings";
@@ -10,7 +11,7 @@ export function SettingsMenu({
   onWorkerSetup,
 }: {
   userEmail: string;
-  onWorkerSetup: () => void;
+  onWorkerSetup?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -81,16 +82,23 @@ export function SettingsMenu({
             <X size={18} />
           </button>
         </div>
-        <button
-          className="settings-row"
-          onClick={() => {
-            setOpen(false);
-            onWorkerSetup();
-          }}
-        >
-          <Laptop size={20} />
-          Worker setup
-        </button>
+        {onWorkerSetup ? (
+          <button
+            className="settings-row"
+            onClick={() => {
+              setOpen(false);
+              onWorkerSetup();
+            }}
+          >
+            <Laptop size={20} />
+            Worker setup
+          </button>
+        ) : (
+          <Link className="settings-row" href="/my-work">
+            <Laptop size={20} />
+            Worker setup
+          </Link>
+        )}
         <details className="settings-notifications">
           <summary className="settings-row">
             <Bell size={20} />

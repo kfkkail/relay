@@ -50,6 +50,16 @@ Raspberry Pi OS):
 npm run worker:service:install
 ```
 
+On Linux, including Raspberry Pi OS, installation checks that systemd lingering
+is enabled for the current user and enables it when necessary. That one-time
+change may prompt for `sudo`; it is required for the user service to survive the
+last SSH logout and start again at boot. Verify both the service and persistence
+setting with:
+
+```bash
+npm run worker:service:status
+```
+
 The service installer creates a dedicated worker clone, separate from your
 project workspaces and the checkout used to install it. While idle, that clone
 checks `origin/main` every five minutes. A clean fast-forward is applied and the

@@ -30,7 +30,7 @@ token:
 
 ```bash
 npm run setup -- --mode web
-npm run setup -- --mode worker --install-service
+npm run worker:service:install
 ```
 
 Worker setup recommends the locally installed Codex CLI, which reuses your
@@ -49,7 +49,8 @@ The remaining cloud steps require your authorization:
    values written to `.env.local`.
 3. Add the deployed URL and `/auth/callback` URL to the Supabase Auth redirect
    URL allowlist.
-4. Sign in, create a token in **Worker setup**, and run the worker setup command.
+4. Sign in, create a token in **Worker setup**, and run
+   `npm run worker:service:install` on the machine that will run the worker.
 
 The web application and worker can use separate environment files or shell
 sessions. Never put a real worker token, API key, task export, log, or database
@@ -63,18 +64,30 @@ reconnect. Worker records are retained so existing run history remains intact.
 
 ## MacBook and Raspberry Pi workers
 
-Test the configured worker in the foreground with:
-
-```bash
-node --env-file=.env.worker worker/index.mjs
-```
-
-Install it as a background service that restarts automatically:
+After cloning this repository on your MacBook or Pi, install Node.js 22 or newer,
+Git, npm, and your chosen backend (the Codex CLI or an OpenAI API key). Create a
+worker token in Relay's **Worker setup** panel, then run this one command in an
+interactive terminal:
 
 ```bash
 npm run worker:service:install
+```
+
+It runs guided worker setup automatically when `.env.worker` is missing or
+incomplete, saves your settings, installs dependencies in a dedicated worker
+clone, and starts the background service. Existing valid settings are reused.
+You do not need to run `npm run setup` separately. If setup is cancelled or
+fails, installation stops. Noninteractive installs require valid settings first.
+
+Check the service with:
+
+```bash
 npm run worker:service:status
 ```
+
+To change settings later, run `npm run setup -- --mode worker`, then rerun
+`npm run worker:service:install`. For a foreground-only worker, run that setup
+command followed by `node --env-file=.env.worker worker/index.mjs`.
 
 This installs a per-user LaunchAgent on macOS or a per-user systemd service on
 Linux, including Raspberry Pi OS. On Linux, the installer verifies that systemd

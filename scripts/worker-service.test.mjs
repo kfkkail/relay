@@ -35,6 +35,10 @@ beforeEach(() => {
   vi.resetModules();
   vi.resetAllMocks();
   mocks.home = "/home/pi";
+  Object.defineProperty(process.stdin, "isTTY", {
+    value: false,
+    configurable: true,
+  });
   process.argv = ["node", "worker-service.mjs", "install"];
   Object.defineProperty(process, "platform", { value: "linux" });
   vi.spyOn(process, "exit").mockImplementation(() => {
@@ -105,6 +109,77 @@ describe("worker service installation", () => {
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("RELAY_CODEX_PATH is unavailable"),
     );
+    noInstall();
+  });
+  it.each(["missing", "incomplete"])(
+    "runs guided setup for %s configuration and resumes installation",
+    async (kind) => {
+      Object.defineProperty(process.stdin, "isTTY", {
+        value: true,
+        configurable: true,
+      });
+      if (kind === "missing")
+        mocks.readFile.mockRejectedValueOnce(
+          Object.assign(new Error(), { code: "ENOENT" }),
+        );
+      else
+        mocks.readFile.mockResolvedValueOnce("RELAY_URL=https://relay.example");
+      await install();
+      const setup = mocks.exec.mock.calls.find(
+        ([cmd]) => cmd === process.execPath,
+      );
+      expect(setup[1]).toEqual([
+        expect.stringMatching(/scripts\/setup\.mjs$/),
+        "--mode",
+        "worker",
+        "--skip-install",
+      ]);
+      expect(setup[2]).toMatchObject({ stdio: "inherit", timeout: 0 });
+      expect(mocks.readFile).toHaveBeenCalledTimes(2);
+      expect(
+        mocks.exec.mock.calls.some(
+          ([cmd, args]) => cmd === "systemctl" && args.includes("enable"),
+        ),
+      ).toBe(true);
+    },
+  );
+  it("keeps valid configuration without prompting", async () => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    await install();
+    expect(
+      mocks.exec.mock.calls.some(([cmd]) => cmd === process.execPath),
+    ).toBe(false);
+  });
+  it("stops if setup is cancelled", async () => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    mocks.readFile.mockResolvedValue("");
+    mocks.exec.mockImplementation(() => {
+      throw new Error("Setup cancelled");
+    });
+    await expect(install()).rejects.toThrow("exit");
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Setup cancelled"),
+    );
+    noInstall();
+    expect(mocks.writeFile).not.toHaveBeenCalled();
+  });
+  it("revalidates setup before installing and never loops", async () => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: true,
+      configurable: true,
+    });
+    mocks.readFile.mockResolvedValue("");
+    await expect(install()).rejects.toThrow("exit");
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Worker setup is incomplete"),
+    );
+    expect(mocks.exec).toHaveBeenCalledTimes(1);
     noInstall();
   });
   it("checks the user bus before fetching or installing", async () => {

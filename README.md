@@ -77,10 +77,12 @@ npm run worker:service:status
 ```
 
 This installs a per-user LaunchAgent on macOS or a per-user systemd service on
-Linux, including 64-bit Raspberry Pi OS. On a headless Raspberry Pi, the setup
-prints the one optional administrator command needed to start the user service
-at boot before login. Remove the service without deleting its configuration or
-logs with `npm run worker:service:uninstall`.
+Linux, including Raspberry Pi OS. On Linux, the installer verifies that systemd
+lingering is enabled for the current user and enables it when necessary; the
+one-time change may prompt for `sudo`. Lingering keeps the worker running after
+the last SSH session closes and starts it at boot before login. Remove the
+service without deleting its configuration or logs with
+`npm run worker:service:uninstall`.
 
 ## Deployment
 

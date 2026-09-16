@@ -9,13 +9,22 @@ until an agent slot becomes available.
 
 Use Node.js 22 or newer (`node --version` to check).
 
-Create a worker token in Relay's **Worker setup** panel, then run the guided
-setup. It writes the selected backend settings to a gitignored,
-owner-readable-only `.env.worker` file:
+Create a worker token in Relay's **Worker setup** panel, then run this command
+in an interactive terminal on your worker machine:
 
 ```bash
-npm run setup -- --mode worker
+npm run worker:service:install
 ```
+
+This command handles guided setup, dependency installation, and starting the
+background service. If `.env.worker` is missing or incomplete, setup asks for
+your Relay URL, worker token, and backend settings and saves them in a
+gitignored, owner-readable-only file. Valid existing settings are reused;
+you do not need to run `npm run setup` separately.
+
+To change settings later, run `npm run setup -- --mode worker`, then rerun the
+service installer. For foreground-only use, run that setup command without
+installing the service.
 
 The recommended backend is your locally installed Codex CLI. It reuses your
 ChatGPT/Codex login, so it does not require an OpenAI API key or API billing
@@ -45,18 +54,20 @@ Start the poller in the foreground with:
 node --env-file=.env.worker worker/index.mjs
 ```
 
-Or install and start the native background service on macOS or Linux (including
-Raspberry Pi OS):
+Once setup and installation finish, the command exits and returns your shell
+prompt. The worker runs independently in the background; you can close the
+terminal or disconnect SSH. The installer does not keep streaming worker logs.
 
-```bash
-npm run worker:service:install
-```
+The service installer supports macOS and Linux (including Raspberry Pi OS).
+Node.js 22+, Git, npm, and any selected backend tools must already be installed.
+Cancelling setup or leaving it incomplete stops installation.
 
 The installer checks the Node version, `.env.worker`, required tools, and (for
-Codex) the executable and workspace paths before downloading anything. Missing
-configuration is fixed with `npm run setup -- --mode worker`. Git and npm output
-is shown while installing; dependency installation can take several minutes on
-a Pi and times out after ten minutes if it does not finish.
+Codex) the executable and workspace paths before downloading anything. In a
+noninteractive session, missing configuration produces instructions instead of
+waiting for input. Git and npm output is shown while installing; dependency
+installation can take several minutes on a Pi and times out after ten minutes
+if it does not finish.
 
 On Linux, including Raspberry Pi OS, installation checks that systemd lingering
 is enabled for the current user and enables it when necessary. That one-time

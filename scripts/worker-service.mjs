@@ -49,7 +49,7 @@ if (command === "install" && !dryRun) {
     );
   }
   console.log("Checking worker configuration and service prerequisites...");
-  await validateWorkerEnv();
+  await ensureWorkerEnv();
   commandOutput("git", ["--version"]);
   commandOutput("npm", ["--version"]);
   if (process.platform === "linux") {
@@ -109,6 +109,9 @@ async function manageLaunchd(action) {
     run("launchctl", ["kickstart", "-k", service]);
     console.log(`Relay worker installed and started (${label}).`);
     console.log(`Logs: ${logs}`);
+    console.log(
+      "Installation complete. The worker is running in the background; you can close this terminal.",
+    );
     return;
   }
 
@@ -162,7 +165,7 @@ WantedBy=default.target
       "Relay worker installed and started as a systemd user service.",
     );
     console.log(
-      "It will continue after logout and start automatically at boot.",
+      "Installation complete. The worker is running in the background; you can close this terminal. It will continue after logout and start automatically at boot.",
     );
     return;
   }
@@ -224,15 +227,39 @@ function isSystemdLingerEnabled(username) {
   );
 }
 
+async function ensureWorkerEnv() {
+  const problem = await validateWorkerEnv();
+  if (!problem) return;
+  if (!process.stdin.isTTY) {
+    fail(
+      `${problem} Run npm run worker:service:install in an interactive terminal to complete guided setup, or run npm run setup -- --mode worker first.`,
+    );
+  }
+  console.log(`${problem} Starting guided worker setup...`);
+  // The managed clone installs dependencies later. Do not pass --install-service:
+  // this installer resumes after setup, without recursively invoking itself.
+  run(
+    process.execPath,
+    [
+      join(sourceRoot, "scripts/setup.mjs"),
+      "--mode",
+      "worker",
+      "--skip-install",
+    ],
+    true,
+    sourceRoot,
+    0,
+  );
+  const remainingProblem = await validateWorkerEnv();
+  if (remainingProblem) fail(`Worker setup is incomplete: ${remainingProblem}`);
+}
+
 async function validateWorkerEnv() {
   let contents;
   try {
     contents = await readFile(envPath, "utf8");
   } catch (error) {
-    if (error?.code === "ENOENT")
-      fail(
-        ".env.worker does not exist. Run npm run setup -- --mode worker first.",
-      );
+    if (error?.code === "ENOENT") return ".env.worker does not exist.";
     throw error;
   }
   workerEnvContents = contents;
@@ -246,21 +273,21 @@ async function validateWorkerEnv() {
       "RELAY_CODEX_WORKSPACE",
       "RELAY_COMMAND_PATH",
     );
-  else fail("RELAY_WORKER_BACKEND must be either codex or openai.");
+  else return "RELAY_WORKER_BACKEND must be either codex or openai.";
 
   for (const name of required) {
-    if (!env[name]?.trim()) fail(`${name} is missing from .env.worker.`);
+    if (!env[name]?.trim()) return `${name} is missing from .env.worker.`;
   }
   try {
     if (!["http:", "https:"].includes(new URL(env.RELAY_URL).protocol))
       throw new Error();
   } catch {
-    fail("RELAY_URL must be an absolute HTTP or HTTPS URL in .env.worker.");
+    return "RELAY_URL must be an absolute HTTP or HTTPS URL in .env.worker.";
   }
   if (backend === "codex") {
     for (const name of ["RELAY_CODEX_PATH", "RELAY_CODEX_WORKSPACE"]) {
       if (!isAbsolute(env[name]))
-        fail(`${name} must be an absolute path in .env.worker.`);
+        return `${name} must be an absolute path in .env.worker.`;
       try {
         const info = await stat(env[name]);
         if (name === "RELAY_CODEX_PATH") {
@@ -268,9 +295,7 @@ async function validateWorkerEnv() {
           await access(env[name], constants.X_OK);
         } else if (!info.isDirectory()) throw new Error();
       } catch {
-        fail(
-          `${name} is unavailable. Run npm run setup -- --mode worker first.`,
-        );
+        return `${name} is unavailable.`;
       }
     }
   }

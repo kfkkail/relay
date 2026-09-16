@@ -5,11 +5,14 @@ import {
   copyFile,
   mkdir,
   readFile,
+  stat,
   unlink,
   writeFile,
 } from "node:fs/promises";
 import { homedir, userInfo } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { constants } from "node:fs";
+import { parseEnv } from "node:util";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -35,8 +38,24 @@ if (!new Set(["install", "status", "uninstall"]).has(command)) {
   fail(`Unknown command: ${command}.`);
 }
 
+if (!["darwin", "linux"].includes(process.platform)) {
+  fail(`Background services are not yet supported on ${process.platform}.`);
+}
+
 if (command === "install" && !dryRun) {
+  if (Number(process.versions.node.split(".")[0]) < 22) {
+    fail(
+      `Relay requires Node.js 22 or newer; found ${process.version}. Upgrade Node.js and retry installation.`,
+    );
+  }
+  console.log("Checking worker configuration and service prerequisites...");
   await validateWorkerEnv();
+  commandOutput("git", ["--version"]);
+  commandOutput("npm", ["--version"]);
+  if (process.platform === "linux") {
+    commandOutput("systemctl", ["--user", "show-environment"]);
+    ensureSystemdLinger(userInfo().username);
+  }
   root = await prepareManagedInstall();
   envPath = join(root, ".env.worker");
   workerPath = join(root, "worker/index.mjs");
@@ -119,7 +138,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=${systemdQuote(root)}
+WorkingDirectory=${systemdPath(root)}
 ExecStart=${systemdQuote(process.execPath)} ${systemdQuote(`--env-file=${envPath}`)} ${systemdQuote(workerPath)}
 Restart=always
 RestartSec=5
@@ -129,7 +148,6 @@ Environment=RELAY_WORKER_AUTO_UPDATE=${autoUpdateSetting()}
 WantedBy=default.target
 `;
     if (dryRun) return showDryRun(servicePath);
-    ensureSystemdLinger(username);
     await mkdir(directory, { recursive: true });
     await writeFile(servicePath, unit, { mode: 0o644 });
     run("systemctl", ["--user", "daemon-reload"]);
@@ -153,7 +171,11 @@ WantedBy=default.target
     console.log(
       `Start after logout/boot: ${isSystemdLingerEnabled(username) ? "enabled" : "disabled"}`,
     );
-    run("systemctl", ["--user", "status", "relay-worker.service"], true);
+    run(
+      "systemctl",
+      ["--user", "--no-pager", "--full", "status", "relay-worker.service"],
+      true,
+    );
     return;
   }
 
@@ -178,6 +200,11 @@ function ensureSystemdLinger(username) {
   if (process.getuid() === 0) {
     run("loginctl", ["enable-linger", username], true);
   } else {
+    if (!process.stdin.isTTY) {
+      fail(
+        `Systemd lingering is disabled. Run sudo loginctl enable-linger ${username}, then retry installation.`,
+      );
+    }
     run("sudo", ["loginctl", "enable-linger", username], true);
   }
 
@@ -209,24 +236,7 @@ async function validateWorkerEnv() {
     throw error;
   }
   workerEnvContents = contents;
-  const env = Object.fromEntries(
-    contents
-      .split(/\r?\n/)
-      .filter(
-        (line) =>
-          line && !line.trimStart().startsWith("#") && line.includes("="),
-      )
-      .map((line) => {
-        const index = line.indexOf("=");
-        return [
-          line.slice(0, index).trim(),
-          line
-            .slice(index + 1)
-            .trim()
-            .replace(/^(["'])(.*)\1$/, "$2"),
-        ];
-      }),
-  );
+  const env = parseEnv(contents);
   const backend = (env.RELAY_WORKER_BACKEND || "openai").toLowerCase();
   const required = ["RELAY_URL", "RELAY_WORKER_TOKEN"];
   if (backend === "openai") required.push("OPENAI_API_KEY");
@@ -239,8 +249,30 @@ async function validateWorkerEnv() {
   else fail("RELAY_WORKER_BACKEND must be either codex or openai.");
 
   for (const name of required) {
-    if (!new RegExp(`^${name}=.+$`, "m").test(contents))
-      fail(`${name} is missing from .env.worker.`);
+    if (!env[name]?.trim()) fail(`${name} is missing from .env.worker.`);
+  }
+  try {
+    if (!["http:", "https:"].includes(new URL(env.RELAY_URL).protocol))
+      throw new Error();
+  } catch {
+    fail("RELAY_URL must be an absolute HTTP or HTTPS URL in .env.worker.");
+  }
+  if (backend === "codex") {
+    for (const name of ["RELAY_CODEX_PATH", "RELAY_CODEX_WORKSPACE"]) {
+      if (!isAbsolute(env[name]))
+        fail(`${name} must be an absolute path in .env.worker.`);
+      try {
+        const info = await stat(env[name]);
+        if (name === "RELAY_CODEX_PATH") {
+          if (!info.isFile()) throw new Error();
+          await access(env[name], constants.X_OK);
+        } else if (!info.isDirectory()) throw new Error();
+      } catch {
+        fail(
+          `${name} is unavailable. Run npm run setup -- --mode worker first.`,
+        );
+      }
+    }
   }
 }
 
@@ -257,6 +289,7 @@ async function prepareManagedInstall() {
     "remote.origin.url",
   ]);
 
+  console.log(`Preparing managed worker checkout at ${installationRoot}...`);
   if (!(await pathExists(join(installationRoot, ".git")))) {
     await mkdir(dirname(installationRoot), { recursive: true });
     run("git", [
@@ -277,7 +310,16 @@ async function prepareManagedInstall() {
     join(installationRoot, ".env.worker"),
   );
   await chmod(join(installationRoot, ".env.worker"), 0o600);
-  run("npm", ["ci", "--omit=dev", "--ignore-scripts"], false, installationRoot);
+  console.log(
+    "Installing worker dependencies (this can take several minutes)...",
+  );
+  run(
+    "npm",
+    ["ci", "--omit=dev", "--ignore-scripts"],
+    false,
+    installationRoot,
+    10 * 60_000,
+  );
   return installationRoot;
 }
 
@@ -300,20 +342,38 @@ async function pathExists(path) {
   }
 }
 
-function run(executable, args, inherit = false, cwd) {
+function childOptions(timeout = 60_000) {
+  return {
+    timeout,
+    killSignal: "SIGKILL",
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never" },
+  };
+}
+
+function run(executable, args, inherit = false, cwd, timeout = 60_000) {
   try {
     execFileSync(executable, args, {
+      ...childOptions(timeout),
       cwd,
-      stdio: inherit ? "inherit" : "pipe",
+      stdio: inherit ? "inherit" : ["ignore", "inherit", "inherit"],
     });
   } catch (error) {
+    if (error.code === "ETIMEDOUT") {
+      fail(
+        `${executable} timed out after ${timeout / 1000} seconds. Check the output above, fix any setup or network issue, and retry installation.`,
+      );
+    }
     fail(error.stderr?.toString().trim() || error.message);
   }
 }
 
 function commandOutput(executable, args) {
   try {
-    return execFileSync(executable, args, { encoding: "utf8" }).trim();
+    return execFileSync(executable, args, {
+      ...childOptions(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
   } catch (error) {
     fail(error.stderr?.toString().trim() || error.message);
   }
@@ -321,7 +381,7 @@ function commandOutput(executable, args) {
 
 function runAllowFailure(executable, args) {
   try {
-    execFileSync(executable, args, { stdio: "ignore" });
+    execFileSync(executable, args, { ...childOptions(), stdio: "ignore" });
   } catch {
     // The service may not have been installed yet.
   }
@@ -335,7 +395,18 @@ async function removeIfPresent(path) {
   }
 }
 
+function systemdPath(value) {
+  // WorkingDirectory is a path directive, not a shell-style argument list.
+  if (/[\r\n\0]/.test(value) || value.trim() !== value) {
+    fail(
+      "Service paths cannot contain newlines or leading/trailing whitespace.",
+    );
+  }
+  return value.replaceAll("%", "%%");
+}
+
 function systemdQuote(value) {
+  value = systemdPath(value).replaceAll("$", "$$");
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 

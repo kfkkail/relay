@@ -7,6 +7,8 @@ until an agent slot becomes available.
 
 ## Run it
 
+Use Node.js 22 or newer (`node --version` to check).
+
 Create a worker token in Relay's **Worker setup** panel, then run the guided
 setup. It writes the selected backend settings to a gitignored,
 owner-readable-only `.env.worker` file:
@@ -50,15 +52,29 @@ Raspberry Pi OS):
 npm run worker:service:install
 ```
 
+The installer checks the Node version, `.env.worker`, required tools, and (for
+Codex) the executable and workspace paths before downloading anything. Missing
+configuration is fixed with `npm run setup -- --mode worker`. Git and npm output
+is shown while installing; dependency installation can take several minutes on
+a Pi and times out after ten minutes if it does not finish.
+
 On Linux, including Raspberry Pi OS, installation checks that systemd lingering
 is enabled for the current user and enables it when necessary. That one-time
 change may prompt for `sudo`; it is required for the user service to survive the
 last SSH logout and start again at boot. Verify both the service and persistence
-setting with:
+setting with (status prints full lines without a pager):
 
 ```bash
 npm run worker:service:status
 ```
+
+If lingering is disabled in a noninteractive session, the installer exits with
+instructions to run `sudo loginctl enable-linger "$USER"` and retry. It also
+checks that the systemd user session is available before installing dependencies.
+
+To repair an older service reporting `Loaded: bad-setting`, update your checkout
+to the latest `main`, ensure Node.js 22 or newer is active, and rerun
+`npm run worker:service:install` to regenerate the unit.
 
 The service installer creates a dedicated worker clone, separate from your
 project workspaces and the checkout used to install it. While idle, that clone

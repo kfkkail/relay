@@ -79,6 +79,10 @@ clone, and starts the background service. Existing valid settings are reused.
 You do not need to run `npm run setup` separately. If setup is cancelled or
 fails, installation stops. Noninteractive installs require valid settings first.
 
+Once setup and installation finish, the command exits and returns your shell
+prompt. The worker runs independently in the background; you can close the
+terminal or disconnect SSH. The installer does not keep streaming worker logs.
+
 Check the service with:
 
 ```bash

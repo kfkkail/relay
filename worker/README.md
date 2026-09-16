@@ -54,6 +54,10 @@ Start the poller in the foreground with:
 node --env-file=.env.worker worker/index.mjs
 ```
 
+Once setup and installation finish, the command exits and returns your shell
+prompt. The worker runs independently in the background; you can close the
+terminal or disconnect SSH. The installer does not keep streaming worker logs.
+
 The service installer supports macOS and Linux (including Raspberry Pi OS).
 Node.js 22+, Git, npm, and any selected backend tools must already be installed.
 Cancelling setup or leaving it incomplete stops installation.

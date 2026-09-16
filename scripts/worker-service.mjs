@@ -109,6 +109,9 @@ async function manageLaunchd(action) {
     run("launchctl", ["kickstart", "-k", service]);
     console.log(`Relay worker installed and started (${label}).`);
     console.log(`Logs: ${logs}`);
+    console.log(
+      "Installation complete. The worker is running in the background; you can close this terminal.",
+    );
     return;
   }
 
@@ -162,7 +165,7 @@ WantedBy=default.target
       "Relay worker installed and started as a systemd user service.",
     );
     console.log(
-      "It will continue after logout and start automatically at boot.",
+      "Installation complete. The worker is running in the background; you can close this terminal. It will continue after logout and start automatically at boot.",
     );
     return;
   }

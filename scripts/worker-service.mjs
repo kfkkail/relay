@@ -109,6 +109,7 @@ async function manageLaunchd(action) {
 async function manageSystemd(action) {
   const directory = join(homedir(), ".config/systemd/user");
   const servicePath = join(directory, "relay-worker.service");
+  const username = userInfo().username;
 
   if (action === "install") {
     const unit = `[Unit]
@@ -128,19 +129,30 @@ Environment=RELAY_WORKER_AUTO_UPDATE=${autoUpdateSetting()}
 WantedBy=default.target
 `;
     if (dryRun) return showDryRun(servicePath);
+    ensureSystemdLinger(username);
     await mkdir(directory, { recursive: true });
     await writeFile(servicePath, unit, { mode: 0o644 });
     run("systemctl", ["--user", "daemon-reload"]);
     run("systemctl", ["--user", "enable", "--now", "relay-worker.service"]);
+    run("systemctl", [
+      "--user",
+      "is-active",
+      "--quiet",
+      "relay-worker.service",
+    ]);
     console.log(
       "Relay worker installed and started as a systemd user service.",
     );
-    console.log("For start-at-boot before login, an administrator can run:");
-    console.log(`  sudo loginctl enable-linger ${userInfo().username}`);
+    console.log(
+      "It will continue after logout and start automatically at boot.",
+    );
     return;
   }
 
   if (action === "status") {
+    console.log(
+      `Start after logout/boot: ${isSystemdLingerEnabled(username) ? "enabled" : "disabled"}`,
+    );
     run("systemctl", ["--user", "status", "relay-worker.service"], true);
     return;
   }
@@ -155,6 +167,34 @@ WantedBy=default.target
   await removeIfPresent(servicePath);
   run("systemctl", ["--user", "daemon-reload"]);
   console.log("Relay worker service removed.");
+}
+
+function ensureSystemdLinger(username) {
+  if (isSystemdLingerEnabled(username)) return;
+
+  console.log(
+    "Enabling the systemd user service to continue after logout and start at boot...",
+  );
+  if (process.getuid() === 0) {
+    run("loginctl", ["enable-linger", username], true);
+  } else {
+    run("sudo", ["loginctl", "enable-linger", username], true);
+  }
+
+  if (!isSystemdLingerEnabled(username)) {
+    fail(`Could not enable systemd lingering for ${username}.`);
+  }
+}
+
+function isSystemdLingerEnabled(username) {
+  return (
+    commandOutput("loginctl", [
+      "show-user",
+      username,
+      "--property=Linger",
+      "--value",
+    ]).toLowerCase() === "yes"
+  );
 }
 
 async function validateWorkerEnv() {

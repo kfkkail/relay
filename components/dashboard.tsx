@@ -1986,9 +1986,7 @@ function ResultDocuments({
             href={`/api/tasks/${taskId}/documents/${document.id}`}
             download={document.display_filename}
           >
-            <span>
-              calendar · {formatBytes(document.byte_size)}
-            </span>
+            <span>calendar · {formatBytes(document.byte_size)}</span>
             <strong>{document.display_filename}</strong>
             <CalendarPlus size={17} />
           </a>

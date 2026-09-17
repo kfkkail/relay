@@ -1699,10 +1699,10 @@ function TaskDetail({
         )}
       </div>
 
-      <section className="document-section">
-        <div className="section-label">
-          <span>Task document</span>
-          {task.status === "inbox" && (
+      <details className="document-section" key={task.id}>
+        <summary className="section-label">Task document</summary>
+        {task.status === "inbox" && (
+          <div className="document-edit-controls">
             <button
               className="document-edit-button"
               disabled={busy}
@@ -1711,14 +1711,14 @@ function TaskDetail({
               <Pencil size={14} />
               Edit
             </button>
-          )}
-        </div>
+          </div>
+        )}
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {task.instructions}
           </ReactMarkdown>
         </div>
-      </section>
+      </details>
 
       {task.task_attachments.map((attachment) => (
         <section className="attachment-section" key={attachment.id}>

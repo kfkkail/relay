@@ -50,7 +50,8 @@ export type ResultDocument = {
     | "text/plain"
     | "application/pdf"
     | "text/csv"
-    | "application/json";
+    | "application/json"
+    | "text/calendar";
   byte_size: number;
   description: string | null;
 };

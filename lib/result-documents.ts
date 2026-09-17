@@ -11,6 +11,7 @@ const documentTypes: Record<string, string> = {
   ".pdf": "application/pdf",
   ".csv": "text/csv",
   ".json": "application/json",
+  ".ics": "text/calendar",
 };
 
 export function safeDocumentFilename(value: string) {

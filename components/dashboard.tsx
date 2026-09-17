@@ -1871,7 +1871,13 @@ function TaskDetail({
             </span>
           </div>
           <div className="markdown result-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={documentLinkComponents(
+                task.id,
+                latest.result_documents,
+              )}
+            >
               {latest.result_markdown}
             </ReactMarkdown>
           </div>
@@ -1949,7 +1955,13 @@ function TaskDetail({
             </button>
           </div>
           <div className="markdown result-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={documentLinkComponents(
+                task.id,
+                acceptedRun?.result_documents ?? [],
+              )}
+            >
               {task.accepted_result}
             </ReactMarkdown>
           </div>
@@ -1963,6 +1975,60 @@ function TaskDetail({
       )}
     </div>
   );
+}
+
+// Let result Markdown link to attached documents by filename, e.g.
+// [Add to calendar](dentist.ics). The agent only knows the workspace-relative
+// path, so we resolve the basename to the uploaded document's authenticated
+// URL: calendar files download directly (a tap opens the OS calendar app),
+// everything else opens the in-app viewer.
+function documentLinkComponents(
+  taskId: string,
+  documents: import("@/lib/types").ResultDocument[],
+): import("react-markdown").Components {
+  const byFilename = new Map(
+    (documents ?? []).map((document) => [
+      document.display_filename.toLowerCase(),
+      document,
+    ]),
+  );
+  return {
+    a({ href, children }) {
+      const document = href ? byFilename.get(linkFilename(href)) : undefined;
+      if (document) {
+        return document.mime_type === "text/calendar" ? (
+          <a
+            href={`/api/tasks/${taskId}/documents/${document.id}`}
+            download={document.display_filename}
+          >
+            {children}
+          </a>
+        ) : (
+          <a href={`/tasks/${taskId}/documents/${document.id}`}>{children}</a>
+        );
+      }
+      if (href && /^(https?:|mailto:)/i.test(href)) {
+        return (
+          <a href={href} target="_blank" rel="noreferrer">
+            {children}
+          </a>
+        );
+      }
+      // Unresolved relative links would navigate inside the app; render the
+      // link text as plain content instead of a dead link.
+      return <>{children}</>;
+    },
+  };
+}
+
+function linkFilename(href: string) {
+  const path = href.split(/[?#]/)[0];
+  const name = path.split("/").pop() ?? path;
+  try {
+    return decodeURIComponent(name).toLowerCase();
+  } catch {
+    return name.toLowerCase();
+  }
 }
 
 function ResultDocuments({

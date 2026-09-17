@@ -2,6 +2,7 @@ import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { validateDocumentBytes } from "../lib/result-documents.ts";
 import {
   collectResultDocuments,
   parseCodexResult,
@@ -22,6 +23,42 @@ async function directory() {
 }
 
 describe("result documents", () => {
+  it("passes a calendar file from worker collection through upload validation", async () => {
+    const workspace = await directory();
+    const bytes = Buffer.from(
+      [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Relay//Calendar//EN",
+        "BEGIN:VEVENT",
+        "UID:deadline-20260918@relay",
+        "DTSTAMP:20260917T120000Z",
+        "DTSTART;VALUE=DATE:20260918",
+        "DTEND;VALUE=DATE:20260919",
+        "SUMMARY:Deadline",
+        "END:VEVENT",
+        "END:VCALENDAR",
+        "",
+      ].join("\r\n"),
+    );
+    await writeFile(join(workspace, "deadline.ics"), bytes);
+    const [document] = await collectResultDocuments(workspace, [
+      { path: "deadline.ics" },
+    ]);
+    expect(document.mimeType).toBe("text/calendar");
+    expect(validateDocumentBytes(document.fileName, bytes)).toEqual({
+      mimeType: document.mimeType,
+      displayFilename: "deadline.ics",
+    });
+    const invalid = Buffer.from([0xff, 0x00]);
+    await writeFile(join(workspace, "invalid.ics"), invalid);
+    await expect(
+      collectResultDocuments(workspace, [{ path: "invalid.ics" }]),
+    ).rejects.toThrow("UTF-8");
+    expect(() => validateDocumentBytes("invalid.ics", invalid)).toThrow(
+      "UTF-8",
+    );
+  });
   it("accepts supported workspace files", async () => {
     const workspace = await directory();
     await writeFile(join(workspace, "report.md"), "# Report\n");

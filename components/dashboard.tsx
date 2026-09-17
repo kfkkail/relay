@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  CalendarPlus,
   Check,
   ChevronRight,
   CircleDot,
@@ -1975,16 +1976,36 @@ function ResultDocuments({
   return (
     <div className="artifact-list">
       <p className="eyebrow">Documents</p>
-      {documents.map((document) => (
-        <a key={document.id} href={`/tasks/${taskId}/documents/${document.id}`}>
-          <span>
-            {document.mime_type.split("/").at(-1)} ·{" "}
-            {formatBytes(document.byte_size)}
-          </span>
-          <strong>{document.display_filename}</strong>
-          <ChevronRight size={17} />
-        </a>
-      ))}
+      {documents.map((document) => {
+        const isCalendar = document.mime_type === "text/calendar";
+        // Calendar files download directly so a tap hands the .ics to the OS
+        // calendar app instead of opening the in-app text preview.
+        return isCalendar ? (
+          <a
+            key={document.id}
+            href={`/api/tasks/${taskId}/documents/${document.id}`}
+            download={document.display_filename}
+          >
+            <span>
+              calendar · {formatBytes(document.byte_size)}
+            </span>
+            <strong>{document.display_filename}</strong>
+            <CalendarPlus size={17} />
+          </a>
+        ) : (
+          <a
+            key={document.id}
+            href={`/tasks/${taskId}/documents/${document.id}`}
+          >
+            <span>
+              {document.mime_type.split("/").at(-1)} ·{" "}
+              {formatBytes(document.byte_size)}
+            </span>
+            <strong>{document.display_filename}</strong>
+            <ChevronRight size={17} />
+          </a>
+        );
+      })}
     </div>
   );
 }

@@ -136,7 +136,7 @@ are not logged.
 
 Relay displays a text/Markdown result for each run. Codex-backed workers may
 also declare up to 10 private result documents from inside their configured
-workspace: Markdown, plain text, PDF, CSV, or JSON. Each document is limited to
+workspace: Markdown, plain text, PDF, CSV, JSON, or iCalendar (`.ics`). Each document is limited to
 10 MB and all documents together are limited to 25 MB. Agents include important
 deliverables, validation, and limitations directly in Markdown even when they
 attach documents. The direct OpenAI backend remains Markdown-only.

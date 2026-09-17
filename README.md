@@ -12,6 +12,8 @@ This repository contains the first vertical slice:
 - one active run per task
 - outbound polling by a separate local worker
 - Markdown results, feedback, acceptance, and follow-up task lineage
+- private result documents (Markdown, text, PDF, CSV, JSON, and iCalendar
+  `.ics` files) attached to a run
 - selectable Codex CLI and OpenAI API worker backends
 
 ## Local setup

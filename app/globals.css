@@ -869,6 +869,17 @@ button:disabled {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+.document-section > summary {
+  display: list-item;
+  cursor: pointer;
+}
+.document-section > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.document-edit-controls {
+  padding: 0 20px 10px;
+}
 .document-edit-button {
   display: inline-flex;
   align-items: center;
@@ -1865,6 +1876,10 @@ textarea {
   .detail-heading .primary-button {
     width: auto;
     flex: 0 0 auto;
+  }
+  .document-edit-controls {
+    padding-right: 42px;
+    padding-left: 42px;
   }
   .section-label {
     padding-right: 42px;

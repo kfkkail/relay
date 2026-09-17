@@ -1820,7 +1820,7 @@ function TaskDetail({
             <p className="eyebrow">Attempt {active.attempt}</p>
             <h2>
               {active.status === "queued"
-                ? "Waiting for your laptop"
+                ? "Waiting for your worker"
                 : "Worker is on it"}
             </h2>
             <p>

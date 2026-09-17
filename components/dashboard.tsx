@@ -305,21 +305,26 @@ export function Dashboard({
     try {
       for (const file of files)
         uploaded.push(await uploadOwnerActionAttachment(actionId, file));
-    } finally {
-      if (uploaded.length)
-        setOwnerActions((current) =>
-          current.map((item) =>
-            item.id === actionId
-              ? {
-                  ...item,
-                  owner_action_attachments: [
-                    ...item.owner_action_attachments,
-                    ...uploaded,
-                  ],
-                }
-              : item,
-          ),
-        );
+      setOwnerActions((current) =>
+        current.map((item) =>
+          item.id === actionId
+            ? {
+                ...item,
+                owner_action_attachments: [
+                  ...item.owner_action_attachments,
+                  ...uploaded,
+                ],
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      // Our local count only tracks finalized photos, so it can lag the server
+      // (e.g. an in-flight upload from another session pushed the action to its
+      // limit). Re-sync from the server so the gallery and counter reflect the
+      // authoritative state that produced this rejection.
+      await refreshOwnerActions().catch(() => {});
+      throw error;
     }
   }
 

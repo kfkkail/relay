@@ -18,7 +18,7 @@ import { DELETE } from "./route";
 describe("DELETE /api/owner-actions/:actionId", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("removes every stored photo before deleting the action", async () => {
+  it("deletes the action before sweeping its stored photos", async () => {
     const remove = vi.fn().mockResolvedValue({ error: null });
     const deleteAction = vi.fn().mockResolvedValue({ error: null, count: 1 });
     const single = vi.fn().mockResolvedValue({
@@ -54,8 +54,8 @@ describe("DELETE /api/owner-actions/:actionId", () => {
       "user/owner-actions/action-1/photo-2",
     ]);
     expect(deleteAction).toHaveBeenCalledWith("id", "action-1");
-    expect(remove.mock.invocationCallOrder[0]).toBeLessThan(
-      deleteAction.mock.invocationCallOrder[0],
+    expect(deleteAction.mock.invocationCallOrder[0]).toBeLessThan(
+      remove.mock.invocationCallOrder[0],
     );
   });
 });

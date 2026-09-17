@@ -36,7 +36,8 @@ create function public.reserve_owner_action_attachment(
   p_storage_path text,
   p_file_name text,
   p_mime_type text,
-  p_byte_size bigint
+  p_byte_size bigint,
+  p_limit integer
 )
 returns jsonb
 language plpgsql
@@ -72,7 +73,7 @@ begin
     select count(*)
     from public.owner_action_attachments
     where owner_action_id = p_action_id and abandoned_at is null
-  ) >= 10 then
+  ) >= p_limit then
     return jsonb_build_object('status', 'limit_reached', 'abandoned', abandoned);
   end if;
 
@@ -88,10 +89,10 @@ end;
 $$;
 
 revoke all on function public.reserve_owner_action_attachment(
-  uuid, uuid, uuid, text, text, text, bigint
+  uuid, uuid, uuid, text, text, text, bigint, integer
 ) from public, anon, authenticated;
 grant execute on function public.reserve_owner_action_attachment(
-  uuid, uuid, uuid, text, text, text, bigint
+  uuid, uuid, uuid, text, text, text, bigint, integer
 ) to service_role;
 
 notify pgrst, 'reload schema';

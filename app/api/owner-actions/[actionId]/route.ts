@@ -84,18 +84,25 @@ export async function DELETE(
     const storagePaths = action.owner_action_attachments.map(
       (attachment) => attachment.storage_path,
     );
-    if (storagePaths.length) {
-      const { error: storageError } = await createAdminClient()
-        .storage.from(ATTACHMENT_BUCKET)
-        .remove(storagePaths);
-      if (storageError) throw storageError;
-    }
+    // Delete the action first (its attachment rows cascade away); only then
+    // sweep storage. A failed storage removal leaves harmless orphaned objects
+    // rather than a half-deleted action whose photos 404.
     const { error, count } = await supabase
       .from("owner_actions")
       .delete({ count: "exact" })
       .eq("id", actionId);
     if (error) throw error;
     if (!count) throw new ApiError("Action not found.", 404);
+    if (storagePaths.length) {
+      const { error: storageError } = await createAdminClient()
+        .storage.from(ATTACHMENT_BUCKET)
+        .remove(storagePaths);
+      if (storageError)
+        console.error(
+          "Could not remove owner action photos from storage",
+          storageError,
+        );
+    }
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return apiErrorResponse(error);

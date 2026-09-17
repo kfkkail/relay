@@ -35,6 +35,7 @@ export async function POST(
         p_file_name: input.fileName,
         p_mime_type: input.mimeType,
         p_byte_size: input.byteSize,
+        p_limit: MAX_OWNER_ACTION_ATTACHMENTS,
       },
     );
     if (reservationError) throw reservationError;

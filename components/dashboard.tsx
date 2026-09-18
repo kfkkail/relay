@@ -49,6 +49,7 @@ import {
   utcToLocalDateTime,
 } from "@/lib/date-time";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
+import { ATTACHMENT_BUCKET } from "@/lib/attachment-constants";
 import { MAX_OWNER_ACTION_ATTACHMENTS } from "@/lib/owner-actions";
 import type { MyWorkFilter } from "@/lib/routing";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
@@ -2184,7 +2185,7 @@ async function uploadAttachment(taskId: string, file: File) {
   });
   try {
     const { error } = await createSupabaseClient()
-      .storage.from("task-attachments")
+      .storage.from(ATTACHMENT_BUCKET)
       .uploadToSignedUrl(created.path, created.token, file, {
         contentType: file.type,
       });
@@ -2300,7 +2301,7 @@ async function uploadOwnerActionAttachment(actionId: string, file: File) {
   );
   try {
     const { error } = await createSupabaseClient()
-      .storage.from("task-attachments")
+      .storage.from(ATTACHMENT_BUCKET)
       .uploadToSignedUrl(created.path, created.token, file, {
         contentType: file.type,
       });

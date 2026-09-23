@@ -6,6 +6,20 @@ bell → Enable notifications. Use Send test notification to verify delivery.
 Permission is requested only from the button tap. No Apple Developer account
 or native app is needed. Android and desktop standards-based push also work.
 
+## iOS banner attribution
+
+The “from Relay” line beneath the notification title is supplied by iOS to
+identify the installed web app. It is not part of Relay's notification title or
+message. Relay supplies the title and body in `lib/push.ts`, and `public/sw.js`
+passes them to `showNotification` without adding an attribution line.
+
+The Web Notifications API has no supported option to hide this system attribution.
+Changing the task title or result preview will not remove it. Keep the app's name
+intact in the manifest; renaming the app is not a supported way to suppress the
+attribution. The exact banner layout can vary by iOS version.
+
+Reference: [Notification options](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification#parameters).
+
 ## Deployment
 
 1. Deploy the new migration through the existing migration workflow.

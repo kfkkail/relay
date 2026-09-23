@@ -5,13 +5,15 @@ const mocks = vi.hoisted(() => ({
   from: vi.fn(),
   send: vi.fn(),
   config: vi.fn(),
+  payload: vi.fn(() => "{}"),
+  runFilter: vi.fn(),
 }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ rpc: mocks.rpc, from: mocks.from }),
 }));
 vi.mock("@/lib/push", () => ({
   pushConfig: mocks.config,
-  pushPayload: () => "{}",
+  pushPayload: mocks.payload,
   pushStatus: (error: { statusCode?: number }) => error.statusCode ?? 0,
   sendPush: mocks.send,
 }));
@@ -28,7 +30,7 @@ beforeEach(() => {
   mocks.config.mockReturnValue({});
   mocks.send.mockResolvedValue({ statusCode: 201 });
   mocks.rpc.mockResolvedValue({ data: [], error: null });
-  mocks.from.mockImplementation(() => {
+  mocks.from.mockImplementation((table: string) => {
     let count = false;
     const query = {
       select: (_columns: string, options?: { count?: string }) => {
@@ -40,15 +42,24 @@ beforeEach(() => {
         return query;
       },
       delete: () => query,
-      eq: () => query,
+      eq: (column: string, value: string) => {
+        if (table === "runs") mocks.runFilter(column, value);
+        return query;
+      },
       lt: () => query,
       gte: () => query,
       maybeSingle: async () => ({
-        data: {
-          endpoint: "https://web.push.apple.com/token",
-          p256dh: "key",
-          auth: "auth",
-        },
+        data:
+          table === "runs"
+            ? {
+                result_markdown: "Your trip is booked.",
+                tasks: { title: "Plan the trip" },
+              }
+            : {
+                endpoint: "https://web.push.apple.com/token",
+                p256dh: "key",
+                auth: "auth",
+              },
         error: null,
       }),
       then: (resolve: (value: unknown) => unknown) =>
@@ -83,6 +94,7 @@ it("persists exhausted provider failure and returns a redacted aggregate alarm",
         id: "delivery",
         subscription_id: "subscription",
         task_id: "task",
+        run_id: "original-run",
         outcome: "completed",
         attempts: 6,
       },
@@ -95,6 +107,12 @@ it("persists exhausted provider failure and returns a redacted aggregate alarm",
   });
   recentFailures = 1;
   const response = await GET(request());
+  expect(mocks.runFilter).toHaveBeenCalledWith("id", "original-run");
+  expect(mocks.runFilter).toHaveBeenCalledWith("task_id", "task");
+  expect(mocks.payload).toHaveBeenCalledWith("completed", "task", "delivery", {
+    title: "Plan the trip",
+    result: "Your trip is booked.",
+  });
   expect(updates[0]).toMatchObject({
     last_status_code: 403,
     failed_at: expect.any(String),

@@ -23,6 +23,7 @@ export async function GET(request: Request) {
           id: string;
           subscription_id: string;
           task_id: string;
+          run_id: string;
           outcome: string;
           attempts: number;
         }) => {
@@ -33,6 +34,15 @@ export async function GET(request: Request) {
             .maybeSingle();
           if (lookupError) throw lookupError;
           if (!subscription) return;
+          const { data: run, error: runError } = await db
+            .from("runs")
+            .select("result_markdown,tasks!runs_task_id_fkey(title)")
+            .eq("id", delivery.run_id)
+            .eq("task_id", delivery.task_id)
+            .maybeSingle();
+          if (runError) throw runError;
+          // Supabase infers embedded relations as arrays without generated types.
+          const task = Array.isArray(run?.tasks) ? run.tasks[0] : run?.tasks;
           let status = 201;
           try {
             await sendPush(
@@ -40,7 +50,10 @@ export async function GET(request: Request) {
                 endpoint: subscription.endpoint,
                 keys: { p256dh: subscription.p256dh, auth: subscription.auth },
               },
-              pushPayload(delivery.outcome, delivery.task_id, delivery.id),
+              pushPayload(delivery.outcome, delivery.task_id, delivery.id, {
+                title: task?.title,
+                result: run?.result_markdown,
+              }),
             );
           } catch (error) {
             status = pushStatus(error);

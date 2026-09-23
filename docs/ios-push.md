@@ -54,8 +54,11 @@ A processed count indicates attempted work, not confirmed device presentation.
 Subscription credentials are stored in server-only tables with RLS and revoked
 client grants. API requests are authenticated and scoped to the current user.
 The sender accepts only known browser push service hosts. Push content contains
-generic text and task identifiers, never task titles, instructions, results, or
-raw errors. Disable removes the subscription and pending deliveries for this
+the task title (up to 100 characters), a plain-text preview of the completed
+result (up to 180 characters), and task identifiers. These may appear on the
+lock screen according to device notification settings. Failed runs show the task
+title and a prompt to review details, never raw errors. Empty titles or results
+use fallback copy. Each preview comes from the run that triggered the notification. Disable removes the subscription and pending deliveries for this
 device, retaining completed outcome records. On mount, Relay reconciles an existing
 browser subscription with the server before displaying it as enabled. A failed
 reconciliation leaves enable/retry available and does not show a false enabled state. Signing out removes this device’s server subscription and pending deliveries,

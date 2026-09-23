@@ -38,7 +38,7 @@ describe("push subscriptions", () => {
   });
 });
 
-it("uses generic copy and an existing task route", () => {
+it("uses fallback copy and an existing task route", () => {
   const payload = JSON.parse(
     pushPayload("completed", "task-id", "delivery-id"),
   );
@@ -52,4 +52,58 @@ it("uses generic copy and an existing task route", () => {
 it("classifies provider errors without exposing their contents", () => {
   expect(pushStatus({ statusCode: 410, body: "secret" })).toBe(410);
   expect(pushStatus(new Error("network failure"))).toBe(0);
+});
+
+it("shows the task title and a readable result preview", () => {
+  expect(
+    JSON.parse(
+      pushPayload("completed", "task", "delivery", {
+        title: "Plan the trip",
+        result:
+          "# Trip booked\n\nYour **tickets** are [ready](https://example.com).",
+      }),
+    ),
+  ).toMatchObject({
+    title: "Plan the trip",
+    body: "Trip booked Your tickets are ready.",
+    url: "/tasks/task",
+    tag: "relay-delivery",
+  });
+});
+it("bounds Unicode previews and falls back for empty results", () => {
+  const payload = JSON.parse(
+    pushPayload("completed", "task", "delivery", {
+      title: "😀".repeat(120),
+      result: "😀".repeat(200),
+    }),
+  );
+  expect(Array.from(payload.title)).toHaveLength(100);
+  expect(Array.from(payload.body)).toHaveLength(180);
+  expect(payload.body.endsWith("…")).toBe(true);
+  expect(
+    JSON.parse(
+      pushPayload("completed", "task", "delivery", {
+        title: " ",
+        result: "\n ",
+      }),
+    ).body,
+  ).toBe("Result ready. Open Relay to review your task.");
+});
+it("keeps failures actionable and test notifications unchanged", () => {
+  const content = {
+    title: "Plan the trip",
+    result: "Do not show a stale result",
+  };
+  expect(
+    JSON.parse(pushPayload("failed", "task", "delivery", content)),
+  ).toMatchObject({
+    title: "Plan the trip",
+    body: "Run needs attention. Open Relay to review the details.",
+  });
+  expect(
+    JSON.parse(pushPayload("test", undefined, "test", content)),
+  ).toMatchObject({
+    title: "Notifications are working",
+    body: "Relay can now notify you on this device.",
+  });
 });

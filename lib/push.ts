@@ -58,18 +58,47 @@ export function validateSubscription(value: unknown): webpush.PushSubscription {
   };
 }
 
-export function pushPayload(outcome: string, taskId?: string, id = "test") {
+function preview(value: string | null | undefined, limit: number) {
+  const text = (value ?? "")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+)/gm, "")
+    .replace(/[*_~`]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const characters = Array.from(text);
+  return characters.length > limit
+    ? characters
+        .slice(0, limit - 1)
+        .join("")
+        .trimEnd() + "…"
+    : text;
+}
+
+export function pushPayload(
+  outcome: string,
+  taskId?: string,
+  id = "test",
+  content?: { title?: string | null; result?: string | null },
+) {
+  const fallbackTitle =
+    outcome === "completed"
+      ? "Result ready to review"
+      : outcome === "failed"
+        ? "Run needs attention"
+        : "Notifications are working";
   return JSON.stringify({
     title:
-      outcome === "completed"
-        ? "Result ready to review"
-        : outcome === "failed"
-          ? "Run needs attention"
-          : "Notifications are working",
+      outcome === "test"
+        ? fallbackTitle
+        : preview(content?.title, 100) || fallbackTitle,
     body:
       outcome === "test"
         ? "Relay can now notify you on this device."
-        : "Open Relay to review your task.",
+        : outcome === "failed"
+          ? "Run needs attention. Open Relay to review the details."
+          : preview(content?.result, 180) ||
+            "Result ready. Open Relay to review your task.",
     tag: `relay-${id}`,
     url: taskId ? `/tasks/${taskId}` : "/tasks",
   });

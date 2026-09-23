@@ -50,6 +50,8 @@ import {
   utcToLocalDateTime,
 } from "@/lib/date-time";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
+import { ATTACHMENT_BUCKET } from "@/lib/attachment-constants";
+import { MAX_OWNER_ACTION_ATTACHMENTS } from "@/lib/owner-actions";
 import type { MyWorkFilter } from "@/lib/routing";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import {
@@ -287,6 +289,67 @@ export function Dashboard({
       method: "DELETE",
     });
     await refreshOwnerActions();
+  }
+
+  async function addOwnerActionPhotos(actionId: string, files: File[]) {
+    const action = ownerActions.find((item) => item.id === actionId);
+    if (!action) return;
+    const remaining =
+      MAX_OWNER_ACTION_ATTACHMENTS - action.owner_action_attachments.length;
+    if (files.length > remaining)
+      throw new Error(
+        remaining > 0
+          ? `Choose up to ${remaining} more ${remaining === 1 ? "photo" : "photos"}.`
+          : `An action can have up to ${MAX_OWNER_ACTION_ATTACHMENTS} photos.`,
+      );
+
+    const uploaded: OwnerAction["owner_action_attachments"] = [];
+    try {
+      for (const file of files)
+        uploaded.push(await uploadOwnerActionAttachment(actionId, file));
+      setOwnerActions((current) =>
+        current.map((item) =>
+          item.id === actionId
+            ? {
+                ...item,
+                owner_action_attachments: [
+                  ...item.owner_action_attachments,
+                  ...uploaded,
+                ],
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      // Our local count only tracks finalized photos, so it can lag the server
+      // (e.g. an in-flight upload from another session pushed the action to its
+      // limit). Re-sync from the server so the gallery and counter reflect the
+      // authoritative state that produced this rejection.
+      await refreshOwnerActions().catch(() => {});
+      throw error;
+    }
+  }
+
+  async function removeOwnerActionPhoto(
+    actionId: string,
+    attachmentId: string,
+  ) {
+    await requestJson(
+      `/api/owner-actions/${actionId}/attachments/${attachmentId}`,
+      { method: "DELETE" },
+    );
+    setOwnerActions((current) =>
+      current.map((item) =>
+        item.id === actionId
+          ? {
+              ...item,
+              owner_action_attachments: item.owner_action_attachments.filter(
+                (attachment) => attachment.id !== attachmentId,
+              ),
+            }
+          : item,
+      ),
+    );
   }
 
   useEffect(() => {
@@ -1003,6 +1066,23 @@ export function Dashboard({
                   <h3>Notes</h3>
                   <p>{selectedOwnerAction.notes || "No notes added."}</p>
                 </section>
+                <OwnerActionPhotos
+                  action={selectedOwnerAction}
+                  busy={busy}
+                  onAdd={(files) =>
+                    runAction(() =>
+                      addOwnerActionPhotos(selectedOwnerAction.id, files),
+                    )
+                  }
+                  onRemove={(attachmentId) =>
+                    runAction(() =>
+                      removeOwnerActionPhoto(
+                        selectedOwnerAction.id,
+                        attachmentId,
+                      ),
+                    )
+                  }
+                />
                 <section>
                   <h3>Linked tasks</h3>
                   {selectedOwnerAction.owner_action_tasks.length ? (
@@ -2196,7 +2276,7 @@ async function uploadAttachment(taskId: string, file: File) {
   });
   try {
     const { error } = await createSupabaseClient()
-      .storage.from("task-attachments")
+      .storage.from(ATTACHMENT_BUCKET)
       .uploadToSignedUrl(created.path, created.token, file, {
         contentType: file.type,
       });
@@ -2209,6 +2289,125 @@ async function uploadAttachment(taskId: string, file: File) {
   } catch (error) {
     await requestJson(
       `/api/tasks/${taskId}/attachments/${created.attachmentId}`,
+      { method: "DELETE" },
+    ).catch(() => {});
+    throw error;
+  }
+}
+
+function OwnerActionPhotos({
+  action,
+  busy,
+  onAdd,
+  onRemove,
+}: {
+  action: OwnerAction;
+  busy: boolean;
+  onAdd: (files: File[]) => Promise<void>;
+  onRemove: (attachmentId: string) => Promise<void>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const remaining =
+    MAX_OWNER_ACTION_ATTACHMENTS - action.owner_action_attachments.length;
+
+  return (
+    <section className="owner-action-photos">
+      <div className="owner-action-photos-heading">
+        <div>
+          <h3>Photos</h3>
+          <p>
+            {action.owner_action_attachments.length} of{" "}
+            {MAX_OWNER_ACTION_ATTACHMENTS}
+          </p>
+        </div>
+        <label className={busy || remaining === 0 ? "disabled" : ""}>
+          <Paperclip size={15} />
+          Add photos
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={busy || remaining === 0}
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              if (files.length) void onAdd(files);
+              event.target.value = "";
+            }}
+          />
+        </label>
+      </div>
+      {action.owner_action_attachments.length ? (
+        <div className="owner-action-photo-grid">
+          {action.owner_action_attachments.map((attachment) => (
+            <div key={attachment.id} className="owner-action-photo">
+              <a
+                href={`/api/owner-actions/${action.id}/attachments/${attachment.id}`}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Open ${attachment.file_name}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- authenticated dynamic image endpoint */}
+                <img
+                  src={`/api/owner-actions/${action.id}/attachments/${attachment.id}`}
+                  alt={attachment.file_name}
+                />
+              </a>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onRemove(attachment.id)}
+                aria-label={`Remove ${attachment.file_name}`}
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>No photos added.</p>
+      )}
+      <p className="owner-action-photo-help">
+        Select multiple JPEG, PNG, or WebP photos · up to 10 MB each
+      </p>
+    </section>
+  );
+}
+
+async function uploadOwnerActionAttachment(actionId: string, file: File) {
+  if (file.size > 10 * 1024 * 1024)
+    throw new Error(`${file.name} must be 10 MB or smaller.`);
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+    throw new Error(`${file.name} must be a JPEG, PNG, or WebP image.`);
+  const created = await requestJson(
+    `/api/owner-actions/${actionId}/attachments`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type,
+        byteSize: file.size,
+      }),
+    },
+  );
+  try {
+    const { error } = await createSupabaseClient()
+      .storage.from(ATTACHMENT_BUCKET)
+      .uploadToSignedUrl(created.path, created.token, file, {
+        contentType: file.type,
+      });
+    if (error) throw error;
+    const finalized = await requestJson(
+      `/api/owner-actions/${actionId}/attachments`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ attachmentId: created.attachmentId }),
+      },
+    );
+    return finalized.attachment;
+  } catch (error) {
+    await requestJson(
+      `/api/owner-actions/${actionId}/attachments/${created.attachmentId}`,
       { method: "DELETE" },
     ).catch(() => {});
     throw error;

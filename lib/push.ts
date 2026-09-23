@@ -64,6 +64,7 @@ function preview(value: string | null | undefined, limit: number) {
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^\s{0,3}(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+\.\s+)/gm, "")
     .replace(/[*_~`]/g, "")
+    .replace(/\bfrom\s+relay\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
   const characters = Array.from(text);

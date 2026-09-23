@@ -107,3 +107,46 @@ it("keeps failures actionable and test notifications unchanged", () => {
     body: "Relay can now notify you on this device.",
   });
 });
+
+it.each(["completed", "failed"])(
+  "removes from Relay from %s notification titles",
+  (outcome) => {
+    const payload = JSON.parse(
+      pushPayload(outcome, "task", "delivery", {
+        title: "Update FROM Relay for today",
+        result: "News **from Relay** for today",
+      }),
+    );
+    expect(payload.title).toBe("Update for today");
+    if (outcome === "completed") expect(payload.body).toBe("News for today");
+    expect(payload.url).toBe("/tasks/task");
+    expect(payload.tag).toBe("relay-delivery");
+  },
+);
+
+it("removes the phrase before truncation and uses fallbacks for empty previews", () => {
+  const payload = JSON.parse(
+    pushPayload("completed", "task", "delivery", {
+      title: "from relay " + "x".repeat(100),
+      result: "FROM\nRELAY",
+    }),
+  );
+  expect(payload.title).toBe("x".repeat(100));
+  expect(payload.body).toBe("Result ready. Open Relay to review your task.");
+  expect(
+    JSON.parse(
+      pushPayload("failed", "task", "delivery", { title: "from Relay" }),
+    ).title,
+  ).toBe("Run needs attention");
+});
+
+it("preserves unrelated words in notification previews", () => {
+  const payload = JSON.parse(
+    pushPayload("completed", "task", "delivery", {
+      title: "News from RelayTools",
+      result: "Updates from relayable jobs",
+    }),
+  );
+  expect(payload.title).toBe("News from RelayTools");
+  expect(payload.body).toBe("Updates from relayable jobs");
+});

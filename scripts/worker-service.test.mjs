@@ -111,6 +111,26 @@ describe("worker service installation", () => {
     );
     noInstall();
   });
+  it("rejects an unavailable additional writable directory before installing", async () => {
+    mocks.readFile.mockResolvedValue(
+      env +
+        "RELAY_WORKER_BACKEND=codex\nRELAY_CODEX_PATH=/opt/codex\nRELAY_CODEX_WORKSPACE=/workspace\nRELAY_CODEX_ADDITIONAL_WRITABLE_DIRS=/tool-state\nRELAY_COMMAND_PATH=/bin",
+    );
+    mocks.stat.mockImplementation(async (path) => {
+      if (path === "/tool-state") throw new Error("missing");
+      return {
+        isFile: () => path === "/opt/codex",
+        isDirectory: () => path === "/workspace",
+      };
+    });
+    await expect(install()).rejects.toThrow("exit");
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "Additional writable directory is unavailable: /tool-state",
+      ),
+    );
+    noInstall();
+  });
   it.each(["missing", "incomplete"])(
     "runs guided setup for %s configuration and resumes installation",
     async (kind) => {

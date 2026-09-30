@@ -1,6 +1,6 @@
 import { chmod, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   codexArguments,
@@ -43,6 +43,34 @@ describe("native Codex runner", () => {
     const args = codexArguments(undefined, [{ path: "/tmp/context.png" }]);
     expect(args).toContain("--image");
     expect(args).toContain("/tmp/context.png");
+  });
+
+  it("passes each resolved additional writable directory with --add-dir", async () => {
+    const workspace = await makeDirectory("relay-workspace-test-");
+    const first = await makeDirectory("relay-tool-state-test-");
+    const second = await makeDirectory("relay-tool-state-test-");
+    const fixture = await makeExecutable(`#!/usr/bin/env node
+process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify(process.argv.slice(2)), documents: [] }));
+`);
+
+    const result = await runWithCodex("task", {
+      command: fixture,
+      env: process.env,
+      completionContract: "Return a report.",
+      timeoutMs: 5000,
+      workspace,
+      additionalDirectories: [first, second, first, workspace].join(delimiter),
+    });
+
+    const args = JSON.parse(result.resultMarkdown);
+    expect(args).toEqual(
+      codexArguments(
+        undefined,
+        [],
+        [await realpath(first), await realpath(second)],
+      ),
+    );
+    expect(args.filter((arg) => arg === "--add-dir")).toHaveLength(2);
   });
 
   it("preserves the local tool environment but removes Relay and API secrets", () => {
@@ -130,6 +158,36 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
     ).rejects.toThrow("RELAY_CODEX_WORKSPACE is required");
   });
 
+  it("rejects a missing additional writable directory", async () => {
+    const workspace = await makeDirectory("relay-workspace-test-");
+    await expect(
+      runWithCodex("task", {
+        command: "/opt/codex",
+        completionContract: "Return a report.",
+        timeoutMs: 5000,
+        workspace,
+        additionalDirectories: join(workspace, "missing"),
+      }),
+    ).rejects.toThrow(
+      "RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS must be an existing directory",
+    );
+  });
+
+  it("rejects a relative additional writable directory", async () => {
+    const workspace = await makeDirectory("relay-workspace-test-");
+    await expect(
+      runWithCodex("task", {
+        command: "/opt/codex",
+        completionContract: "Return a report.",
+        timeoutMs: 5000,
+        workspace,
+        additionalDirectories: "relative/tool-state",
+      }),
+    ).rejects.toThrow(
+      "RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS must contain only absolute paths",
+    );
+  });
+
   it("returns a safe usage-limit error without CLI diagnostics", async () => {
     const workspace = await makeDirectory("relay-workspace-test-");
     const fixture = await makeExecutable(`#!/usr/bin/env node
@@ -157,6 +215,7 @@ describe("worker backend selection", () => {
         RELAY_WORKER_BACKEND: "codex",
         RELAY_CODEX_PATH: "/opt/homebrew/bin/codex",
         RELAY_CODEX_WORKSPACE: "/Users/relay/repos",
+        RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS: "/Users/relay/.config/tool",
         RELAY_CODEX_MODEL: "gpt-example",
       },
       {
@@ -179,6 +238,7 @@ describe("worker backend selection", () => {
         command: "/opt/homebrew/bin/codex",
         model: "gpt-example",
         workspace: "/Users/relay/repos",
+        additionalDirectories: "/Users/relay/.config/tool",
         completionContract: "Trusted test contract",
       },
     });

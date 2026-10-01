@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { TASK_SELECT } from "@/lib/task-select";
-import { parseDeliverable } from "@/lib/deliverables";
+import { queueTask } from "@/lib/queue-task";
+import { deliverableConflict, parseDeliverable } from "@/lib/deliverables";
 
 export async function GET() {
   try {
@@ -35,6 +36,9 @@ export async function POST(request: Request) {
     }
     if (!title) throw new ApiError("Task title is required.");
 
+    const conflict = deliverableConflict(deliverable, instructions);
+    if (conflict) throw new ApiError(conflict, 409);
+
     const { data, error } = await supabase
       .from("tasks")
       .insert({
@@ -54,6 +58,22 @@ export async function POST(request: Request) {
       type: "task.created",
       payload: { ...(parentTaskId ? { parentTaskId } : {}), deliverable },
     });
+    // Image uploads finish before the client queues the task.
+    if (body.hasAttachment !== true) {
+      try {
+        await queueTask(supabase, user, data.id);
+      } catch (error) {
+        await supabase.from("tasks").delete().eq("id", data.id);
+        throw error;
+      }
+      const { data: queuedTask, error: readError } = await supabase
+        .from("tasks")
+        .select(TASK_SELECT)
+        .eq("id", data.id)
+        .single();
+      if (readError) throw readError;
+      return NextResponse.json({ task: queuedTask }, { status: 201 });
+    }
     return NextResponse.json({ task: data }, { status: 201 });
   } catch (error) {
     return apiErrorResponse(error);

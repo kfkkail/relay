@@ -37,8 +37,8 @@ export function buildFollowUpInstructions(
 
 export function statusLabel(status: TaskStatus) {
   return {
-    inbox: "Inbox",
-    ready: "Ready",
+    inbox: "Pending queue",
+    ready: "Queued",
     working: "Working",
     waiting: "Review",
     done: "Done",

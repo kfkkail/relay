@@ -1,7 +1,8 @@
 import sharp from "sharp";
+import { ATTACHMENT_BUCKET } from "@/lib/attachment-constants";
 import { ApiError } from "@/lib/http";
 
-export const ATTACHMENT_BUCKET = "task-attachments";
+export { ATTACHMENT_BUCKET };
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_ATTACHMENT_DIMENSION = 12_000;
 export const MAX_ATTACHMENT_PIXELS = 40_000_000;

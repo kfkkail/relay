@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
+import { ATTACHMENT_BUCKET } from "@/lib/attachments";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-import { ownerActionDateUpdates, ownerActionSelect } from "@/lib/owner-actions";
+import {
+  onlyFinalizedOwnerActionAttachments,
+  ownerActionDateUpdates,
+  ownerActionSelect,
+} from "@/lib/owner-actions";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ownerActionStatuses } from "@/lib/types";
 
 export async function PATCH(
@@ -54,7 +60,9 @@ export async function PATCH(
       .select(ownerActionSelect)
       .single();
     if (error || !data) throw new ApiError("Action not found.", 404);
-    return NextResponse.json({ action: data });
+    return NextResponse.json({
+      action: onlyFinalizedOwnerActionAttachments(data),
+    });
   } catch (error) {
     return apiErrorResponse(error);
   }
@@ -67,12 +75,34 @@ export async function DELETE(
   try {
     const { actionId } = await params;
     const { supabase } = await requireUser();
+    const { data: action, error: actionError } = await supabase
+      .from("owner_actions")
+      .select("id,owner_action_attachments(storage_path)")
+      .eq("id", actionId)
+      .single();
+    if (actionError || !action) throw new ApiError("Action not found.", 404);
+    const storagePaths = action.owner_action_attachments.map(
+      (attachment) => attachment.storage_path,
+    );
+    // Delete the action first (its attachment rows cascade away); only then
+    // sweep storage. A failed storage removal leaves harmless orphaned objects
+    // rather than a half-deleted action whose photos 404.
     const { error, count } = await supabase
       .from("owner_actions")
       .delete({ count: "exact" })
       .eq("id", actionId);
     if (error) throw error;
     if (!count) throw new ApiError("Action not found.", 404);
+    if (storagePaths.length) {
+      const { error: storageError } = await createAdminClient()
+        .storage.from(ATTACHMENT_BUCKET)
+        .remove(storagePaths);
+      if (storageError)
+        console.error(
+          "Could not remove owner action photos from storage",
+          storageError,
+        );
+    }
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return apiErrorResponse(error);

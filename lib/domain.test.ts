@@ -38,6 +38,7 @@ const action = (overrides: Partial<OwnerAction>): OwnerAction => ({
   completed_at: null,
   created_at: "2026-01-01T00:00:00.000Z",
   updated_at: "2026-01-01T00:00:00.000Z",
+  owner_action_attachments: [],
   owner_action_tasks: [],
   ...overrides,
 });

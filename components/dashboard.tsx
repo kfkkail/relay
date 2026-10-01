@@ -58,7 +58,7 @@ import {
   type Deliverable,
 } from "@/lib/deliverables";
 
-const filters: TaskStatus[] = ["inbox", "ready", "working", "waiting", "done"];
+const filters: TaskStatus[] = ["ready", "working", "waiting", "done"];
 
 type Draft = {
   title: string;
@@ -197,9 +197,13 @@ export function Dashboard({
   const visiblePending = showPendingNavigation ? pendingNavigation : null;
 
   const selected = tasks.find((task) => task.id === initialTaskId) ?? null;
-  const filter = selected?.status ?? initialTaskFilter;
+  const selectedStatus = selected?.status ?? initialTaskFilter;
+  const filter = selectedStatus === "inbox" ? "ready" : selectedStatus;
   const visibleTasks = useMemo(
-    () => tasks.filter((task) => task.status === filter),
+    () =>
+      tasks.filter(
+        (task) => (task.status === "inbox" ? "ready" : task.status) === filter,
+      ),
     [filter, tasks],
   );
   const selectedOwnerAction =
@@ -316,7 +320,10 @@ export function Dashboard({
         ((
           await requestJson("/api/tasks", {
             method: "POST",
-            body: JSON.stringify(draft),
+            body: JSON.stringify({
+              ...draft,
+              hasAttachment: Boolean(draftImage),
+            }),
           })
         ).task as Task);
       setPendingTask(task);
@@ -324,14 +331,19 @@ export function Dashboard({
         task,
         ...current.filter((item) => item.id !== task.id),
       ]);
-      if (draftImage)
+      if (draftImage && !task.task_attachments.length)
         task.task_attachments = [await uploadAttachment(task.id, draftImage)];
+      if (task.status === "inbox") {
+        await requestJson(`/api/tasks/${task.id}/queue`, { method: "POST" });
+        task.status = "ready";
+      }
       if (draft.ownerActionId)
         await linkOwnerAction(draft.ownerActionId, task.id);
       setTasks((current) => [
         task,
         ...current.filter((item) => item.id !== task.id),
       ]);
+      await refreshTasks();
       setDraft(emptyDraft);
       setDraftImage(null);
       setPendingTask(null);
@@ -628,7 +640,13 @@ export function Dashboard({
                 >
                   {statusLabel(item)}
                   <span>
-                    {tasks.filter((task) => task.status === item).length}
+                    {
+                      tasks.filter(
+                        (task) =>
+                          (task.status === "inbox" ? "ready" : task.status) ===
+                          item,
+                      ).length
+                    }
                   </span>
                 </button>
               ))}
@@ -813,7 +831,7 @@ export function Dashboard({
               </div>
               <ImagePicker file={draftImage} onChange={setDraftImage} />
               <button className="primary-button" disabled={busy}>
-                {busy ? "Saving and uploading…" : "Save to Inbox"}
+                {busy ? "Creating and queuing…" : "Create task"}
                 <ArrowRight size={18} />
               </button>
             </form>

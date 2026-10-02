@@ -169,6 +169,15 @@ async function configureWorker() {
       fallback: "5000",
       validate: validateMilliseconds,
     }),
+    RELAY_MAX_IDLE_POLL_INTERVAL_MS: await askValue(
+      "Maximum idle polling interval in milliseconds",
+      {
+        name: "RELAY_MAX_IDLE_POLL_INTERVAL_MS",
+        existing,
+        fallback: "60000",
+        validate: validateMilliseconds,
+      },
+    ),
   });
 
   await saveEnv(target, values);

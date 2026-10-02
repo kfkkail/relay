@@ -114,9 +114,22 @@ default to the writable **Keusch** calendar unless the task names another one.
 Relay starts `codex exec` with Codex's built-in `workspace-write` sandbox,
 automatic approval review, and network access. Approval-gated connector writes
 are reviewed against the task instead of being rejected by a non-interactive
-`never` policy. Project files can only be changed inside
-`RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories remain
-available so developer tools work. This is deliberately not
+`never` policy. Project files can only be changed inside the primary workspace
+set by `RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories
+remain available so developer tools work. Tools that keep required state
+elsewhere can be granted narrowly scoped writable directories with the optional,
+path-delimited `RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS` setting (`:` on macOS and
+Linux, `;` on Windows). For example:
+
+```dotenv
+RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS=/home/pi/.config/hey-cli
+```
+
+Relay resolves and validates every configured directory before launching Codex,
+then passes each one as `codex exec --add-dir <DIR>`. These directories are only
+for installed tools that require their external state; project files,
+worktrees, deliverables, and result documents must remain in
+`RELAY_CODEX_WORKSPACE`. This is deliberately not
 `danger-full-access`. User Codex configuration, web search, and custom execution
 rules are ignored so they cannot silently widen the worker's permissions; Google
 Calendar is the sole explicitly enabled user plugin.

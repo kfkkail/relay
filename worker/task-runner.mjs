@@ -25,6 +25,8 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
           model: env.RELAY_CODEX_MODEL || undefined,
           timeoutMs: env.RELAY_CODEX_TIMEOUT_MS || undefined,
           workspace: env.RELAY_CODEX_WORKSPACE,
+          additionalDirectories:
+            env.RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS || undefined,
           env,
           attachments: payload.attachments,
           completionContract,

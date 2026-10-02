@@ -111,6 +111,12 @@ in Codex once; Relay can then read calendar context and carry out explicitly
 requested event changes without asking for a second confirmation. New events
 default to the writable **Keusch** calendar unless the task names another one.
 
+Timed calendar events and downloadable `.ics` suggestions default to two hours
+when the date and start time are confirmed but no end time or duration is given.
+The worker notes when this default is used so the owner can adjust it. Explicit
+end times and durations are preserved; missing dates or start times and
+conflicting times still require clarification. Date-only deadlines remain all-day.
+
 Relay starts `codex exec` with Codex's built-in `workspace-write` sandbox,
 automatic approval review, and network access. Approval-gated connector writes
 are reviewed against the task instead of being rejected by a non-interactive

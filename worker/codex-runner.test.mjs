@@ -107,6 +107,15 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
     );
     expect(debug.input).toContain("Create it with an empty attendee list");
     expect(debug.input).toContain(
+      "default the end to exactly two hours after the start instead of failing or asking for an end time",
+    );
+    expect(debug.input).toContain("Preserve any explicit end time or duration");
+    expect(debug.input).toContain("State when the two-hour default was used");
+    expect(debug.input).toContain(
+      "Flag missing dates, missing start times, or conflicting times",
+    );
+    expect(debug.input).not.toContain("confirmed dates and start/end times");
+    expect(debug.input).toContain(
       "never add the owner as an attendee merely to make a shared-calendar event appear on their primary calendar",
     );
     expect(debug.input).toContain("# Trusted Relay worker policy\n\n");

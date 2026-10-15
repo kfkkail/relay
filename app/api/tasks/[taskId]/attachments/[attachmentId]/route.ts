@@ -52,7 +52,7 @@ export async function DELETE(
     if (!data) throw new ApiError("Attachment not found.", 404);
     if ((data.tasks as unknown as { status: string }).status !== "inbox")
       throw new ApiError(
-        "Attachments can only be changed while a task is in Inbox.",
+        "Attachments can only be changed before a task is queued.",
         409,
       );
     const { error: storageError } = await createAdminClient()

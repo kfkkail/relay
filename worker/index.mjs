@@ -7,6 +7,7 @@ import deliverables from "../lib/deliverables.json" with { type: "json" };
 import {
   DEFAULT_MAX_CONCURRENT_RUNS,
   fillAvailableSlots,
+  nextIdlePollInterval,
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
 import { dirname, resolve } from "node:path";
@@ -15,6 +16,9 @@ import { fileURLToPath } from "node:url";
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
 const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
+const maxIdlePollInterval = Number(
+  process.env.RELAY_MAX_IDLE_POLL_INTERVAL_MS || 60000,
+);
 const taskRunner = createTaskRunner();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkForUpdate = createAutoUpdater({ root });
@@ -28,9 +32,11 @@ console.log(
 );
 
 const activeRuns = new Set();
+let idlePollInterval = pollInterval;
 while (!stopping) {
+  let claimedRuns = 0;
   try {
-    await fillAvailableSlots({
+    claimedRuns = await fillAvailableSlots({
       activeRuns,
       claim: () => relayRequest("/api/worker/runs/claim", { method: "POST" }),
       run: processClaimedRun,
@@ -38,6 +44,8 @@ while (!stopping) {
   } catch (error) {
     console.error(`Claim failed: ${safeError(error)}`);
   }
+
+  if (claimedRuns > 0) idlePollInterval = pollInterval;
 
   if (!activeRuns.size) {
     const update = await checkForUpdate();
@@ -50,7 +58,11 @@ while (!stopping) {
         `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
       );
     }
-    await sleep(pollInterval);
+    await sleep(idlePollInterval);
+    idlePollInterval = nextIdlePollInterval(idlePollInterval, {
+      baseInterval: pollInterval,
+      maxInterval: maxIdlePollInterval,
+    });
     continue;
   }
 

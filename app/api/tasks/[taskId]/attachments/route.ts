@@ -29,7 +29,7 @@ export async function POST(
     if (!task) throw new ApiError("Task not found.", 404);
     if (task.status !== "inbox")
       throw new ApiError(
-        "Attachments can only be changed while a task is in Inbox.",
+        "Attachments can only be changed before a task is queued.",
         409,
       );
     if (task.task_attachments.length)
@@ -83,7 +83,7 @@ export async function PATCH(
     if (!attachment) throw new ApiError("Attachment not found.", 404);
     if ((attachment.tasks as unknown as { status: string }).status !== "inbox")
       throw new ApiError(
-        "Attachments can only be changed while a task is in Inbox.",
+        "Attachments can only be changed before a task is queued.",
         409,
       );
     const admin = createAdminClient();

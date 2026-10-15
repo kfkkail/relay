@@ -3,7 +3,6 @@ import type { TaskStatus } from "@/lib/types";
 export type MyWorkFilter = "active" | "snoozed" | "done";
 
 const taskFilters = new Set<TaskStatus>([
-  "inbox",
   "ready",
   "working",
   "waiting",
@@ -15,7 +14,7 @@ export function parseTaskFilter(value: string | string[] | undefined) {
   const candidate = Array.isArray(value) ? value[0] : value;
   return candidate && taskFilters.has(candidate as TaskStatus)
     ? (candidate as TaskStatus)
-    : "inbox";
+    : "ready";
 }
 
 export function parseMyWorkFilter(value: string | string[] | undefined) {

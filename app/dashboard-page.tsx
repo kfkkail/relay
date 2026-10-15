@@ -10,7 +10,7 @@ import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
 
 export async function DashboardPage({
   area,
-  taskFilter = "inbox",
+  taskFilter = "ready",
   myWorkFilter = "active",
   taskId,
   actionId,

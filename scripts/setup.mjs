@@ -133,6 +133,13 @@ async function configureWorker() {
       existing,
       fallback: process.env.PATH,
     });
+    values.RELAY_HEY_CREDENTIAL_DIR = await askOptionalValue(
+      "HEY credential directory (optional; enables lock/refresh writes)",
+      {
+        name: "RELAY_HEY_CREDENTIAL_DIR",
+        existing,
+      },
+    );
     values.RELAY_CODEX_MODEL = await askOptionalValue(
       "Codex model (blank uses your CLI default)",
       {

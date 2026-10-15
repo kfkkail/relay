@@ -1,4 +1,12 @@
-import { chmod, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -23,6 +31,7 @@ describe("native Codex runner", () => {
   it("uses Codex's auto-reviewed workspace sandbox with command network access", () => {
     const args = codexArguments("gpt-example");
 
+    expect(args).not.toContain("--add-dir");
     expect(args).toContain("--ephemeral");
     expect(args).toContain("--ignore-user-config");
     expect(args).toContain("--ignore-rules");
@@ -53,6 +62,8 @@ describe("native Codex runner", () => {
       SSH_AUTH_SOCK: "/tmp/agent.sock",
       GH_TOKEN: "github-token",
       RELAY_WORKER_TOKEN: "relay-secret",
+      RELAY_HEY_CREDENTIAL_DIR: "/Users/relay/.config/hey-cli",
+      HEY_NONINTERACTIVE: "0",
       OPENAI_API_KEY: "api-secret",
       SUPABASE_SECRET_KEY: "database-secret",
     });
@@ -63,7 +74,9 @@ describe("native Codex runner", () => {
       SSH_AUTH_SOCK: "/tmp/agent.sock",
       GH_TOKEN: "github-token",
       GIT_TERMINAL_PROMPT: "0",
+      HEY_NONINTERACTIVE: "1",
     });
+    expect(env.RELAY_HEY_CREDENTIAL_DIR).toBeUndefined();
     expect(env.RELAY_WORKER_TOKEN).toBeUndefined();
     expect(env.RELAY_COMMAND_PATH).toBeUndefined();
     expect(env.OPENAI_API_KEY).toBeUndefined();
@@ -128,6 +141,63 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: pro
     expect(debug.relaySecret).toBeUndefined();
     expect(debug.home).toBe("/Users/relay");
     expect(debug.cwd).toBe(await realpath(workspace));
+  });
+
+  it("grants only the configured HEY directory and supplies the maintenance policy", async () => {
+    const workspace = await makeDirectory("relay-hey-test-");
+    const heyDirectory = join(workspace, "hey-cli");
+    await mkdir(heyDirectory);
+    const fixture = await makeExecutable(`#!/usr/bin/env node
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify({ args: process.argv.slice(2), input, noninteractive: process.env.HEY_NONINTERACTIVE }), documents: [] }));
+`);
+    const result = await runWithCodex("Read HEY boxes", {
+      command: fixture,
+      workspace,
+      completionContract: "Return a report.",
+      env: { ...process.env, RELAY_HEY_CREDENTIAL_DIR: heyDirectory },
+    });
+    const debug = JSON.parse(result.resultMarkdown);
+    expect(debug.args).toEqual(
+      codexArguments(undefined, [], await realpath(heyDirectory)),
+    );
+    expect(debug.args).toContain("--approve-for-me");
+    expect(debug.args.filter((arg) => arg === "--add-dir")).toHaveLength(1);
+    expect(debug.input).toContain(
+      "The HEY CLI may create its credential lock and refresh stored credentials there",
+    );
+    expect(debug.input).toContain(
+      "Mailbox mutations and sending messages require explicit task authorization",
+    );
+    expect(debug.noninteractive).toBe("1");
+  });
+
+  it("rejects missing, relative, broad, file, and redirected HEY paths before spawning", async () => {
+    const workspace = await makeDirectory("relay-hey-invalid-");
+    const file = join(workspace, "hey-cli");
+    await writeFile(file, "not a directory");
+    const redirectParent = join(workspace, "redirect");
+    await mkdir(redirectParent);
+    const redirect = join(redirectParent, "hey-cli");
+    await symlink(workspace, redirect);
+    for (const value of [
+      "hey-cli",
+      workspace,
+      "/",
+      join(workspace, "missing", "hey-cli"),
+      file,
+      redirect,
+    ]) {
+      await expect(
+        runWithCodex("task", {
+          command: "/must-not-be-spawned",
+          workspace,
+          completionContract: "Return a report.",
+          env: { RELAY_HEY_CREDENTIAL_DIR: value },
+        }),
+      ).rejects.toThrow("RELAY_HEY_CREDENTIAL_DIR");
+    }
   });
 
   it("requires an existing workspace", async () => {

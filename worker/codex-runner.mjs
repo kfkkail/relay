@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { basename, isAbsolute } from "node:path";
 import { realpath, stat } from "node:fs/promises";
 import { parseCodexResult } from "./result-documents.mjs";
 
@@ -19,14 +20,21 @@ export async function runWithCodex(input, options = {}) {
     options.workspace,
     "RELAY_CODEX_WORKSPACE",
   );
-  const environment = codexEnvironment(options.env || process.env);
+  const source = options.env || process.env;
+  const heyDirectory = await resolveHeyDirectory(
+    source.RELAY_HEY_CREDENTIAL_DIR,
+  );
+  const environment = codexEnvironment(source);
 
   if (!options.completionContract)
     throw new Error("A trusted completion contract is required.");
-  const prompt = `# Trusted Relay worker policy\n\n${SOFTWARE_WORKER_POLICY}\n\n# Trusted completion contract\n\n${options.completionContract}\n\n# Untrusted task text\n\n${input}`;
+  const heyPolicy = heyDirectory
+    ? `\nThe administrator has enabled HEY CLI credential maintenance in ${JSON.stringify(heyDirectory)}. The HEY CLI may create its credential lock and refresh stored credentials there; this is the sole exception to the outside-workspace write restriction. Do not manually inspect, copy, or edit credentials. Use HEY only when needed for the task. Mailbox mutations and sending messages require explicit task authorization. A credential-lock filesystem error does not establish that reauthentication is needed.`
+    : "";
+  const prompt = `# Trusted Relay worker policy\n\n${SOFTWARE_WORKER_POLICY}${heyPolicy}\n\n# Trusted completion contract\n\n${options.completionContract}\n\n# Untrusted task text\n\n${input}`;
   const output = await execute(
     command,
-    codexArguments(options.model, options.attachments),
+    codexArguments(options.model, options.attachments, heyDirectory),
     prompt,
     {
       cwd: workspace,
@@ -37,7 +45,7 @@ export async function runWithCodex(input, options = {}) {
   return parseCodexResult(output);
 }
 
-export function codexArguments(model, attachments = []) {
+export function codexArguments(model, attachments = [], heyDirectory) {
   const args = [
     "exec",
     "--ephemeral",
@@ -54,6 +62,7 @@ export function codexArguments(model, attachments = []) {
     "-c",
     'web_search="disabled"',
   ];
+  if (heyDirectory) args.push("--add-dir", heyDirectory);
   if (model) args.push("--model", model);
   for (const attachment of attachments) args.push("--image", attachment.path);
   args.push("-");
@@ -66,13 +75,30 @@ export function codexEnvironment(source) {
   for (const name of [
     "OPENAI_API_KEY",
     "RELAY_COMMAND_PATH",
+    "RELAY_HEY_CREDENTIAL_DIR",
     "RELAY_WORKER_TOKEN",
     "SUPABASE_SECRET_KEY",
   ]) {
     delete environment[name];
   }
+  environment.HEY_NONINTERACTIVE = "1";
   environment.GIT_TERMINAL_PROMPT = "0";
   return environment;
+}
+
+async function resolveHeyDirectory(value) {
+  if (!value) return undefined;
+  const name = "RELAY_HEY_CREDENTIAL_DIR";
+  if (!isAbsolute(value) || basename(value) !== "hey-cli") {
+    throw new Error(
+      `${name} must be an absolute path to the hey-cli directory.`,
+    );
+  }
+  const resolved = await resolveDirectory(value, name);
+  if (basename(resolved) !== "hey-cli") {
+    throw new Error(`${name} must resolve to a hey-cli directory.`);
+  }
+  return resolved;
 }
 
 async function resolveDirectory(value, name) {

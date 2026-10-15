@@ -127,6 +127,36 @@ available so developer tools work. This is deliberately not
 rules are ignored so they cannot silently widen the worker's permissions; Google
 Calendar is the sole explicitly enabled user plugin.
 
+### Optional HEY CLI access
+
+For tasks that use the installed, authenticated HEY CLI, an administrator can set
+`RELAY_HEY_CREDENTIAL_DIR` in the worker's `.env.worker` to the existing absolute
+`hey-cli` directory (for example `/home/pi/.config/hey-cli` on Linux), then restart
+the worker through the normal service installation/update procedure. This must
+be the directory HEY already uses; the setting does not move credentials or
+change HEY's configuration. Leave it empty to retain workspace-only writes.
+
+HEY takes a credential lock even for mailbox reads and may refresh credentials.
+Without this setting, `open .../hey-cli/credentials.lock: read-only file system`
+can block reads. This error does not imply that the login has expired.
+The runner validates that the directory exists and resolves to a directory named
+`hey-cli`, then passes only that directory via Codex's
+[`--add-dir`](https://developers.openai.com/codex/cli/reference/) option. Missing or
+invalid paths fail before Codex starts. Do not configure a home directory or the
+whole `.config` directory. No credentials are read or copied by Relay.
+
+This grants filesystem write access to the entire HEY directory for every Codex
+run on that worker, including credential replacement during refresh. The trusted
+policy limits its use to HEY's credential maintenance; project writes remain
+inside the workspace, and mailbox mutations still require task authorization.
+The sandbox and automatic approval review remain enabled. HEY runs with
+`HEY_NONINTERACTIVE=1` so missing authentication cannot start a login prompt.
+
+After enabling it, request a read-only `hey box list --count` through Relay to
+verify access without returning mailbox contents. Run this through the worker,
+not just an ordinary terminal: a terminal check does not exercise the sandbox.
+Do not run an unattended login or disable the sandbox to recover from an error.
+
 The worker token and API/database secrets are removed before Codex starts. Other
 local environment and credential-helper access are preserved intentionally for
 this personal, single-user worker. Tasks can inspect Actions, push, and create

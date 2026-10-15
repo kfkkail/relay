@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-import { optionalDate, ownerActionSelect } from "@/lib/owner-actions";
+import {
+  onlyFinalizedOwnerActionAttachments,
+  optionalDate,
+  ownerActionSelect,
+} from "@/lib/owner-actions";
 
 export async function GET(request: Request) {
   try {
@@ -25,7 +29,7 @@ export async function GET(request: Request) {
       .range(from, from + pageSize - 1);
     if (error) throw error;
     return NextResponse.json({
-      actions: data ?? [],
+      actions: (data ?? []).map(onlyFinalizedOwnerActionAttachments),
       page,
       pageSize,
       total: count ?? 0,
@@ -57,7 +61,10 @@ export async function POST(request: Request) {
       .select(ownerActionSelect)
       .single();
     if (error) throw error;
-    return NextResponse.json({ action: data }, { status: 201 });
+    return NextResponse.json(
+      { action: onlyFinalizedOwnerActionAttachments(data) },
+      { status: 201 },
+    );
   } catch (error) {
     return apiErrorResponse(error);
   }

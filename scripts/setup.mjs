@@ -128,6 +128,13 @@ async function configureWorker() {
         validate: validateDirectory,
       },
     );
+    values.RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS = await askOptionalValue(
+      "Additional writable directories (path-delimited; blank for none)",
+      {
+        name: "RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS",
+        existing,
+      },
+    );
     values.RELAY_COMMAND_PATH = await askValue("Command search path", {
       name: "RELAY_COMMAND_PATH",
       existing,

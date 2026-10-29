@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  autoDevPhotos,
   collectAutoDev,
   normalizeAutoDev,
+  normalizeAutoDevHistory,
   rivianAttributes,
 } from "./auto-dev.mjs";
 import { autoDevKey } from "./credentials.mjs";
@@ -39,6 +41,22 @@ const collect = (fetchImpl, options = {}) =>
   });
 
 describe("Rivian evidence", () => {
+  it("retains reported accidents, owners and usage without inferring a clean title", () => {
+    expect(
+      normalizeAutoDevHistory({
+        accidentCount: 1,
+        ownerCount: 2,
+        usageType: "Commercial Use",
+      }),
+    ).toEqual({
+      title_status: "unknown",
+      available: true,
+      flags: ["Accident reported", "Multiple owners", "Commercial use"],
+    });
+    expect(normalizeAutoDevHistory({ salvage: true }).title_status).toBe(
+      "salvage",
+    );
+  });
   it.each([
     ["Adventure", null],
     ["Launch Edition", null],
@@ -67,6 +85,21 @@ describe("Rivian evidence", () => {
 });
 
 describe("bounded Auto.dev collection", () => {
+  it("does not truncate an invalid VIN into a valid identity", async () => {
+    const report = await collect(async () =>
+      response([sample("7FCTGAAA0NN000001EXTRA")], 1),
+    );
+    expect(report.counts.invalid).toBe(1);
+  });
+  it("stops instead of retrying before a long Retry-After expires", async () => {
+    const fake = vi.fn(
+      async () =>
+        new Response("", { status: 429, headers: { "retry-after": "3600" } }),
+    );
+    const report = await collect(fake);
+    expect(fake).toHaveBeenCalledTimes(1);
+    expect(report.warnings).toContain("rate_limited");
+  });
   it("follows clamped pages and preserves the search filters", async () => {
     const fake = vi
       .fn()
@@ -132,6 +165,34 @@ describe("bounded Auto.dev collection", () => {
     const report = await collect(async () => response([wrong], 1));
     expect(report.counts.invalid).toBe(1);
     expect(report.status).toBe("partial");
+  });
+});
+
+describe("on-demand photo gallery", () => {
+  it("keeps unclassified gallery frames unknown", async () => {
+    const photos = await autoDevPhotos({
+      key: "private",
+      vin: "7FCTGAAA0NN000001",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              retail: [
+                "https://example.com/a.jpg",
+                "https://example.com/b.jpg",
+              ],
+            },
+          }),
+        ),
+    });
+    expect(photos.map((p) => p.category)).toEqual(["exterior", "unknown"]);
+  });
+  it("rejects an invalid VIN before making a request", async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      autoDevPhotos({ key: "private", vin: "bad", fetchImpl }),
+    ).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 

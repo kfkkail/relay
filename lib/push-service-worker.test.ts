@@ -43,6 +43,7 @@ it("shows a visible fallback even for malformed pushes", async () => {
 
 it.each([
   ["/tasks/1234-abcd", "https://relay.example/tasks/1234-abcd"],
+  ["/vehicles", "https://relay.example/vehicles"],
   ["https://evil.example/tasks", "https://relay.example/tasks"],
   ["/auth/sign-out", "https://relay.example/tasks"],
 ])("opens only safe task destinations: %s", async (url, expected) => {

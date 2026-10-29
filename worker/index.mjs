@@ -1,4 +1,5 @@
 import { createTaskRunner } from "./task-runner.mjs";
+import { runVehicleJob, vehicleCapabilities } from "./vehicles/handler.mjs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -38,7 +39,11 @@ while (!stopping) {
   try {
     claimedRuns = await fillAvailableSlots({
       activeRuns,
-      claim: () => relayRequest("/api/worker/runs/claim", { method: "POST" }),
+      claim: () =>
+        relayRequest("/api/worker/runs/claim", {
+          method: "POST",
+          body: JSON.stringify({ capabilities: vehicleCapabilities() }),
+        }),
       run: processClaimedRun,
     });
   } catch (error) {
@@ -77,6 +82,11 @@ async function processClaimedRun(claimed) {
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
   try {
+    if (run.job_kind === "vehicle_search") {
+      await runVehicleJob(claimed, relayRequest);
+      console.log(`Completed vehicle run ${run.id}`);
+      return;
+    }
     const localAttachments = [];
     if (attachments.length) {
       attachmentDirectory = await mkdtemp(join(tmpdir(), `relay-${run.id}-`));
@@ -167,7 +177,7 @@ async function processClaimedRun(claimed) {
     try {
       await relayRequest(`/api/worker/runs/${run.id}/fail`, {
         method: "POST",
-        body: JSON.stringify({ error: message }),
+        body: JSON.stringify({ error: message, lease: run.lease }),
       });
     } catch (reportError) {
       console.error(

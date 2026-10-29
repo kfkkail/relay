@@ -61,7 +61,7 @@ export function normalizeAutoDev(row, { make, model }) {
   if (!row || typeof row !== "object") return null;
   const v = row.vehicle ?? {};
   const l = row.retailListing ?? {};
-  const vin = text(v.vin || row.vin, 17).toUpperCase();
+  const vin = text(v.vin || row.vin, 80).toUpperCase();
   if (
     !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin) ||
     text(v.make).toLowerCase() !== make.toLowerCase() ||
@@ -73,6 +73,7 @@ export function normalizeAutoDev(row, { make, model }) {
       ? rivianAttributes(v)
       : { battery_pack: null, motor: null, battery_evidence: null };
   const primary = publicListingUrl(l.primaryImage);
+  const history = normalizeAutoDevHistory(row.history);
   const coordinates =
     Array.isArray(row.location) &&
     row.location.length === 2 &&
@@ -114,16 +115,43 @@ export function normalizeAutoDev(row, { make, model }) {
     shipping: null,
     mandatory_fees: null,
     delivery: "unknown",
-    title_status: "unknown",
+    title_status: history.title_status,
     // History presence is not evidence of a clean title or zero accidents.
-    history_available: Boolean(row.history),
-    history_flags: [],
+    history_available: history.available,
+    history_flags: history.flags,
     photos: primary ? [{ url: primary, category: "exterior" }] : [],
     photo_count: Math.min(amount(l.photoCount) ?? 0, 100),
     source_created_at: text(row.createdAt, 80) || null,
     source_updated_at: text(row.updatedAt, 80) || null,
     availability: row.removedAt ? "unavailable" : "available",
   };
+}
+
+export function normalizeAutoDevHistory(value) {
+  const h =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const flags = [];
+  if (h.accidents === true || Number(h.accidentCount) > 0)
+    flags.push("Accident reported");
+  if (Number(h.ownerCount) > 1) flags.push("Multiple owners");
+  const usage = text(h.usageType, 100).toLowerCase();
+  if (/rental/.test(usage)) flags.push("Rental use");
+  if (/fleet/.test(usage)) flags.push("Fleet use");
+  if (/commercial/.test(usage)) flags.push("Commercial use");
+  if (/multiple use/.test(usage)) flags.push("Multiple usage types reported");
+  let title = text(h.titleStatus, 80).toLowerCase() || "unknown";
+  for (const [field, label] of [
+    ["salvage", "salvage"],
+    ["rebuilt", "rebuilt"],
+    ["flood", "flood"],
+    ["lemonBuyback", "lemon-law buyback"],
+    ["manufacturerBuyback", "manufacturer buyback"],
+  ])
+    if (h[field] === true) {
+      title = label;
+      break;
+    }
+  return { title_status: title, flags, available: Object.keys(h).length > 0 };
 }
 
 async function boundedJson(response, maxBytes) {
@@ -156,6 +184,7 @@ export async function collectAutoDev({
   pageSize = 20,
   paceMs = 500,
   retries = 2,
+  maxDurationMs = 5 * 60 * 1000,
 }) {
   if (!key?.trim()) throw new Error("Auto.dev credential is required.");
   if (!profile?.make?.trim() || !profile?.model?.trim())
@@ -170,6 +199,7 @@ export async function collectAutoDev({
   )
     throw new Error("Invalid collection limits.");
   const started = now().toISOString();
+  const deadline = Date.now() + maxDurationMs;
   const base = new URL("/listings", API);
   base.search = new URLSearchParams({
     "vehicle.make": profile.make,
@@ -191,6 +221,10 @@ export async function collectAutoDev({
   const warnings = new Set();
   let blocked = false;
   while (next && pages < maxPages && discovered < maxListings) {
+    if (Date.now() >= deadline) {
+      warnings.add("collection_timeout");
+      break;
+    }
     let url;
     try {
       url = new URL(next, API);
@@ -219,6 +253,10 @@ export async function collectAutoDev({
     visited.add(url.href);
     let body = null;
     for (let attempt = 0; attempt <= retries; attempt++) {
+      if (Date.now() >= deadline) {
+        warnings.add("collection_timeout");
+        break;
+      }
       if (requests) await sleep(paceMs);
       requests++;
       try {
@@ -227,21 +265,33 @@ export async function collectAutoDev({
             Authorization: `Bearer ${key}`,
             Accept: "application/json",
           },
-          signal: AbortSignal.timeout(20000),
+          signal: AbortSignal.timeout(
+            Math.max(1, Math.min(20000, deadline - Date.now())),
+          ),
           redirect: "error",
         });
         if (
           [429, 502, 503, 504].includes(response.status) &&
           attempt < retries
         ) {
-          const retryAfter = Number(response.headers.get("retry-after"));
+          const retryHeader = response.headers.get("retry-after");
+          const retryAfter =
+            retryHeader === null
+              ? 0
+              : Number.isFinite(Number(retryHeader))
+                ? Number(retryHeader) * 1000
+                : Date.parse(retryHeader) - Date.now();
           await response.body?.cancel();
+          if (retryAfter > 30000 || Date.now() + retryAfter >= deadline) {
+            warnings.add("rate_limited");
+            break;
+          }
           await sleep(
             Math.min(
               30000,
               Math.max(
                 1000 * 2 ** attempt,
-                Number.isFinite(retryAfter) ? retryAfter * 1000 : 0,
+                Number.isFinite(retryAfter) ? retryAfter : 0,
               ),
             ),
           );
@@ -338,4 +388,33 @@ export async function collectAutoDev({
     warnings: [...warnings],
     listings: [...rows.values()],
   };
+}
+
+export async function autoDevPhotos({ key, vin, fetchImpl = fetch }) {
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin))
+    throw new Error("Valid photo VIN required.");
+  try {
+    const response = await fetchImpl(`${API}/photos/${vin}`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(20000),
+      redirect: "error",
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error("Photo request failed.");
+    }
+    const body = await boundedJson(response, 256 * 1024);
+    if (!Array.isArray(body.data?.retail))
+      throw new Error("Photo response malformed.");
+    return body.data.retail.slice(0, 50).flatMap((value, index) => {
+      const url = publicListingUrl(value);
+      // The API returns ordered URLs, not reliable interior/exterior labels.
+      // Keep later frames unknown until the owner chooses an interior image.
+      return url
+        ? [{ url, category: index === 0 ? "exterior" : "unknown" }]
+        : [];
+    });
+  } catch {
+    throw new Error("Auto.dev photo gallery is unavailable.");
+  }
 }

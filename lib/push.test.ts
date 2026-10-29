@@ -54,6 +54,16 @@ it("classifies provider errors without exposing their contents", () => {
   expect(pushStatus(new Error("network failure"))).toBe(0);
 });
 
+it("opens Vehicles for a vehicle digest", () => {
+  expect(
+    JSON.parse(
+      pushPayload("completed", "task", "delivery", {
+        jobKind: "vehicle_search",
+      }),
+    ).url,
+  ).toBe("/vehicles");
+});
+
 it("shows the task title and a readable result preview", () => {
   expect(
     JSON.parse(

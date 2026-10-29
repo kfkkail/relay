@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { deliverables, type Deliverable } from "@/lib/deliverables";
-import { SettingsMenu } from "@/components/settings-menu";
+import { RelayHeader } from "@/components/relay-header";
 
 const timezones: string[] =
   typeof (Intl as { supportedValuesOf?: (key: string) => string[] })
@@ -112,22 +112,7 @@ export function Schedules({ userEmail }: { userEmail: string }) {
   }
   return (
     <main className="app-shell schedules-page">
-      <header className="topbar">
-        <Link href="/my-work" className="brand-lockup">
-          <span className="brand-mark">R</span>
-          <span>Relay</span>
-        </Link>
-        <nav className="area-nav" aria-label="Main navigation">
-          <Link href="/my-work">My Work</Link>
-          <Link href="/tasks">Tasks</Link>
-          <Link href="/schedules" aria-current="page">
-            Schedules
-          </Link>
-        </nav>
-        <div className="topbar-actions">
-          <SettingsMenu userEmail={userEmail} />
-        </div>
-      </header>
+      <RelayHeader userEmail={userEmail} active="schedules" />
       <section className="schedule-content">
         <div className="schedule-heading">
           <h1>Schedules</h1>

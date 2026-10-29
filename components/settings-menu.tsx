@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
-import { Bell, ChevronDown, Laptop, Settings, X } from "lucide-react";
+import { Bell, CarFront, ChevronDown, Laptop, Settings, X } from "lucide-react";
 import { PushSettings } from "@/components/push-settings";
 import { SignOutButton } from "@/components/sign-out-button";
 
@@ -99,6 +99,14 @@ export function SettingsMenu({
             Worker setup
           </Link>
         )}
+        <Link
+          className="settings-row"
+          href="/vehicles"
+          onClick={() => setOpen(false)}
+        >
+          <CarFront size={20} />
+          Vehicles
+        </Link>
         <details className="settings-notifications">
           <summary className="settings-row">
             <Bell size={20} />

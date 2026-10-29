@@ -98,6 +98,7 @@ export function codexEnvironment(source) {
   if (source.RELAY_COMMAND_PATH) environment.PATH = source.RELAY_COMMAND_PATH;
   for (const name of [
     "OPENAI_API_KEY",
+    "AUTODEV_API_KEY",
     "RELAY_COMMAND_PATH",
     "RELAY_WORKER_TOKEN",
     "SUPABASE_SECRET_KEY",

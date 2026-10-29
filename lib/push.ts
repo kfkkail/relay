@@ -79,7 +79,11 @@ export function pushPayload(
   outcome: string,
   taskId?: string,
   id = "test",
-  content?: { title?: string | null; result?: string | null },
+  content?: {
+    title?: string | null;
+    result?: string | null;
+    jobKind?: string | null;
+  },
 ) {
   const fallbackTitle =
     outcome === "completed"
@@ -100,7 +104,12 @@ export function pushPayload(
           : preview(content?.result, 180) ||
             "Result ready. Open Relay to review your task.",
     tag: `relay-${id}`,
-    url: taskId ? `/tasks/${taskId}` : "/tasks",
+    url:
+      content?.jobKind === "vehicle_search"
+        ? "/vehicles"
+        : taskId
+          ? `/tasks/${taskId}`
+          : "/tasks",
   });
 }
 

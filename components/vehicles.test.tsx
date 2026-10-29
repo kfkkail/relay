@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RelayHeader } from "./relay-header";
-import { VehicleCard, VehicleEditor } from "./vehicles";
+import {
+  VehicleCard,
+  VehicleEditor,
+  shouldQueueVehiclePhotos,
+} from "./vehicles";
 import { createVehiclePreviewRequest } from "@/lib/vehicles/preview";
 import { defaultVehicleProfile } from "@/lib/vehicles/domain";
 import { reviewVehicle } from "@/lib/vehicles/review";
@@ -92,5 +96,33 @@ describe("Relay Vehicles presentation", () => {
     );
     expect(html).toMatch(/<option value="quad"[^>]*>Quad<\/option>/);
     expect(html).toContain('<option value="tri">Tri</option>');
+  });
+  it("queues fuller galleries only for live Interested and Shortlist vehicles", () => {
+    const vehicle = {
+      vin: "7FCTGAAA0NN000001",
+      row: {
+        photo_count: 12,
+        photos: [
+          {
+            url: "https://example.test/main.jpg",
+            category: "exterior" as const,
+          },
+        ],
+      },
+    };
+    expect(shouldQueueVehiclePhotos(vehicle, "watch", false)).toBe(true);
+    expect(shouldQueueVehiclePhotos(vehicle, "shortlist", false)).toBe(true);
+    expect(shouldQueueVehiclePhotos(vehicle, "unreviewed", false)).toBe(false);
+    expect(shouldQueueVehiclePhotos(vehicle, "watch", true)).toBe(false);
+    expect(
+      shouldQueueVehiclePhotos({ ...vehicle, vin: null }, "shortlist", false),
+    ).toBe(false);
+    expect(
+      shouldQueueVehiclePhotos(
+        { ...vehicle, row: { ...vehicle.row, photo_count: 1 } },
+        "watch",
+        false,
+      ),
+    ).toBe(false);
   });
 });

@@ -38,7 +38,7 @@ export function parseVehicleProfile(value: unknown): VehicleProfile {
   const v = object(value);
   const make = str(v.make, 80),
     model = str(v.model, 80),
-    origin = str(v.origin_zip, 5);
+    origin = str(v.origin_zip, 10);
   if (
     !make ||
     !model ||

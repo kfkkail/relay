@@ -10,7 +10,7 @@ Branch: `codex/auto-dev-vehicles`, based on `284e3a7` (`origin/main`).
       results, bounded pagination, retry, explicit coverage status, and fixtures.
 - [x] Domain and ingestion: forward-only schema/RLS, durable decisions,
       deduplication, rule evaluation, scoring, and idempotent ingestion.
-- [ ] Review interface: dropdown link, queues, cards/photos, swipe, undo,
+- [x] Review interface: dropdown link, queues, cards/photos, swipe, undo,
       verification, settings, and coverage health.
 - [ ] Relay integration and verification: Run Now, task lifecycle, notifications,
       disabled schedules, regression checks, and final handoff.
@@ -19,9 +19,11 @@ Branch: `codex/auto-dev-vehicles`, based on `284e3a7` (`origin/main`).
 
 Build started 2026-10-28. Auto.dev collector and Keychain credential helper are
 implemented. `npm run vehicles:probe` runs a bounded, aggregate-only census with
-no saved raw API output. The full suite passed 214 tests before the latest
-photo/polling and notification refinements; TypeScript, lint and a production
-build also passed. Embedded PostgreSQL tests execute all repository migrations
+no saved raw API output. The full suite passes 221 tests, including final history
+normalization and title-conflict tests; TypeScript, lint and formatting pass. A clean
+production build passes after removing the temporary browser preview route and
+its stale generated Next.js development types. Embedded PostgreSQL tests execute
+all repository migrations
 with stubs for Supabase auth/storage and cron/network extensions, and test
 capability-aware claiming, immutable profile snapshots, idempotent finalization,
 VIN suppression, absence handling, owner isolation and lease fencing.
@@ -40,13 +42,27 @@ Never print or store the credential in project files.
 
 ## Next step
 
-Finish UI browser verification with fixture data and capture desktop/mobile
-screenshots. A temporary route `app/vehicles/preview/page.tsx` exists only for
-that test: REMOVE IT before committing UI. The temporary browser harness is
-`/private/tmp/relay-vehicles-db.oGEtnx/vehicles-browser.mjs`; it uses the existing
-Playwright dependency from `relay-worker-playwright` and system Chrome. Local
-test server is on 127.0.0.1:3217 (webpack with WATCHPACK_POLLING=1000 because
-native file watchers failed). It is not a production server. After verification,
-add migration pgTAP coverage/operational docs, rerun checks, and commit the UI and
-integration checkpoints. Docker daemon is not running: full local Supabase
-reset/lint/pgTAP remains unverified, though embedded PostgreSQL tests pass.
+Desktop/mobile browser checks pass with fixtures: photos, Pass/Undo, Passed
+after refresh, Watch, required-data verification, coverage warnings, profile
+re-evaluation preserving Watch, keyboard focus trapping/Escape, and mobile
+overflow. No page errors. Screenshots are in `docs/vehicles-qa/` (fixture images,
+not real inventory). The temporary preview route has been removed and the local
+test server stopped. Operations are documented in `docs/vehicles.md`; actual
+Supabase pgTAP assertions are in `supabase/tests/vehicles.test.sql`.
+
+The UI and integration checkpoint commits are being saved. Perform a final code review
+against the approved plan, concentrating on cross-layer behavior rather than
+re-running completed tests without changes. Run Now, task completion, meaningful digest enqueueing,
+photo jobs and disabled schedule controls are implemented and locally tested;
+the last checkbox stays open until the integration verification is accounted for.
+Docker daemon is not running: full Supabase
+reset/lint/pgTAP remains unverified, though embedded PostgreSQL tests pass. The
+initial manual Rivian/Carvana/CarMax VIN comparison and subscription-specific
+storage/photo permissions remain rollout verification, as does the Auto.dev
+count mismatch. Direct URL extraction is intentionally deferred; manual import
+uses an editable form and performs no seller-page network fetch.
+
+The last clean production build contains `/vehicles`, owner APIs, and the
+vehicle-worker result route. No unauthenticated preview route remains. The
+temporary browser server is stopped. Browser fixture screenshots are evidence
+of the UI only, not of a production database rollout or inventory completeness.

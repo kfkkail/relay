@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { defaultVehicleProfile } from "@/lib/vehicles/domain";
 import {
   parseVehicleListing,
   parseVehicleProfile,
+  safeVehicleUrl,
 } from "@/lib/vehicles/validation";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +27,7 @@ export async function GET(request: Request) {
     const [profiles, vehicles, runs, pending] = await Promise.all([
       supabase
         .from("vehicle_search_profiles")
-        .select("*,task_schedules(enabled,next_due_at,timezone)")
+        .select("*,task_schedules(enabled,next_due_at,timezone,start_minute)")
         .order("created_at")
         .limit(20),
       supabase
@@ -195,11 +197,14 @@ export async function POST(request: Request) {
         break;
       }
       case "manual": {
+        const url = safeVehicleUrl(body.listing?.url);
+        if (!url) throw new ApiError("A valid listing URL is required.");
         const row = parseVehicleListing(
           {
             ...body.listing,
             source_listing_id:
-              body.listing?.source_listing_id || body.listing?.url,
+              body.listing?.source_listing_id ||
+              createHash("sha256").update(url).digest("hex"),
           },
           "manual",
         );

@@ -133,6 +133,13 @@ describe("vehicle hard rules", () => {
 });
 
 describe("durable review and re-evaluation", () => {
+  it("does not let a prior clean-title override hide a newly reported title problem", () => {
+    const r = record({ overrides: { title_status: "clean" } });
+    r.vehicle_listings[0].data.title_status = "salvage";
+    expect(reviewVehicle(r, profile)!.evaluation.eligibility).toBe(
+      "ineligible",
+    );
+  });
   it("never returns passed inventory to other queues after a profile change", () => {
     const v = reviewVehicle(record({ decision: "passed" }), {
       ...profile,

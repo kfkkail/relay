@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse } from "@/lib/http";
 import { requireWorker } from "@/lib/worker-auth";
-import { evaluateVehicle } from "@/lib/vehicles/domain";
+import { applyVehicleOverrides, evaluateVehicle } from "@/lib/vehicles/domain";
+import type { VehicleListing } from "@/lib/vehicles/types";
 import {
   parseVehicleHealth,
   parseVehicleListing,
@@ -75,15 +76,26 @@ export async function POST(
       if (revisionError || !revision)
         throw new ApiError("Profile revision missing.", 409);
       const profile = parseVehicleProfile(revision.config);
-      const normalized = body.listings.map((value: unknown) => parseVehicleListing(value));
-      const { data: verified, error: verifiedError } = await supabase.from("vehicles").select("vin,overrides").eq("user_id", worker.user_id).in("vin", normalized.map((row) => row.vin).filter(Boolean));
+      const normalized: VehicleListing[] = body.listings.map((value: unknown) =>
+        parseVehicleListing(value),
+      );
+      const { data: verified, error: verifiedError } = await supabase
+        .from("vehicles")
+        .select("vin,overrides")
+        .eq("user_id", worker.user_id)
+        .in("vin", normalized.map((row) => row.vin).filter(Boolean));
       if (verifiedError) throw verifiedError;
-      const overrides = new Map((verified ?? []).map((v) => [v.vin, v.overrides]));
+      const overrides = new Map(
+        (verified ?? []).map((v) => [v.vin, v.overrides]),
+      );
       const listings = normalized.map((row) => {
         const owner = overrides.get(row.vin) ?? {};
         return {
           ...row,
-          eligibility: evaluateVehicle({ ...row, ...owner, attributes: { ...row.attributes, ...owner.attributes } }, profile).eligibility,
+          eligibility: evaluateVehicle(
+            applyVehicleOverrides(row, owner, profile),
+            profile,
+          ).eligibility,
         };
       });
       result = await supabase.rpc("stage_vehicle_batch", {

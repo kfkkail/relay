@@ -28,6 +28,21 @@ export const defaultVehicleProfile: VehicleProfile = {
   },
 };
 
+export function applyVehicleOverrides(
+  row: VehicleListing,
+  overrides: Partial<VehicleListing>,
+  profile: VehicleProfile,
+): VehicleListing {
+  const verified = {
+    ...row,
+    ...overrides,
+    attributes: { ...row.attributes, ...overrides.attributes },
+  };
+  if (profile.excluded_titles.includes(row.title_status.toLowerCase()))
+    verified.title_status = row.title_status;
+  return verified;
+}
+
 export function distanceMiles(
   a: [number, number] | null,
   b: [number, number] | null,

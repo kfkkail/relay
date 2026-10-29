@@ -36,7 +36,7 @@ export async function GET(request: Request) {
           if (!subscription) return;
           const { data: run, error: runError } = await db
             .from("runs")
-            .select("result_markdown,tasks!runs_task_id_fkey(title)")
+            .select("result_markdown,job_kind,tasks!runs_task_id_fkey(title)")
             .eq("id", delivery.run_id)
             .eq("task_id", delivery.task_id)
             .maybeSingle();
@@ -53,6 +53,7 @@ export async function GET(request: Request) {
               pushPayload(delivery.outcome, delivery.task_id, delivery.id, {
                 title: task?.title,
                 result: run?.result_markdown,
+                jobKind: run?.job_kind,
               }),
             );
           } catch (error) {

@@ -1,18 +1,13 @@
-import { evaluateVehicle } from "./domain";
+import { applyVehicleOverrides, evaluateVehicle } from "./domain";
 import type { VehicleListing, VehicleProfile, VehicleRecord } from "./types";
 
 export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
   const listings = record.vehicle_listings
     .map((listing) => {
       const row: VehicleListing = {
-        ...listing.data,
-        ...record.overrides,
+        ...applyVehicleOverrides(listing.data, record.overrides, profile),
         vin: record.vin,
         availability: listing.availability as VehicleListing["availability"],
-        attributes: {
-          ...listing.data.attributes,
-          ...record.overrides.attributes,
-        },
       };
       return { row, evaluation: evaluateVehicle(row, profile) };
     })

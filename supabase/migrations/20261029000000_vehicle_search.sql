@@ -178,7 +178,7 @@ grant execute on function public.set_vehicle_decision(uuid,text,integer),public.
 create function public.finalize_vehicle_run(p_run uuid,p_worker uuid,p_lease uuid,p_health jsonb) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare r public.runs%rowtype; item jsonb; prev public.vehicle_listings%rowtype; vid uuid; lid uuid; decision text;
- total integer; seen text[]:=array[]::text[]; new_eligible integer:=0; changed integer:=0; coverage_status text:=p_health->>'status'; summary jsonb; cfg jsonb;
+ total integer; previous_total integer; seen text[]:=array[]::text[]; new_eligible integer:=0; changed integer:=0; coverage_status text:=p_health->>'status'; summary jsonb; cfg jsonb;
 begin
  select * into r from public.runs where id=p_run and worker_id=p_worker and vehicle_lease=p_lease and job_kind='vehicle_search' for update;
  if r.id is null then raise exception 'Vehicle run not found'; end if;
@@ -190,6 +190,11 @@ begin
  if total<>coalesce((p_health->'counts'->>'parsed')::integer,-1) or total>10000 then raise exception 'Staged count does not match collector'; end if;
  if p_health->'scope'->>'make' is distinct from cfg->>'make' or p_health->'scope'->>'model' is distinct from cfg->>'model' or p_health->'scope'->>'origin_zip' is distinct from cfg->>'origin_zip' then raise exception 'Collector scope mismatch'; end if;
  if coverage_status='success' and ((p_health->'counts'->>'reported')::integer is distinct from total or coalesce((p_health->'counts'->>'invalid')::integer,0)>0 or coalesce((p_health->'counts'->>'duplicates')::integer,0)>0 or jsonb_array_length(p_health->'warnings')>0) then coverage_status:='partial'; end if;
+ select (s.health->'counts'->>'parsed')::integer into previous_total from public.vehicle_search_runs s where s.user_id=r.user_id and s.status='success' and lower(s.health->'scope'->>'make')=lower(cfg->>'make') and lower(s.health->'scope'->>'model')=lower(cfg->>'model') order by s.finished_at desc limit 1;
+ if coverage_status='success' and previous_total>=20 and total<previous_total*0.5 then
+  coverage_status:='partial'; p_health:=jsonb_set(p_health,'{warnings}',coalesce(p_health->'warnings','[]')||'"sudden_count_drop"'::jsonb);
+ end if;
+ p_health:=jsonb_set(p_health,'{status}',to_jsonb(coverage_status));
  for item in select value from public.vehicle_ingestion_batches b cross join lateral jsonb_array_elements(b.payload) where b.run_id=p_run order by b.batch_number loop
   if item->>'source'<>'auto.dev' or coalesce(item->>'vin','') !~ '^[A-HJ-NPR-Z0-9]{17}$' or lower(item->>'make')<>lower(cfg->>'make') or lower(item->>'model')<>lower(cfg->>'model') then raise exception 'Invalid normalized listing'; end if;
   if item->>'source_listing_id'=any(seen) then raise exception 'Duplicate listing in run'; end if;
@@ -216,9 +221,9 @@ begin
  if coverage_status='success' then
   for prev in select l.* from public.vehicle_listings l where l.user_id=r.user_id and l.source='auto.dev' and lower(l.data->>'make')=lower(cfg->>'make') and lower(l.data->>'model')=lower(cfg->>'model') and not(l.source_listing_id=any(seen)) and l.consecutive_absences>=1 and l.availability='available' loop
    insert into public.vehicle_listing_observations(user_id,listing_id,data) values(r.user_id,prev.id,prev.data||jsonb_build_object('availability','unavailable'));
-   if exists(select 1 from public.vehicles where id=prev.vehicle_id and decision in ('watch','shortlist')) then changed:=changed+1; end if;
+   if exists(select 1 from public.vehicles v where v.id=prev.vehicle_id and v.decision in ('watch','shortlist')) then changed:=changed+1; end if;
   end loop;
-  update public.vehicle_listings set consecutive_absences=consecutive_absences+1,availability=case when consecutive_absences>=1 then 'unavailable' else availability end
+  update public.vehicle_listings set consecutive_absences=consecutive_absences+1,availability=case when consecutive_absences>=1 then 'unavailable' else availability end,data=case when consecutive_absences>=1 then jsonb_set(data,'{availability}','"unavailable"') else data end
    where user_id=r.user_id and source='auto.dev' and lower(data->>'make')=lower(cfg->>'make') and lower(data->>'model')=lower(cfg->>'model') and not(source_listing_id=any(seen));
  end if;
  summary:=jsonb_build_object('imported',total,'new_eligible',new_eligible,'watched_changes',changed,'status',coverage_status,'url','/vehicles');

@@ -79,7 +79,8 @@ self.addEventListener("notificationclick", (event) => {
         );
         if (
           candidate.origin === self.location.origin &&
-          /^\/tasks(?:\/[a-f0-9-]+)?$/.test(candidate.pathname)
+          (/^\/tasks(?:\/[a-f0-9-]+)?$/.test(candidate.pathname) ||
+            candidate.pathname === "/vehicles")
         )
           url = candidate;
       } catch {

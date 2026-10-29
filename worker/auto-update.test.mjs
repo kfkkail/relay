@@ -67,7 +67,7 @@ describe("worker auto updates", () => {
     expect(calls.some(([, args]) => args[0] === "fetch")).toBe(false);
   });
 
-  it("allows ten minutes for dependency installation", async () => {
+  it("allows ten minutes for dependency and Chromium installation", async () => {
     const root = await fixture();
     await mkdir(join(root, ".relay"));
     await writeFile(
@@ -85,6 +85,17 @@ describe("worker auto updates", () => {
         ([command, args]) => command === "npm" && args[0] === "ci",
       )?.[2],
     ).toEqual({ cwd: root, timeout: 10 * 60_000 });
+    expect(
+      calls.find(
+        ([command, args]) =>
+          command === process.execPath && args[1] === "install",
+      )?.[2],
+    ).toEqual({ cwd: root, timeout: 10 * 60_000 });
+    expect(calls).toContainEqual([
+      process.execPath,
+      [`${root}/worker/browser-smoke.mjs`],
+      { cwd: root },
+    ]);
     expect(
       calls.find(
         ([command, args]) =>

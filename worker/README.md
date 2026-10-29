@@ -69,6 +69,12 @@ waiting for input. Git and npm output is shown while installing; dependency
 installation can take several minutes on a Pi and times out after ten minutes
 if it does not finish.
 
+The managed install also downloads Playwright's Chromium build and launches a
+local smoke-test page before starting the service. Automatic updates repeat
+browser provisioning when dependencies change and refuse to restart into a
+browser version that cannot launch. On Linux, a failed launch may require the
+host packages reported by Playwright; install those once and rerun worker setup.
+
 On Linux, including Raspberry Pi OS, installation checks that systemd lingering
 is enabled for the current user and enables it when necessary. That one-time
 change may prompt for `sudo`; it is required for the user service to survive the

@@ -170,7 +170,10 @@ describe("worker service installation", () => {
     });
     await install();
     expect(
-      mocks.exec.mock.calls.some(([cmd]) => cmd === process.execPath),
+      mocks.exec.mock.calls.some(
+        ([cmd, args]) =>
+          cmd === process.execPath && args[0].endsWith("scripts/setup.mjs"),
+      ),
     ).toBe(false);
   });
   it("stops if setup is cancelled", async () => {
@@ -244,6 +247,20 @@ describe("worker service installation", () => {
       stdio: ["ignore", "inherit", "inherit"],
       timeout: 600000,
     });
+    const browserInstall = mocks.exec.mock.calls.find(
+      ([cmd, args]) =>
+        cmd === process.execPath &&
+        args[0].endsWith("node_modules/playwright/cli.js"),
+    );
+    expect(browserInstall[1].slice(1)).toEqual(["install", "chromium"]);
+    expect(browserInstall[2]).toMatchObject({ timeout: 600000 });
+    expect(
+      mocks.exec.mock.calls.some(
+        ([cmd, args]) =>
+          cmd === process.execPath &&
+          args[0].endsWith("worker/browser-smoke.mjs"),
+      ),
+    ).toBe(true);
     expect(mocks.exec).toHaveBeenCalledWith(
       "systemctl",
       ["--user", "enable", "--now", "relay-worker.service"],
@@ -271,6 +288,27 @@ describe("worker service installation", () => {
     await expect(install()).rejects.toThrow("exit");
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining("npm timed out after 600 seconds"),
+    );
+    expect(mocks.writeFile).not.toHaveBeenCalled();
+    expect(
+      mocks.exec.mock.calls.some(
+        ([cmd, args]) => cmd === "systemctl" && args.includes("enable"),
+      ),
+    ).toBe(false);
+  });
+  it("does not start the service when Chromium cannot launch", async () => {
+    mocks.exec.mockImplementation((cmd, args) => {
+      if (
+        cmd === process.execPath &&
+        args[0]?.endsWith("worker/browser-smoke.mjs")
+      ) {
+        throw new Error("Chromium launch failed");
+      }
+      return cmd === "loginctl" ? "yes" : "ok";
+    });
+    await expect(install()).rejects.toThrow("exit");
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining("Chromium launch failed"),
     );
     expect(mocks.writeFile).not.toHaveBeenCalled();
     expect(

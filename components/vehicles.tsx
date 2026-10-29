@@ -202,8 +202,8 @@ export function Vehicles({
         .sort((a, b) => {
           if (sort === "price")
             return (
-              (a.evaluation.effective_cost ?? Infinity) -
-              (b.evaluation.effective_cost ?? Infinity)
+              (a.evaluation.effective_cost ?? a.row.price ?? Infinity) -
+              (b.evaluation.effective_cost ?? b.row.price ?? Infinity)
             );
           if (sort === "mileage")
             return (a.row.mileage ?? Infinity) - (b.row.mileage ?? Infinity);
@@ -530,7 +530,7 @@ export function Vehicles({
                 </h2>
                 <p>
                   {queue === "unreviewed"
-                    ? "Run a search or check Needs Verification for vehicles with missing battery or cost information."
+                    ? "Run a search or check Needs Verification for vehicles whose required battery is still unknown."
                     : "Vehicles will appear here as you review them."}
                 </p>
               </section>
@@ -821,6 +821,7 @@ export function VehicleCard({
               ? `${row.attributes.battery_pack} battery`
               : "Battery unverified",
             row.attributes.motor ? `${row.attributes.motor} motor` : null,
+            !row.attributes.motor ? "Motor unverified (optional)" : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -834,7 +835,7 @@ export function VehicleCard({
             <span>With shipping &amp; fees</span>
             <strong>
               {ev.effective_cost === null
-                ? "Cost incomplete"
+                ? "Not yet verified"
                 : money(ev.effective_cost)}
             </strong>
           </div>
@@ -1229,7 +1230,7 @@ function VehicleSettings({
   );
 }
 
-function VehicleEditor({
+export function VehicleEditor({
   vehicle,
   config,
   busy,
@@ -1391,24 +1392,56 @@ function VehicleEditor({
             />
           </label>
           <label>
-            Confirmed battery pack
-            <input
-              placeholder="e.g. large or max"
+            Confirmed battery pack (required)
+            <select
               value={row.attributes?.battery_pack ?? ""}
+              onChange={(e) => {
+                const battery = e.target.value || null;
+                setRow({
+                  ...row,
+                  attributes: {
+                    battery_pack: battery,
+                    motor: row.attributes?.motor ?? null,
+                    battery_evidence: battery
+                      ? "Owner verified from seller information"
+                      : null,
+                  },
+                });
+              }}
+            >
+              <option value="">Unknown</option>
+              <option value="standard">Standard</option>
+              <option value="standard+">Standard+</option>
+              <option value="large">Large</option>
+              <option value="max">Max</option>
+            </select>
+          </label>
+          <label>
+            Confirmed motor configuration (optional)
+            <select
+              value={row.attributes?.motor ?? ""}
               onChange={(e) =>
                 setRow({
                   ...row,
                   attributes: {
-                    battery_pack: e.target.value.toLowerCase() || null,
-                    motor: row.attributes?.motor ?? null,
-                    battery_evidence: "Owner verified from seller information",
+                    battery_pack: row.attributes?.battery_pack ?? null,
+                    motor: e.target.value || null,
+                    battery_evidence: row.attributes?.battery_evidence ?? null,
                   },
                 })
               }
-            />
+            >
+              <option value="">Unknown</option>
+              <option value="dual">Dual</option>
+              <option value="performance dual">
+                Performance Dual / Dual + Power Upgrade
+              </option>
+              <option value="quad">Quad</option>
+              <option value="tri">Tri</option>
+            </select>
           </label>
           <label>
-            Delivery
+            Delivery (optional until Watch or Shortlist)
             <select
               value={row.delivery}
               onChange={(e) =>
@@ -1424,7 +1457,7 @@ function VehicleEditor({
             </select>
           </label>
           <label>
-            Confirmed shipping ($)
+            Confirmed shipping ($, optional)
             <input
               type="number"
               min="0"
@@ -1438,7 +1471,7 @@ function VehicleEditor({
             />
           </label>
           <label>
-            Confirmed mandatory fees ($)
+            Confirmed mandatory fees ($, optional)
             <input
               type="number"
               min="0"

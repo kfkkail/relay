@@ -84,14 +84,19 @@ describe("vehicle hard rules", () => {
       ).eligibility,
     ).toBe("ineligible");
   });
-  it("does not hide missing shipping or fees in a score", () => {
-    expect(
-      evaluateVehicle(listing({ delivery: "unknown", shipping: null }), profile)
-        .effective_cost,
-    ).toBeNull();
+  it("keeps missing shipping or fees visible without blocking initial review", () => {
+    const unknownDelivery = evaluateVehicle(
+      listing({ delivery: "unknown", shipping: null }),
+      profile,
+    );
+    expect(unknownDelivery.effective_cost).toBeNull();
+    expect(unknownDelivery.eligibility).toBe("eligible");
+    expect(unknownDelivery.warnings).toContain(
+      "Shipping and mandatory fees not yet verified; confirm them before buying",
+    );
     expect(
       evaluateVehicle(listing({ mandatory_fees: null }), profile).eligibility,
-    ).toBe("needs_verification");
+    ).toBe("eligible");
   });
   it("uses confirmed pickup as zero shipping and includes mandatory fees", () => {
     expect(
@@ -177,9 +182,9 @@ describe("durable review and re-evaluation", () => {
         profile,
       );
       expect(verified.attributes.battery_pack).toBe("max");
-      expect(evaluateVehicle(verified, profile).eligibility).toBe(
-        "needs_verification",
-      );
+      const evaluation = evaluateVehicle(verified, profile);
+      expect(evaluation.eligibility).toBe("eligible");
+      expect(evaluation.effective_cost).toBeNull();
     }
   });
   it("uses a scoped confirmed price only while the feed price is missing", () => {
@@ -237,9 +242,7 @@ describe("durable review and re-evaluation", () => {
     };
     const verified = applyVehicleOverrides(row, legacy, profile);
     expect(verified.vin).toBe(row.vin);
-    expect(evaluateVehicle(verified, profile).eligibility).toBe(
-      "needs_verification",
-    );
+    expect(evaluateVehicle(verified, profile).eligibility).toBe("eligible");
   });
   it("does not let a prior clean-title override hide a newly reported title problem", () => {
     const r = record({ overrides: { title_status: "clean" } });

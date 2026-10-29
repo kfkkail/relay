@@ -142,8 +142,8 @@ export function evaluateVehicle(
   else if (cost !== null && cost > profile.cost_ceiling)
     fail("Effective cost exceeds ceiling");
   else if (cost === null)
-    reasons.push(
-      "Cost incomplete: confirm price, shipping/pickup, and mandatory fees",
+    warnings.push(
+      "Shipping and mandatory fees not yet verified; confirm them before buying",
     );
   if (row.availability === "unavailable") fail("Listing unavailable");
   const distance = distanceMiles(profile.origin_coordinates, row.coordinates);
@@ -156,6 +156,10 @@ export function evaluateVehicle(
           ? "Pickup Required"
           : "Delivery Unknown";
   const w = profile.weights;
+  // Advertised price is still useful for initial ranking. Unknown acquisition
+  // costs lower confidence, but they no longer force every discovered vehicle
+  // into the verification queue before the owner can review it.
+  const rankingCost = cost ?? row.price;
   const mileage =
     row.mileage === null
       ? 0.2
@@ -169,9 +173,13 @@ export function evaluateVehicle(
   const breakdown = {
     price: Math.round(
       w.price *
-        (cost === null
+        (rankingCost === null
           ? 0.3
-          : Math.max(0, Math.min(1, 1.5 - cost / profile.cost_ceiling))),
+          : Math.max(
+              0,
+              Math.min(1, 1.5 - rankingCost / profile.cost_ceiling),
+            )) *
+        (cost === null ? 0.8 : 1),
     ),
     mileage: Math.round(w.mileage * mileage),
     distance: Math.round(

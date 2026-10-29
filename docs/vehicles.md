@@ -32,6 +32,20 @@ separate worker job so each scan does not consume a photo request for every VIN.
 The API's gallery ordering does not establish an interior image: choose **Use as
 interior photo** after viewing the gallery.
 
+After the inventory scan, the worker checks up to 20 unresolved R1T seller pages
+for explicit battery labels, cheapest and lowest-mileage first. Set
+`RELAY_VEHICLE_DETAIL_LIMIT` from 0 to 50 to change or disable that bounded pass.
+Requests have a ten-second timeout, a 1.5 MB response limit, no cookies or API
+credentials, manual redirect validation, and public-address DNS checks. Exact
+Large, Max, Standard or Standard+ evidence is cached by VIN in the managed
+worker's ignored `.relay/vehicle-enrichment.json`; unresolved pages rotate behind
+untried candidates on later scans. Dual/Quad/Tri is captured opportunistically
+but is never required for the initial profile.
+
+This review-funnel change requires no database migration or backfill. Existing
+listing JSON is re-evaluated by the application immediately, and the next search
+upserts any newly enriched battery or motor facts for the same VINs.
+
 ## Local interactive preview
 
 For visual review without a database or Auto.dev key, start the development
@@ -54,10 +68,12 @@ retains its decision when the owner confirms its VIN and it merges into a
 canonical record. Restore is an explicit owner action. Undo uses a decision
 revision so it cannot overwrite a newer decision from another tab.
 
-Unknown battery, VIN or complete acquisition cost goes to Needs Verification.
-Adventure and Launch Edition alone do not establish a battery. Missing shipping
-and fees are not zero; confirmed pickup removes shipping from the total. Missing
-history is a warning and score penalty. Verified battery/history facts follow
+Unknown battery or VIN goes to Needs Verification. Adventure and Launch Edition
+alone do not establish a battery. Missing shipping and fees are not zero, but
+they no longer block initial review: the card shows a warning, ranking uses the
+advertised price with reduced confidence, and full cost should be confirmed for
+a Watch or Shortlist candidate. Confirmed pickup removes shipping from the total.
+Missing history is a warning and score penalty. Verified battery/history facts follow
 the vehicle through source updates; newly reported excluded titles always win
 over an earlier clean-title confirmation. Shipping, fees, delivery, a confirmed
 missing-price fallback, and the selected interior photo are scoped to the
@@ -72,11 +88,11 @@ Secondary facts and corrections are under **Details & sources**. Swipe the
 photo/card left to Pass or right to Watch, or use the three review buttons.
 Passed cards expose an explicit Restore action rather than normal review actions.
 
-Manual import currently uses a URL plus an editable form; it does not fetch an
-arbitrary seller URL. This keeps source credentials and SSRF out of the initial
-Auto.dev implementation. Automatic URL extraction is deferred pending a
-permitted-source collector. Gallery/photo failures fall back to the original
-listing and placeholders.
+Manual import currently uses a URL plus an editable form; it does not fetch that
+URL. The worker's separate Auto.dev enrichment pass reads only provider-returned
+public seller pages under the bounded network controls above. Failed or blocked
+pages remain unresolved and never become evidence. Gallery/photo failures fall
+back to the original listing and placeholders.
 
 ## Coverage and completion
 
@@ -85,7 +101,9 @@ and destination domains describe observed inventory, not guaranteed upstream
 marketplace coverage. Rivian, Carvana and CarMax were observed in local probes.
 Edmunds, Autotrader, Cars.com, CarGurus, TrueCar and individual dealer sites remain
 direct-collection targets, with manual-only access until separately assessed.
-Logged-in marketplaces use manual entry. No direct scrapers are implemented.
+Logged-in marketplaces use manual entry. No logged-in or source-specific scraper
+is implemented; the optional detail pass reads only public seller HTML for exact
+configuration labels and does not attempt to bypass access controls.
 
 The 2026-10-28 collector probe used 28 requests in 118 seconds: 547 reported,
 544 unique VINs enumerated, no invalid/duplicate VINs. It correctly returned

@@ -18,12 +18,26 @@ describe("vehicle worker routing", () => {
     await runVehicleJob(
       { run: { id: "run-1" }, profile: { make: "Rivian", model: "R1T" } },
       request,
-      { getKey: async () => "test-secret", collect },
+      {
+        getKey: async () => "test-secret",
+        collect,
+        enrich: async ({ listings }) => ({
+          listings,
+          counts: {
+            detail_attempted: 0,
+            detail_resolved: 0,
+            detail_failed: 0,
+          },
+        }),
+      },
     );
     expect(request).toHaveBeenCalledTimes(4);
     expect(JSON.parse(request.mock.calls[0][1].body).listings).toHaveLength(50);
     expect(JSON.parse(request.mock.calls[2][1].body).listings).toHaveLength(1);
     expect(JSON.parse(request.mock.calls[3][1].body).action).toBe("finalize");
+    expect(
+      JSON.parse(request.mock.calls[3][1].body).health.counts.detail_attempted,
+    ).toBe(0);
     expect(JSON.stringify(request.mock.calls)).not.toContain("test-secret");
     expect(
       request.mock.calls.every(

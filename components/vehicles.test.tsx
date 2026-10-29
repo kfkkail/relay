@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RelayHeader } from "./relay-header";
-import { VehicleCard } from "./vehicles";
+import { VehicleCard, VehicleEditor } from "./vehicles";
 import { createVehiclePreviewRequest } from "@/lib/vehicles/preview";
 import { defaultVehicleProfile } from "@/lib/vehicles/domain";
 import { reviewVehicle } from "@/lib/vehicles/review";
@@ -62,4 +62,31 @@ describe("Relay Vehicles presentation", () => {
       else expect(actions).not.toContain("Verify");
     },
   );
+  it("offers the normalized battery and motor choices", async () => {
+    const data = await (
+      await createVehiclePreviewRequest()("/api/vehicles")
+    ).json();
+    const vehicle = reviewVehicle(data.vehicles[0], defaultVehicleProfile)!;
+    const html = renderToStaticMarkup(
+      <VehicleEditor
+        vehicle={vehicle}
+        config={defaultVehicleProfile}
+        busy={false}
+        close={() => {}}
+        save={async () => {}}
+      />,
+    );
+    expect(html).toContain("Confirmed battery pack (required)");
+    expect(html).toContain('<option value="standard">Standard</option>');
+    expect(html).toContain('<option value="standard+">Standard+</option>');
+    expect(html).toMatch(/<option value="large"[^>]*>Large<\/option>/);
+    expect(html).toContain('<option value="max">Max</option>');
+    expect(html).toContain("Confirmed motor configuration (optional)");
+    expect(html).toContain('<option value="dual">Dual</option>');
+    expect(html).toContain(
+      '<option value="performance dual">Performance Dual / Dual + Power Upgrade</option>',
+    );
+    expect(html).toMatch(/<option value="quad"[^>]*>Quad<\/option>/);
+    expect(html).toContain('<option value="tri">Tri</option>');
+  });
 });

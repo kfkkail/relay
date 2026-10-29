@@ -82,6 +82,7 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify(process.arg
       GH_TOKEN: "github-token",
       RELAY_WORKER_TOKEN: "relay-secret",
       OPENAI_API_KEY: "api-secret",
+      AUTODEV_API_KEY: "vehicle-secret",
       SUPABASE_SECRET_KEY: "database-secret",
     });
 
@@ -95,6 +96,7 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify(process.arg
     expect(env.RELAY_WORKER_TOKEN).toBeUndefined();
     expect(env.RELAY_COMMAND_PATH).toBeUndefined();
     expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.AUTODEV_API_KEY).toBeUndefined();
     expect(env.SUPABASE_SECRET_KEY).toBeUndefined();
   });
 

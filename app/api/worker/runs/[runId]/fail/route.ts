@@ -16,13 +16,25 @@ export async function POST(
         : "Worker run failed.";
     const { data: run, error: runError } = await supabase
       .from("runs")
-      .select("id,task_id,user_id,attempt")
+      .select("id,task_id,user_id,attempt,job_kind,vehicle_lease")
       .eq("id", runId)
       .eq("worker_id", worker.id)
       .eq("status", "working")
       .maybeSingle();
     if (runError || !run)
       throw new ApiError("Active run not found for this worker.", 404);
+
+    if (run.job_kind === "vehicle_search") {
+      if (!body.lease || run.vehicle_lease !== body.lease)
+        throw new ApiError("Vehicle lease expired.", 409);
+      const { error } = await supabase.rpc("fail_vehicle_run", {
+        p_run: run.id,
+        p_worker: worker.id,
+        p_lease: body.lease,
+      });
+      if (error) throw error;
+      return NextResponse.json({ failed: true });
+    }
 
     const { data: stagedDocuments } = await supabase
       .from("result_documents")

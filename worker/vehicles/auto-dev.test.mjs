@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  autoDevPhotos,
   collectAutoDev,
   normalizeAutoDev,
   rivianAttributes,
@@ -132,6 +133,34 @@ describe("bounded Auto.dev collection", () => {
     const report = await collect(async () => response([wrong], 1));
     expect(report.counts.invalid).toBe(1);
     expect(report.status).toBe("partial");
+  });
+});
+
+describe("on-demand photo gallery", () => {
+  it("keeps unclassified gallery frames unknown", async () => {
+    const photos = await autoDevPhotos({
+      key: "private",
+      vin: "7FCTGAAA0NN000001",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            data: {
+              retail: [
+                "https://example.com/a.jpg",
+                "https://example.com/b.jpg",
+              ],
+            },
+          }),
+        ),
+    });
+    expect(photos.map((p) => p.category)).toEqual(["exterior", "unknown"]);
+  });
+  it("rejects an invalid VIN before making a request", async () => {
+    const fetchImpl = vi.fn();
+    await expect(
+      autoDevPhotos({ key: "private", vin: "bad", fetchImpl }),
+    ).rejects.toThrow();
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
 

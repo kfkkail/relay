@@ -7,6 +7,21 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const { supabase, worker } = await requireWorker(request);
+    const body = await request.json().catch(() => ({}));
+    if (
+      Array.isArray(body.capabilities) &&
+      body.capabilities.includes("vehicle_search")
+    ) {
+      const { data: vehicleJob, error: vehicleError } = await supabase.rpc(
+        "claim_vehicle_run",
+        { p_worker_id: worker.id },
+      );
+      if (vehicleError) throw vehicleError;
+      if (vehicleJob)
+        return NextResponse.json(vehicleJob, {
+          headers: { "Cache-Control": "no-store" },
+        });
+    }
     const { data, error } = await supabase.rpc("claim_next_run", {
       p_worker_id: worker.id,
     });

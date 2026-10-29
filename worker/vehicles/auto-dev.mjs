@@ -339,3 +339,32 @@ export async function collectAutoDev({
     listings: [...rows.values()],
   };
 }
+
+export async function autoDevPhotos({ key, vin, fetchImpl = fetch }) {
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin))
+    throw new Error("Valid photo VIN required.");
+  try {
+    const response = await fetchImpl(`${API}/photos/${vin}`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      signal: AbortSignal.timeout(20000),
+      redirect: "error",
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new Error("Photo request failed.");
+    }
+    const body = await boundedJson(response, 256 * 1024);
+    if (!Array.isArray(body.data?.retail))
+      throw new Error("Photo response malformed.");
+    return body.data.retail.slice(0, 50).flatMap((value, index) => {
+      const url = publicListingUrl(value);
+      // The API returns ordered URLs, not reliable interior/exterior labels.
+      // Keep later frames unknown until the owner chooses an interior image.
+      return url
+        ? [{ url, category: index === 0 ? "exterior" : "unknown" }]
+        : [];
+    });
+  } catch {
+    throw new Error("Auto.dev photo gallery is unavailable.");
+  }
+}

@@ -19,13 +19,15 @@ export async function POST(
 
     const { data: run, error: runError } = await supabase
       .from("runs")
-      .select("id,task_id,user_id,attempt")
+      .select("id,task_id,user_id,attempt,job_kind")
       .eq("id", runId)
       .eq("worker_id", worker.id)
       .eq("status", "working")
       .maybeSingle();
     if (runError || !run)
       throw new ApiError("Active run not found for this worker.", 404);
+    if (run.job_kind === "vehicle_search")
+      throw new ApiError("Vehicle runs require structured ingestion.", 409);
 
     const { error } = await supabase.rpc("complete_run_with_documents", {
       p_run_id: run.id,

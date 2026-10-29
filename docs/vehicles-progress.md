@@ -19,9 +19,9 @@ Branch: `codex/auto-dev-vehicles`, based on `284e3a7` (`origin/main`).
 
 ## Current work
 
-Build started 2026-10-28. Auto.dev collector and Keychain credential helper are
+Build started 2026-10-28. Auto.dev collector and environment credential helper are
 implemented. `npm run vehicles:probe` runs a bounded, aggregate-only census with
-no saved raw API output. The full suite passes 236 tests, including final history
+no saved raw API output. The full suite passes 238 tests, including final history
 normalization and title-conflict tests; TypeScript, lint and formatting pass. A clean
 production build passes after removing the temporary browser preview route and
 its stale generated Next.js development types. Embedded PostgreSQL tests execute
@@ -38,9 +38,10 @@ present. Do not mark that provider discrepancy resolved without evidence.
 
 The primary Relay checkout has unrelated branch work;
 all Vehicles edits belong in this checkout. No remote migration, deployment,
-push, PR, or schedule enablement is authorized. Auto.dev access is stored in
-macOS Keychain under service `com.relay.auto-dev.api-key`, account `relay-worker`.
-Never print or store the credential in project files.
+push, PR, or schedule enablement was authorized during the initial build.
+The owner subsequently authorized PR publication. Linux workers receive
+`AUTODEV_API_KEY` through their protected process environment; no OS credential
+store or subprocess is used. Never print or commit the credential.
 
 ## Final review — 2026-10-29
 
@@ -62,11 +63,18 @@ Fixed demonstrated cross-layer defects without adding another collector:
   Optional photo-job failures remain on their own tasks, not as inventory
   coverage failures or digests.
 
-All 236 tests pass, as do lint, formatting, TypeScript and the production build.
+All 238 tests pass, as do lint, formatting, TypeScript and the production build.
 The embedded PostgreSQL suite now has 16 integration tests. Browser checks were
 repeated after these fixes, including scoped photo selection, two provisional
 vehicles with null VINs and missing-price verification (including editing the
 confirmation again), with no page errors.
+
+The owner confirmed the production workers are Linux-only. PR #85 now uses
+environment-only Auto.dev credentials, and PR #86 incorporates that change.
+The credential helper has no Keychain, platform detection or subprocess path;
+missing and blank process secrets fail closed. The API key is still stripped
+from generic Codex child environments. Existing local OS credential entries
+were not read or deleted during this change.
 
 ## Handoff and remaining gates
 
@@ -93,8 +101,9 @@ Next owner-controlled step: make an isolated local Supabase runtime available,
 then run reset/lint/pgTAP and perform the small manual source comparison before
 authorizing rollout. Do not point reset at any existing unrelated database.
 The overnight build automation can now be paused: local implementation is
-complete, with external rollout gates explicitly outstanding. Nothing has been
-pushed, deployed, remotely migrated or enabled for daily inventory searches.
+complete, with external rollout gates explicitly outstanding. Draft PRs #85 and
+#86 have since been published with owner authorization; nothing has been merged,
+remotely migrated or enabled for daily inventory searches.
 
 The last clean production build contains `/vehicles`, owner APIs, and the
 vehicle-worker result route. No unauthenticated preview route remains. The

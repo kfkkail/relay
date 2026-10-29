@@ -13,13 +13,15 @@ web routes, set `RELAY_VEHICLE_SEARCH=1` in the worker's protected configuration
 and restart the worker. Its normal Relay URL/token and backend settings remain
 required. Older workers continue claiming only generic agent tasks.
 
-On macOS the vehicle handler reads the login Keychain item with service
-`com.relay.auto-dev.api-key`, account `relay-worker`. The item must be accessible
-to the user running the background worker; a locked or inaccessible Keychain
-produces a visible failure. On Linux, or for another secret manager, inject
-`AUTODEV_API_KEY` into the worker environment. The key is removed before generic
-Codex child processes start. Never place it in task payloads, browser settings,
-fixtures, logs or tracked files.
+The workers are Linux-only. Inject `AUTODEV_API_KEY` into the worker service's
+protected environment or its owner-readable `.env.worker` file (permissions
+`0600`). There is no OS credential-store fallback or credential subprocess;
+a missing or blank key produces a visible configuration failure. The key is
+removed before generic Codex child processes start. Never place it in task
+payloads, browser settings, fixtures, logs or tracked files.
+
+To run the local probe with that file rather than an already-injected process
+environment, use `node --env-file=.env.worker scripts/vehicles-probe.mjs`.
 
 `npm run vehicles:probe` performs an aggregate-only local census. It uses no Relay
 or Supabase credentials and does not write inventory. It fetches at most 100
@@ -101,7 +103,8 @@ Scoring-only edits preserve an already-enabled schedule.
   cron/network extensions are stubbed only in this embedded harness.
 - `npx tsc --noEmit`, `npm run lint`, `npm run format:check`, and `npm run build`
   verify the application.
-- Final local review passed 236 tests on 2026-10-29, including HTTP verification
+- Final local review and the Linux-only credential update passed 238 tests on
+  2026-10-29, including missing/blank credential checks, HTTP verification
   patches, seller-context changes, VIN-merge confirmations, optional-photo
   failures and shared-schedule baseline enforcement. Desktop/mobile fixture
   checks also exercised provisional (no-VIN) gallery selection and missing-price
@@ -117,5 +120,6 @@ Scoring-only edits preserve an already-enabled schedule.
   baseline, and review it before explicitly enabling the daily schedule. The
   currently Partial census does not satisfy the baseline guard.
 
-This implementation is prepared locally. Remote migration, deploy, push/PR,
-merge and schedule enablement are separate owner actions.
+This implementation is published in draft PRs #85 and #86. Merge, production
+deployment, remote migration and schedule enablement remain separate owner
+actions.

@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker": "node worker/index.mjs",
+    "vehicles:probe": "node scripts/vehicles-probe.mjs",
     "worker:service:install": "node scripts/worker-service.mjs install",
     "worker:service:update": "node scripts/worker-update.mjs",
     "worker:service:status": "node scripts/worker-service.mjs status",

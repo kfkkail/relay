@@ -67,6 +67,32 @@ describe("worker auto updates", () => {
     expect(calls.some(([, args]) => args[0] === "fetch")).toBe(false);
   });
 
+  it("allows ten minutes for dependency installation", async () => {
+    const root = await fixture();
+    await mkdir(join(root, ".relay"));
+    await writeFile(
+      join(root, ".relay/update-pending"),
+      JSON.stringify({ dependenciesChanged: true }),
+    );
+    const calls = [];
+    const result = await updateManagedClone(
+      root,
+      fakeGit({ local: "new", remote: "new", calls }),
+    );
+    expect(result.status).toBe("updated");
+    expect(
+      calls.find(
+        ([command, args]) => command === "npm" && args[0] === "ci",
+      )?.[2],
+    ).toEqual({ cwd: root, timeout: 10 * 60_000 });
+    expect(
+      calls.find(
+        ([command, args]) =>
+          command === process.execPath && args[0] === "--check",
+      )?.[2],
+    ).toEqual({ cwd: root });
+  });
+
   it("checks only when enabled and due", async () => {
     let time = 100;
     const root = await fixture();
@@ -98,8 +124,8 @@ function fakeGit({
   calls = [],
 } = {}) {
   let head = local;
-  return async (command, args) => {
-    calls.push([command, args]);
+  return async (command, args, options) => {
+    calls.push([command, args, options]);
     if (command === "git" && args[0] === "status") return { stdout: dirty };
     if (command === "git" && args[0] === "rev-parse")
       return { stdout: `${args[1] === "HEAD" ? head : remote}\n` };

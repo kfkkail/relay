@@ -97,6 +97,8 @@ Set `RELAY_WORKER_AUTO_UPDATE=off` in `.env.worker` before installing to disable
 updates. Run `npm run worker:service:update` from the managed clone to check
 immediately. Updates are refused if the clone is dirty or diverged; network and
 validation failures leave the current process running and retry later.
+Dependency-changing automatic updates allow npm up to ten minutes on slower
+workers; other update commands retain a one-minute timeout.
 
 `npm run worker` remains available when the required values are already
 exported into the current shell or supplied by another secret manager.

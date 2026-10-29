@@ -62,7 +62,7 @@ describe("Relay Vehicles presentation", () => {
       else expect(actions).not.toContain("Verify");
     },
   );
-  it("lets the owner edit optional motor configuration", async () => {
+  it("offers the normalized battery and motor choices", async () => {
     const data = await (
       await createVehiclePreviewRequest()("/api/vehicles")
     ).json();
@@ -76,10 +76,14 @@ describe("Relay Vehicles presentation", () => {
         save={async () => {}}
       />,
     );
+    expect(html).toContain("Confirmed battery pack (required)");
+    expect(html).toContain('<option value="standard">Standard</option>');
+    expect(html).toContain('<option value="standard+">Standard+</option>');
+    expect(html).toMatch(/<option value="large"[^>]*>Large<\/option>/);
+    expect(html).toContain('<option value="max">Max</option>');
     expect(html).toContain("Confirmed motor configuration (optional)");
-    expect(html).toContain('list="vehicle-motor-options"');
-    expect(html).toContain('<option value="dual"></option>');
-    expect(html).toContain('<option value="quad"></option>');
-    expect(html).toContain('<option value="tri"></option>');
+    expect(html).toContain('<option value="dual">Dual</option>');
+    expect(html).toMatch(/<option value="quad"[^>]*>Quad<\/option>/);
+    expect(html).toContain('<option value="tri">Tri</option>');
   });
 });

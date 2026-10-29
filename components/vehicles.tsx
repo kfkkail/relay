@@ -1393,11 +1393,10 @@ export function VehicleEditor({
           </label>
           <label>
             Confirmed battery pack (required)
-            <input
-              placeholder="e.g. large or max"
+            <select
               value={row.attributes?.battery_pack ?? ""}
               onChange={(e) => {
-                const battery = e.target.value.trim().toLowerCase() || null;
+                const battery = e.target.value || null;
                 setRow({
                   ...row,
                   attributes: {
@@ -1409,30 +1408,34 @@ export function VehicleEditor({
                   },
                 });
               }}
-            />
+            >
+              <option value="">Unknown</option>
+              <option value="standard">Standard</option>
+              <option value="standard+">Standard+</option>
+              <option value="large">Large</option>
+              <option value="max">Max</option>
+            </select>
           </label>
           <label>
             Confirmed motor configuration (optional)
-            <input
-              list="vehicle-motor-options"
-              placeholder="e.g. dual or quad"
+            <select
               value={row.attributes?.motor ?? ""}
               onChange={(e) =>
                 setRow({
                   ...row,
                   attributes: {
                     battery_pack: row.attributes?.battery_pack ?? null,
-                    motor: e.target.value.trim().toLowerCase() || null,
+                    motor: e.target.value || null,
                     battery_evidence: row.attributes?.battery_evidence ?? null,
                   },
                 })
               }
-            />
-            <datalist id="vehicle-motor-options">
-              <option value="dual" />
-              <option value="quad" />
-              <option value="tri" />
-            </datalist>
+            >
+              <option value="">Unknown</option>
+              <option value="dual">Dual</option>
+              <option value="quad">Quad</option>
+              <option value="tri">Tri</option>
+            </select>
           </label>
           <label>
             Delivery (optional until Watch or Shortlist)

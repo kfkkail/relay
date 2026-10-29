@@ -55,6 +55,10 @@ type HealthRun = {
   summary: Record<string, number>;
 };
 type Reviewed = NonNullable<ReturnType<typeof reviewVehicle>>;
+type PhotoCandidate = {
+  vin: string | null;
+  row: Pick<VehicleListing, "photo_count" | "photos">;
+};
 const queues = {
   unreviewed: "Unreviewed",
   verification: "Needs Verification",
@@ -72,6 +76,18 @@ const money = (n: number | null) =>
         currency: "USD",
         maximumFractionDigits: 0,
       }).format(n);
+export function shouldQueueVehiclePhotos(
+  vehicle: PhotoCandidate,
+  decision: Decision,
+  preview: boolean,
+) {
+  return (
+    !preview &&
+    Boolean(vehicle.vin) &&
+    (decision === "watch" || decision === "shortlist") &&
+    vehicle.row.photo_count > vehicle.row.photos.length
+  );
+}
 export type VehicleRequest = (
   path: string,
   init?: RequestInit,
@@ -234,6 +250,11 @@ export function Vehicles({
   }
   async function decide(v: VehicleRecord, decision: Decision) {
     await perform(async () => {
+      const reviewed = reviewVehicle(v, config);
+      const queuePhotos =
+        profile &&
+        reviewed &&
+        shouldQueueVehiclePhotos(reviewed, decision, preview);
       const revision = await action({
         action: "decision",
         id: v.id,
@@ -248,6 +269,23 @@ export function Vehicles({
         ),
       );
       setUndo({ id: v.id, decision: v.decision, revision });
+      if (queuePhotos) {
+        try {
+          await action({
+            action: "photos",
+            id: v.id,
+            profileId: profile.id,
+          });
+          setNotice(
+            `${decision === "watch" ? "Interested" : "Shortlist"} saved. Full photo gallery queued.`,
+          );
+          await refresh().catch(() => {});
+        } catch {
+          setError(
+            `${decision === "watch" ? "Interested" : "Shortlist"} saved, but the optional photo gallery could not be queued. Open View photos to retry.`,
+          );
+        }
+      }
     });
   }
   function chooseQueue(next: string) {

@@ -59,7 +59,11 @@ describe("Relay Vehicles presentation", () => {
       );
       if (decision === "passed")
         expect(actions).toContain("Restore to Unreviewed");
-      else expect(actions).not.toContain("Verify");
+      else {
+        expect(actions).not.toContain("Verify");
+        expect(actions).toContain("Interested");
+        expect(actions).not.toContain(">Watch<");
+      }
     },
   );
   it("offers the normalized battery and motor choices", async () => {

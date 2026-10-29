@@ -7,7 +7,7 @@ Screenshots were taken with no open notification overlays or development badge.
 The design uses Relay's shared header, colors, type, buttons and filter controls.
 Cards focus on photos, prices, mileage and location, with secondary facts under
 Details & sources. Mobile queues are selectable without horizontal clipping.
-Pass, Watch and Shortlist are the review actions; Passed requires explicit restore.
+Pass, Interested and Shortlist are the review actions; Passed requires explicit restore.
 
 The local preview is `/vehicles/preview`, with `RELAY_VEHICLES_PREVIEW=1` and a
 development server. The route is unavailable in production. Profile/decision
@@ -16,10 +16,10 @@ and no worker jobs or Auto.dev requests are created. Global account controls are
 disabled in the sample. Unit tests assert isolation and production gating.
 
 Browser checks covered 1440px desktop, 390px and 320px mobile, light/dark modes,
-header navigation, queue selection, Pass/Undo/restore, Watch, verification,
-focus trapping/Escape, gallery selection, profile re-evaluation and actual pointer
-swipes across photos without opening a gallery. No page errors or live vehicle
-API requests were observed.
+header navigation, queue selection, Pass/Undo/restore, Interested, verification,
+focus trapping/Escape, gallery selection and profile re-evaluation. Review-state
+swipes are intentionally disabled. No page errors or live vehicle API requests
+were observed.
 
 ## Photo attribution
 

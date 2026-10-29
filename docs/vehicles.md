@@ -62,8 +62,9 @@ attribution are in `public/vehicles-demo/`. No API key is needed or read.
 
 ## Review behavior
 
-Pass, Watch and Shortlist are global per vehicle. Passing a VIN suppresses it
-across listings, future runs and profile changes. A passed provisional vehicle
+Pass, Interested and Shortlist are global per vehicle. The internal durable
+value for Interested remains `watch` for backward compatibility. Passing a VIN
+suppresses it across listings, future runs and profile changes. A passed provisional vehicle
 retains its decision when the owner confirms its VIN and it merges into a
 canonical record. Restore is an explicit owner action. Undo uses a decision
 revision so it cannot overwrite a newer decision from another tab.
@@ -72,7 +73,7 @@ Unknown battery or VIN goes to Needs Verification. Adventure and Launch Edition
 alone do not establish a battery. Missing shipping and fees are not zero, but
 they no longer block initial review: the card shows a warning, ranking uses the
 advertised price with reduced confidence, and full cost should be confirmed for
-a Watch or Shortlist candidate. Confirmed pickup removes shipping from the total.
+an Interested or Shortlist candidate. Confirmed pickup removes shipping from the total.
 Missing history is a warning and score penalty. Verified battery/history facts follow
 the vehicle through source updates; newly reported excluded titles always win
 over an earlier clean-title confirmation. Shipping, fees, delivery, a confirmed
@@ -84,8 +85,9 @@ Review cards show 25 at a time, with the backlog reachable
 through **Review next 25**, and session storage retains queue/batch position.
 Vehicles shares Relay's header and controls with Schedules. Desktop uses queue
 pills; mobile uses a queue selector so none of the states are clipped off-screen.
-Secondary facts and corrections are under **Details & sources**. Swipe the
-photo/card left to Pass or right to Watch, or use the three review buttons.
+Secondary facts and corrections are under **Details & sources**. Pass,
+Interested and Shortlist use explicit review buttons; card swipes never change
+review state.
 Passed cards expose an explicit Restore action rather than normal review actions.
 
 Manual import currently uses a URL plus an editable form; it does not fetch that
@@ -120,8 +122,8 @@ advance absence counters, and two absences are required to mark a listing
 unavailable. A 15-minute expired lease can be reclaimed; each new claim fences
 out the prior token. Generic tasks are never retried by this mechanism.
 
-Successful no-change searches remain silent. New eligible vehicles, watched
-changes and material failures enqueue one digest per subscription/run. Vehicle
+Successful no-change searches remain silent. New eligible vehicles, changes to
+Interested vehicles and material failures enqueue one digest per subscription/run. Vehicle
 pushes open `/vehicles`; the generic completion push is suppressed. Photo-only
 jobs complete silently.
 Optional photo failures leave their own task waiting without changing inventory
@@ -146,7 +148,7 @@ Scoring-only edits preserve an already-enabled schedule.
   failures and shared-schedule baseline enforcement. Desktop/mobile fixture
   checks also exercised provisional (no-VIN) gallery selection and missing-price
   verification; the visual pass repeated shared navigation, mobile queue access,
-  photo swipes, Undo, dark mode and 320px layout. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
+  review buttons, Undo, dark mode and 320px layout. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
   not live feed coverage or a deployed database.
 - `supabase db reset`, `supabase db lint --level warning`, and `supabase test db`
   remain required against a local Supabase runtime or the existing CI workflow.

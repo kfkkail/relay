@@ -104,8 +104,8 @@ success is evidence of behavior, not a claim that the design is approved.
 ## Handoff and remaining gates
 
 Desktop/mobile browser checks pass with fixtures: photos, Pass/Undo, Passed
-after refresh, Watch, required-data verification, coverage warnings, profile
-re-evaluation preserving Watch, keyboard focus trapping/Escape, and mobile
+after refresh, Interested, required-data verification, coverage warnings, profile
+re-evaluation preserving Interested, keyboard focus trapping/Escape, and mobile
 overflow. No page errors. Screenshots are in `docs/vehicles-qa/` (fixture images,
 not real inventory). The earlier temporary preview was replaced by the guarded
 interactive development sample above. Operations are documented in `docs/vehicles.md`; actual

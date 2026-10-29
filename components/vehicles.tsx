@@ -58,7 +58,7 @@ type Reviewed = NonNullable<ReturnType<typeof reviewVehicle>>;
 const queues = {
   unreviewed: "Unreviewed",
   verification: "Needs Verification",
-  watch: "Watch",
+  watch: "Interested",
   shortlist: "Shortlist",
   passed: "Passed",
   coverage: "Coverage Health",
@@ -500,7 +500,7 @@ export function Vehicles({
                   {" "}
                   · showing {Math.min(shown, filtered.length)}
                 </span>
-                <span>Swipe left to pass, right to watch</span>
+                <span>Swipe left to pass, right for Interested</span>
               </p>
               <label>
                 Sort{" "}
@@ -1006,7 +1006,7 @@ export function VehicleCard({
                 onClick={() => decide("watch")}
               >
                 <Eye size={16} aria-hidden />
-                Watch
+                Interested
               </button>
               <button
                 className="primary-button"
@@ -1441,7 +1441,7 @@ export function VehicleEditor({
             </select>
           </label>
           <label>
-            Delivery (optional until Watch or Shortlist)
+            Delivery (optional until Interested or Shortlist)
             <select
               value={row.delivery}
               onChange={(e) =>

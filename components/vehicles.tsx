@@ -1433,6 +1433,9 @@ export function VehicleEditor({
             >
               <option value="">Unknown</option>
               <option value="dual">Dual</option>
+              <option value="performance dual">
+                Performance Dual / Dual + Power Upgrade
+              </option>
               <option value="quad">Quad</option>
               <option value="tri">Tri</option>
             </select>

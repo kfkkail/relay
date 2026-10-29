@@ -83,6 +83,9 @@ describe("Relay Vehicles presentation", () => {
     expect(html).toContain('<option value="max">Max</option>');
     expect(html).toContain("Confirmed motor configuration (optional)");
     expect(html).toContain('<option value="dual">Dual</option>');
+    expect(html).toContain(
+      '<option value="performance dual">Performance Dual / Dual + Power Upgrade</option>',
+    );
     expect(html).toMatch(/<option value="quad"[^>]*>Quad<\/option>/);
     expect(html).toContain('<option value="tri">Tri</option>');
   });

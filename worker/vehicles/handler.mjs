@@ -1,5 +1,6 @@
 import { autoDevKey } from "./credentials.mjs";
 import { autoDevPhotos, collectAutoDev } from "./auto-dev.mjs";
+import { enrichSellerListings } from "./detail-enrichment.mjs";
 
 export function vehicleCapabilities(env = process.env) {
   return env.RELAY_VEHICLE_SEARCH === "1" ? ["vehicle_search"] : [];
@@ -11,6 +12,7 @@ export async function runVehicleJob(
   {
     getKey = autoDevKey,
     collect = collectAutoDev,
+    enrich = enrichSellerListings,
     photos = autoDevPhotos,
   } = {},
 ) {
@@ -44,7 +46,16 @@ export async function runVehicleJob(
         request({ action: "photos", lease, photos: gallery }),
       );
     }
-    const result = await collect({ key, profile: claimed.profile });
+    const collected = await collect({ key, profile: claimed.profile });
+    const enrichment = await enrich({
+      listings: collected.listings,
+      profile: claimed.profile,
+    });
+    const result = {
+      ...collected,
+      counts: { ...collected.counts, ...enrichment.counts },
+      listings: enrichment.listings,
+    };
     if (leaseFailed)
       throw new Error("Vehicle worker lease could not be renewed.");
     const { listings, ...health } = result;

@@ -195,6 +195,10 @@ export function parseVehicleHealth(value: unknown) {
       return [key, n];
     }),
   );
+  for (const key of ["detail_attempted", "detail_resolved", "detail_failed"]) {
+    const n = number(c[key]);
+    if (n !== null && Number.isInteger(n)) counts[key] = n;
+  }
   return {
     version: 1,
     source: "auto.dev",

@@ -119,8 +119,11 @@ was found: full Supabase
 reset/lint/pgTAP remains unverified, though embedded PostgreSQL tests pass. The
 initial manual Rivian/Carvana/CarMax VIN comparison and subscription-specific
 storage/photo permissions remain rollout verification, as does the Auto.dev
-count mismatch. Direct URL extraction is intentionally deferred; manual import
-uses an editable form and performs no seller-page network fetch.
+count mismatch. Arbitrary URL extraction remains deferred; manual import uses an
+editable form and performs no seller-page network fetch. The worker now performs
+a separate bounded pass over Auto.dev-returned public seller URLs for exact
+battery labels, with the network and cache controls documented in
+`docs/vehicles.md`.
 
 Next owner-controlled step: make an isolated local Supabase runtime available,
 then run reset/lint/pgTAP and perform the small manual source comparison before

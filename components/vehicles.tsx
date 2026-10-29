@@ -202,8 +202,8 @@ export function Vehicles({
         .sort((a, b) => {
           if (sort === "price")
             return (
-              (a.evaluation.effective_cost ?? Infinity) -
-              (b.evaluation.effective_cost ?? Infinity)
+              (a.evaluation.effective_cost ?? a.row.price ?? Infinity) -
+              (b.evaluation.effective_cost ?? b.row.price ?? Infinity)
             );
           if (sort === "mileage")
             return (a.row.mileage ?? Infinity) - (b.row.mileage ?? Infinity);
@@ -530,7 +530,7 @@ export function Vehicles({
                 </h2>
                 <p>
                   {queue === "unreviewed"
-                    ? "Run a search or check Needs Verification for vehicles with missing battery or cost information."
+                    ? "Run a search or check Needs Verification for vehicles whose required battery is still unknown."
                     : "Vehicles will appear here as you review them."}
                 </p>
               </section>
@@ -821,6 +821,7 @@ export function VehicleCard({
               ? `${row.attributes.battery_pack} battery`
               : "Battery unverified",
             row.attributes.motor ? `${row.attributes.motor} motor` : null,
+            !row.attributes.motor ? "Motor unverified (optional)" : null,
           ]
             .filter(Boolean)
             .join(" · ")}
@@ -834,7 +835,7 @@ export function VehicleCard({
             <span>With shipping &amp; fees</span>
             <strong>
               {ev.effective_cost === null
-                ? "Cost incomplete"
+                ? "Not yet verified"
                 : money(ev.effective_cost)}
             </strong>
           </div>
@@ -1391,7 +1392,7 @@ function VehicleEditor({
             />
           </label>
           <label>
-            Confirmed battery pack
+            Confirmed battery pack (required)
             <input
               placeholder="e.g. large or max"
               value={row.attributes?.battery_pack ?? ""}
@@ -1408,7 +1409,7 @@ function VehicleEditor({
             />
           </label>
           <label>
-            Delivery
+            Delivery (optional until Watch or Shortlist)
             <select
               value={row.delivery}
               onChange={(e) =>
@@ -1424,7 +1425,7 @@ function VehicleEditor({
             </select>
           </label>
           <label>
-            Confirmed shipping ($)
+            Confirmed shipping ($, optional)
             <input
               type="number"
               min="0"
@@ -1438,7 +1439,7 @@ function VehicleEditor({
             />
           </label>
           <label>
-            Confirmed mandatory fees ($)
+            Confirmed mandatory fees ($, optional)
             <input
               type="number"
               min="0"

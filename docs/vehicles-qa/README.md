@@ -17,9 +17,9 @@ disabled in the sample. Unit tests assert isolation and production gating.
 
 Browser checks covered 1440px desktop, 390px and 320px mobile, light/dark modes,
 header navigation, queue selection, Pass/Undo/restore, Interested, verification,
-focus trapping/Escape, gallery selection, profile re-evaluation and actual pointer
-swipes across photos without opening a gallery. No page errors or live vehicle
-API requests were observed.
+focus trapping/Escape, gallery selection and profile re-evaluation. Review-state
+swipes are intentionally disabled. No page errors or live vehicle API requests
+were observed.
 
 ## Photo attribution
 

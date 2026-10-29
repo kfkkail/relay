@@ -500,7 +500,6 @@ export function Vehicles({
                   {" "}
                   · showing {Math.min(shown, filtered.length)}
                 </span>
-                <span>Swipe left to pass, right for Interested</span>
               </p>
               <label>
                 Sort{" "}
@@ -748,43 +747,13 @@ export function VehicleCard({
   verify: () => void;
   gallery: () => void;
 }) {
-  const start = useRef<{ x: number; y: number } | null>(null);
-  const swiped = useRef(false);
   const row = v.row,
     ev = v.evaluation;
   return (
-    <article
-      className="vehicle-card"
-      style={{ touchAction: "pan-y" }}
-      onPointerDown={(event) => {
-        if (
-          (event.target as HTMLElement).closest(
-            "button:not(.vehicle-photo-pair),a,input,select,details",
-          )
-        )
-          return;
-        swiped.current = false;
-        start.current = { x: event.clientX, y: event.clientY };
-      }}
-      onPointerUp={(event) => {
-        const origin = start.current;
-        start.current = null;
-        if (!origin || busy || Math.abs(event.clientY - origin.y) > 60) return;
-        const dx = event.clientX - origin.x;
-        if (Math.abs(dx) > 100 && v.decision !== "passed") {
-          swiped.current = true;
-          decide(dx < 0 ? "passed" : "watch");
-        }
-      }}
-      onPointerCancel={() => {
-        start.current = null;
-      }}
-    >
+    <article className="vehicle-card">
       <button
         className="vehicle-photo-pair"
-        onClick={() => {
-          if (!swiped.current) gallery();
-        }}
+        onClick={gallery}
         aria-label="View listing photos"
       >
         <span className="vehicle-exterior">

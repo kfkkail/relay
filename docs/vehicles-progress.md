@@ -10,7 +10,7 @@ Branch: `codex/auto-dev-vehicles`, based on `284e3a7` (`origin/main`).
       results, bounded pagination, retry, explicit coverage status, and fixtures.
 - [x] Domain and ingestion: forward-only schema/RLS, durable decisions,
       deduplication, rule evaluation, scoring, and idempotent ingestion.
-- [x] Review interface: dropdown link, queues, cards/photos, swipe, undo,
+- [x] Review interface: dropdown link, queues, cards/photos, review buttons, undo,
       verification, settings, and coverage health.
 - [x] Local Relay integration and verification: Run Now, task lifecycle,
       notifications, disabled schedules, regression checks and final review.
@@ -86,7 +86,8 @@ were not read or deleted during this change.
   mileage, location and seller. VIN, history, scoring, sources and corrections
   remain available in expandable details. Primary review has three actions;
   Passed has only an explicit restore action.
-- Photo swipes work without native image dragging or accidental gallery opens.
+- Review-state swipes are disabled; Pass, Interested and Shortlist use explicit
+  buttons.
   Desktop, 390px/320px mobile, dark mode, decisions/Undo, verification, gallery
   selection and profile re-evaluation passed browser checks with no page errors
   or live vehicle API requests. The full suite now passes 249 tests.

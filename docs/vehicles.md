@@ -85,8 +85,9 @@ Review cards show 25 at a time, with the backlog reachable
 through **Review next 25**, and session storage retains queue/batch position.
 Vehicles shares Relay's header and controls with Schedules. Desktop uses queue
 pills; mobile uses a queue selector so none of the states are clipped off-screen.
-Secondary facts and corrections are under **Details & sources**. Swipe the
-photo/card left to Pass or right to Interested, or use the three review buttons.
+Secondary facts and corrections are under **Details & sources**. Pass,
+Interested and Shortlist use explicit review buttons; card swipes never change
+review state.
 Passed cards expose an explicit Restore action rather than normal review actions.
 
 Manual import currently uses a URL plus an editable form; it does not fetch that
@@ -147,7 +148,7 @@ Scoring-only edits preserve an already-enabled schedule.
   failures and shared-schedule baseline enforcement. Desktop/mobile fixture
   checks also exercised provisional (no-VIN) gallery selection and missing-price
   verification; the visual pass repeated shared navigation, mobile queue access,
-  photo swipes, Undo, dark mode and 320px layout. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
+  review buttons, Undo, dark mode and 320px layout. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
   not live feed coverage or a deployed database.
 - `supabase db reset`, `supabase db lint --level warning`, and `supabase test db`
   remain required against a local Supabase runtime or the existing CI workflow.

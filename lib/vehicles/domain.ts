@@ -1,4 +1,24 @@
-import type { Evaluation, VehicleListing, VehicleProfile } from "./types";
+import type {
+  Evaluation,
+  VehicleListing,
+  VehicleOverrides,
+  VehicleProfile,
+} from "./types";
+
+export const listingVerificationKey = (row: VehicleListing) =>
+  `${row.source}:${row.source_listing_id}`;
+
+export function sameListingContext(
+  a: VehicleListing,
+  b: Pick<
+    VehicleListing,
+    "source" | "source_listing_id" | "seller" | "seller_id" | "url"
+  >,
+) {
+  return (
+    ["source", "source_listing_id", "seller", "seller_id", "url"] as const
+  ).every((key) => a[key] === b[key]);
+}
 
 export const defaultVehicleProfile: VehicleProfile = {
   make: "Rivian",
@@ -30,14 +50,41 @@ export const defaultVehicleProfile: VehicleProfile = {
 
 export function applyVehicleOverrides(
   row: VehicleListing,
-  overrides: Partial<VehicleListing>,
+  overrides: VehicleOverrides,
   profile: VehicleProfile,
 ): VehicleListing {
-  const verified = {
+  // Only vehicle-level facts follow a VIN. Legacy unscoped costs/photos and
+  // arbitrary identity fields must never leak onto another seller's listing.
+  const verified: VehicleListing = {
     ...row,
-    ...overrides,
     attributes: { ...row.attributes, ...overrides.attributes },
+    title_status: overrides.title_status ?? row.title_status,
+    history_available: overrides.history_available ?? row.history_available,
+    history_flags: overrides.history_flags ?? row.history_flags,
   };
+  const scoped = overrides.listing_verifications?.[listingVerificationKey(row)];
+  if (scoped && sameListingContext(row, scoped)) {
+    verified.price = row.price ?? scoped.price ?? null;
+    verified.shipping =
+      scoped.shipping === undefined ? row.shipping : scoped.shipping;
+    verified.mandatory_fees =
+      scoped.mandatory_fees === undefined
+        ? row.mandatory_fees
+        : scoped.mandatory_fees;
+    verified.delivery = scoped.delivery ?? row.delivery;
+    if (scoped.interior_photo) {
+      verified.photos = row.photos
+        .filter((photo) => photo.url !== scoped.interior_photo)
+        .map((photo) => ({
+          ...photo,
+          category: photo.category === "interior" ? "unknown" : photo.category,
+        }));
+      verified.photos.push({
+        url: scoped.interior_photo,
+        category: "interior",
+      });
+    }
+  }
   if (profile.excluded_titles.includes(row.title_status.toLowerCase()))
     verified.title_status = row.title_status;
   return verified;

@@ -41,8 +41,14 @@ revision so it cannot overwrite a newer decision from another tab.
 Unknown battery, VIN or complete acquisition cost goes to Needs Verification.
 Adventure and Launch Edition alone do not establish a battery. Missing shipping
 and fees are not zero; confirmed pickup removes shipping from the total. Missing
-history is a warning and score penalty. Verification overrides persist through
-future source updates. Review cards show 25 at a time, with the backlog reachable
+history is a warning and score penalty. Verified battery/history facts follow
+the vehicle through source updates; newly reported excluded titles always win
+over an earlier clean-title confirmation. Shipping, fees, delivery, a confirmed
+missing-price fallback, and the selected interior photo are scoped to the
+listing ID, seller identity and URL. A seller/URL change requires fresh cost
+verification. A later advertised source price takes precedence over the fallback.
+Gallery selection patches only the photo, not stale verification form fields.
+Review cards show 25 at a time, with the backlog reachable
 through **Review next 25**, and session storage retains queue/batch position.
 
 Manual import currently uses a URL plus an editable form; it does not fetch an
@@ -79,6 +85,14 @@ Successful no-change searches remain silent. New eligible vehicles, watched
 changes and material failures enqueue one digest per subscription/run. Vehicle
 pushes open `/vehicles`; the generic completion push is suppressed. Photo-only
 jobs complete silently.
+Optional photo failures leave their own task waiting without changing inventory
+coverage health, absence counters or digest counts. Vehicle ingestion and
+heartbeat requests have a 30-second timeout with bounded upload retries.
+
+The baseline guard is enforced in the database, including edits through the
+shared Schedules screen. Make/model/origin ZIP changes disable daily searches
+until a successful baseline for that collection scope and an explicit enable.
+Scoring-only edits preserve an already-enabled schedule.
 
 ## Verification and rollout gates
 
@@ -87,14 +101,21 @@ jobs complete silently.
   cron/network extensions are stubbed only in this embedded harness.
 - `npx tsc --noEmit`, `npm run lint`, `npm run format:check`, and `npm run build`
   verify the application.
+- Final local review passed 236 tests on 2026-10-29, including HTTP verification
+  patches, seller-context changes, VIN-merge confirmations, optional-photo
+  failures and shared-schedule baseline enforcement. Desktop/mobile fixture
+  checks also exercised provisional (no-VIN) gallery selection and missing-price
+  verification. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
+  not live feed coverage or a deployed database.
 - `supabase db reset`, `supabase db lint --level warning`, and `supabase test db`
   remain required against a local Supabase runtime or the existing CI workflow.
   The new `supabase/tests/vehicles.test.sql` tests owner isolation, job snapshots,
   legacy claims, lease fencing and atomic/idempotent ingestion there.
 - Compare manually enumerated VIN samples from Rivian/Carvana/CarMax against the
   feed, confirm the account's storage/photo permissions and request allowance,
-  resolve or document provider count discrepancies, and review the baseline
-  before explicitly enabling the daily schedule.
+  resolve the provider count discrepancy sufficiently to produce a successful
+  baseline, and review it before explicitly enabling the daily schedule. The
+  currently Partial census does not satisfy the baseline guard.
 
 This implementation is prepared locally. Remote migration, deploy, push/PR,
 merge and schedule enablement are separate owner actions.

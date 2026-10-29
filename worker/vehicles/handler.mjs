@@ -16,14 +16,19 @@ export async function runVehicleJob(
 ) {
   const endpoint = `/api/worker/runs/${claimed.run.id}/vehicles`;
   const lease = claimed.run.lease;
+  // Bound uploads/finalization as well as provider requests. A stalled Relay
+  // connection must not keep renewing an otherwise abandoned vehicle job.
+  const request = (body) =>
+    relayRequest(endpoint, {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30000),
+    });
   // A heartbeat failure aborts this local collection before it can stage data
   // under a lease that another worker may have recovered.
   let leaseFailed = false;
   const heartbeat = setInterval(() => {
-    relayRequest(endpoint, {
-      method: "POST",
-      body: JSON.stringify({ action: "heartbeat", lease }),
-    }).catch(() => {
+    request({ action: "heartbeat", lease }).catch(() => {
       leaseFailed = true;
     });
   }, 30000);
@@ -36,10 +41,7 @@ export async function runVehicleJob(
       if (leaseFailed)
         throw new Error("Vehicle worker lease could not be renewed.");
       return await retryRelay(() =>
-        relayRequest(endpoint, {
-          method: "POST",
-          body: JSON.stringify({ action: "photos", lease, photos: gallery }),
-        }),
+        request({ action: "photos", lease, photos: gallery }),
       );
     }
     const result = await collect({ key, profile: claimed.profile });
@@ -49,22 +51,16 @@ export async function runVehicleJob(
     for (let offset = 0; offset < listings.length; offset += 50) {
       if (leaseFailed)
         throw new Error("Vehicle worker lease could not be renewed.");
-      const init = {
-        method: "POST",
-        body: JSON.stringify({
-          action: "batch",
-          lease,
-          batch: offset / 50,
-          listings: listings.slice(offset, offset + 50),
-        }),
+      const body = {
+        action: "batch",
+        lease,
+        batch: offset / 50,
+        listings: listings.slice(offset, offset + 50),
       };
-      await retryRelay(() => relayRequest(endpoint, init));
+      await retryRelay(() => request(body));
     }
     return await retryRelay(() =>
-      relayRequest(endpoint, {
-        method: "POST",
-        body: JSON.stringify({ action: "finalize", lease, health }),
-      }),
+      request({ action: "finalize", lease, health }),
     );
   } finally {
     clearInterval(heartbeat);

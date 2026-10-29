@@ -12,6 +12,7 @@ create temp table vehicle_test_context(profile uuid,schedule uuid,task uuid,run 
 insert into vehicle_test_context(profile) select public.save_vehicle_profile(null,'{"make":"Rivian","model":"R1T","origin_zip":"46530","cost_ceiling":70000,"allowed_batteries":["large","max"]}');
 update vehicle_test_context c set schedule=p.schedule_id from public.vehicle_search_profiles p where p.id=c.profile;
 select is((select s.enabled from public.task_schedules s join vehicle_test_context c on c.schedule=s.id),false,'Initial vehicle schedule is disabled');
+select throws_ok($$update public.task_schedules set enabled=true where id=(select schedule from vehicle_test_context)$$,'P0001','Complete and review a successful manual baseline for this search scope before enabling daily searches','Shared schedule controls cannot bypass the vehicle baseline');
 select is((select count(*)::integer from public.vehicle_profile_versions p join vehicle_test_context c on c.profile=p.profile_id),1,'Profile revision is immutable domain data');
 update vehicle_test_context set task=public.run_task_schedule(schedule,'00000000-0000-4000-8000-000000000074');
 update vehicle_test_context c set run=r.id from public.runs r where r.task_id=c.task;

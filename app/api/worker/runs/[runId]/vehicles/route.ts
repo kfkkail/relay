@@ -3,6 +3,7 @@ import { ApiError, apiErrorResponse } from "@/lib/http";
 import { requireWorker } from "@/lib/worker-auth";
 import { applyVehicleOverrides, evaluateVehicle } from "@/lib/vehicles/domain";
 import type { VehicleListing } from "@/lib/vehicles/types";
+import { readVehicleJson } from "@/lib/vehicles/request";
 import {
   parseVehicleHealth,
   parseVehicleListing,
@@ -18,23 +19,7 @@ export async function POST(
     const { runId } = await params;
     // Read a bounded stream; a missing/forged Content-Length must not bypass
     // ingestion limits. Unknown worker fields never reach storage.
-    const reader = request.body?.getReader();
-    if (!reader) throw new ApiError("Vehicle result required.");
-    const chunks: Uint8Array[] = [];
-    let length = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        length += value.length;
-        if (length > 1024 * 1024)
-          throw new ApiError("Vehicle batch exceeds 1 MB.", 413);
-        chunks.push(value);
-      }
-    } finally {
-      await reader.cancel().catch(() => {});
-    }
-    const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    const body = await readVehicleJson(request, 1024 * 1024);
     const { data: run, error } = await supabase
       .from("runs")
       .select("id,job_kind,job_payload,status,user_id")

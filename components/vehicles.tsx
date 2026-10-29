@@ -85,7 +85,9 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
     [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<Reviewed | null>(null),
     [importing, setImporting] = useState(false),
-    [gallery, setGallery] = useState<VehicleListing | null>(null);
+    [gallery, setGallery] = useState<
+      (VehicleListing & { vehicleId: string }) | null
+    >(null);
   const [undo, setUndo] = useState<{
     id: string;
     decision: Decision;
@@ -448,7 +450,7 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
                   busy={busy}
                   decide={(decision) => void decide(v, decision)}
                   verify={() => setEditing(v)}
-                  gallery={() => setGallery(v.row)}
+                  gallery={() => setGallery({ ...v.row, vehicleId: v.id })}
                 />
               ))}
             </div>
@@ -550,11 +552,9 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
                 disabled={busy}
                 onClick={() =>
                   void perform(async () => {
-                    const vehicle = vehicles.find((v) => v.vin === gallery.vin);
-                    if (!vehicle) return;
                     await action({
                       action: "photos",
-                      id: vehicle.id,
+                      id: gallery.vehicleId,
                       profileId: profile.id,
                     });
                     await refresh();
@@ -578,10 +578,6 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
                   disabled={busy}
                   onClick={() =>
                     void perform(async () => {
-                      const vehicle = vehicles.find(
-                        (v) => v.vin === gallery.vin,
-                      );
-                      if (!vehicle) return;
                       const updated = {
                         ...gallery,
                         photos: gallery.photos.map((item) => ({
@@ -595,9 +591,10 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
                         })),
                       };
                       await action({
-                        action: "verify",
-                        id: vehicle.id,
-                        listing: updated,
+                        action: "interior_photo",
+                        id: gallery.vehicleId,
+                        listing: gallery,
+                        photoUrl: photo.url,
                       });
                       await refresh();
                       setGallery(updated);
@@ -1032,6 +1029,12 @@ function VehicleEditor({
   save: (listing: Partial<VehicleListing>) => Promise<void>;
 }) {
   const modalFocus = useVehicleModal(true, close);
+  const missingSourcePrice = vehicle?.vehicle_listings.some(
+    (listing) =>
+      listing.data.source === vehicle.row.source &&
+      listing.data.source_listing_id === vehicle.row.source_listing_id &&
+      listing.data.price === null,
+  );
   const [row, setRow] = useState<Partial<VehicleListing>>(
     vehicle?.row ?? {
       source: "manual",
@@ -1140,6 +1143,22 @@ function VehicleEditor({
                 />
               </label>
             </>
+          )}
+          {vehicle && missingSourcePrice && (
+            <label>
+              Confirmed advertised price
+              <input
+                type="number"
+                min="1"
+                value={row.price ?? ""}
+                onChange={(e) =>
+                  setRow({
+                    ...row,
+                    price: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </label>
           )}
           <label>
             VIN

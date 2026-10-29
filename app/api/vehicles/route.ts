@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-import { defaultVehicleProfile } from "@/lib/vehicles/domain";
+import {
+  defaultVehicleProfile,
+  listingVerificationKey,
+  sameListingContext,
+} from "@/lib/vehicles/domain";
 import {
   parseVehicleListing,
   parseVehicleProfile,
   safeVehicleUrl,
 } from "@/lib/vehicles/validation";
+import { readVehicleJson } from "@/lib/vehicles/request";
 
 export const dynamic = "force-dynamic";
 const uuid = (value: unknown) =>
@@ -71,10 +76,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    if (Number(request.headers.get("content-length")) > 100000)
-      throw new ApiError("Vehicle request is too large.", 413);
     const { supabase } = await requireUser();
-    const body = await request.json();
+    const body = await readVehicleJson(request, 100000);
     let result;
     switch (body.action) {
       case "profile":
@@ -101,33 +104,59 @@ export async function POST(request: Request) {
           p_revision: body.revision,
         });
         break;
-      case "verify": {
+      case "verify":
+      case "interior_photo": {
         if (!uuid(body.id)) throw new ApiError("Invalid vehicle.");
-        // Only owner-confirmable fields are overrides; never permit decision,
-        // identity, owner, or source metadata changes via verification JSON.
-        const row = parseVehicleListing(
-          {
-            ...body.listing,
-            source_listing_id: "verification",
-            make: "verification",
-            model: "verification",
-            vin: null,
-          },
-          "manual",
-        );
+        if (!["auto.dev", "manual"].includes(body.listing?.source))
+          throw new ApiError("Invalid listing source.");
+        const row = parseVehicleListing(body.listing, body.listing.source);
+        const { data: listing, error } = await supabase
+          .from("vehicle_listings")
+          .select("data")
+          .eq("vehicle_id", body.id)
+          .eq("source", row.source)
+          .eq("source_listing_id", row.source_listing_id)
+          .single();
+        if (error || !listing) throw new ApiError("Listing not found.", 404);
+        const current = parseVehicleListing(listing.data, row.source);
+        if (!sameListingContext(current, row))
+          throw new ApiError("Listing changed; refresh before verifying.", 409);
+        const context = {
+          source: current.source,
+          source_listing_id: current.source_listing_id,
+          seller: current.seller,
+          seller_id: current.seller_id,
+          url: current.url,
+        };
+        const interior = body.action === "interior_photo";
+        if (interior && !current.photos.some((p) => p.url === body.photoUrl))
+          throw new ApiError("Photo changed; reload the gallery.", 409);
+        // The RPC rechecks the stored context transactionally. Gallery selection
+        // only patches the photo, never stale battery/history/cost form values.
         result = await supabase.rpc("verify_vehicle", {
           p_id: body.id,
           p_overrides: {
-            attributes: row.attributes,
-            shipping: row.shipping,
-            mandatory_fees: row.mandatory_fees,
-            delivery: row.delivery,
-            title_status: row.title_status,
-            history_available: row.history_available,
-            history_flags: row.history_flags,
-            ...(row.photos.some((photo) => photo.category === "interior")
-              ? { photos: row.photos }
+            ...(!interior
+              ? {
+                  attributes: row.attributes,
+                  title_status: row.title_status,
+                  history_available: row.history_available,
+                  history_flags: row.history_flags,
+                }
               : {}),
+            listing_verifications: {
+              [listingVerificationKey(current)]: {
+                ...context,
+                ...(interior
+                  ? { interior_photo: body.photoUrl }
+                  : {
+                      ...(current.price === null ? { price: row.price } : {}),
+                      shipping: row.shipping,
+                      mandatory_fees: row.mandatory_fees,
+                      delivery: row.delivery,
+                    }),
+              },
+            },
           },
         });
         break;

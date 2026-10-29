@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultVehicleProfile as profile,
+  applyVehicleOverrides,
+  listingVerificationKey,
   distanceMiles,
   evaluateVehicle,
   materialVehicleChange,
@@ -133,6 +135,112 @@ describe("vehicle hard rules", () => {
 });
 
 describe("durable review and re-evaluation", () => {
+  it("scopes seller cost confirmations while battery follows the VIN", () => {
+    const row = listing({
+      shipping: null,
+      mandatory_fees: null,
+      delivery: "unknown",
+    });
+    const overrides = {
+      attributes: {
+        battery_pack: "max",
+        motor: null,
+        battery_evidence: "verified",
+      },
+      listing_verifications: {
+        [listingVerificationKey(row)]: {
+          source: row.source,
+          source_listing_id: row.source_listing_id,
+          seller: row.seller,
+          seller_id: row.seller_id,
+          url: row.url,
+          shipping: 0,
+          mandatory_fees: 0,
+          delivery: "pickup" as const,
+        },
+      },
+    };
+    expect(
+      evaluateVehicle(applyVehicleOverrides(row, overrides, profile), profile)
+        .eligibility,
+    ).toBe("eligible");
+    for (const changed of [
+      { seller: "Different Dealer" },
+      { seller_id: "new-id" },
+      { url: "https://example.com/new-listing" },
+      { source_listing_id: "another-listing" },
+      { source: "manual" as const },
+    ]) {
+      const verified = applyVehicleOverrides(
+        { ...row, ...changed },
+        overrides,
+        profile,
+      );
+      expect(verified.attributes.battery_pack).toBe("max");
+      expect(evaluateVehicle(verified, profile).eligibility).toBe(
+        "needs_verification",
+      );
+    }
+  });
+  it("uses a scoped confirmed price only while the feed price is missing", () => {
+    const row = listing({ price: null });
+    const overrides = {
+      listing_verifications: {
+        [listingVerificationKey(row)]: {
+          source: row.source,
+          source_listing_id: row.source_listing_id,
+          seller: row.seller,
+          seller_id: row.seller_id,
+          url: row.url,
+          price: 51000,
+          interior_photo: "https://example.com/cabin.jpg",
+        },
+      },
+    };
+    expect(applyVehicleOverrides(row, overrides, profile).price).toBe(51000);
+    expect(
+      applyVehicleOverrides({ ...row, price: 49000 }, overrides, profile).price,
+    ).toBe(49000);
+    expect(
+      applyVehicleOverrides(
+        { ...row, seller: "Different Dealer" },
+        overrides,
+        profile,
+      ).price,
+    ).toBeNull();
+    expect(
+      applyVehicleOverrides(row, overrides, profile).photos,
+    ).toContainEqual({
+      url: "https://example.com/cabin.jpg",
+      category: "interior",
+    });
+    expect(
+      applyVehicleOverrides(
+        { ...row, seller: "Different Dealer" },
+        overrides,
+        profile,
+      ).photos,
+    ).toEqual(row.photos);
+  });
+  it("ignores legacy unscoped listing costs and identity overrides", () => {
+    const row = listing({
+      shipping: null,
+      mandatory_fees: null,
+      delivery: "unknown",
+    });
+    const legacy = {
+      shipping: 0,
+      mandatory_fees: 0,
+      delivery: "pickup",
+      vin: "7FCTGAAA0NN000099",
+      title_status: "clean",
+    };
+    const verified = applyVehicleOverrides(row, legacy, profile);
+    expect(verified.vin).toBe(row.vin);
+    expect(evaluateVehicle(verified, profile).eligibility).toBe(
+      "needs_verification",
+    );
+  });
   it("does not let a prior clean-title override hide a newly reported title problem", () => {
     const r = record({ overrides: { title_status: "clean" } });
     r.vehicle_listings[0].data.title_status = "salvage";

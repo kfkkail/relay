@@ -25,5 +25,10 @@ describe("vehicle worker routing", () => {
     expect(JSON.parse(request.mock.calls[2][1].body).listings).toHaveLength(1);
     expect(JSON.parse(request.mock.calls[3][1].body).action).toBe("finalize");
     expect(JSON.stringify(request.mock.calls)).not.toContain("test-secret");
+    expect(
+      request.mock.calls.every(
+        ([, init]) => init.signal instanceof AbortSignal,
+      ),
+    ).toBe(true);
   });
 });

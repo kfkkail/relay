@@ -72,7 +72,7 @@ grant usage,select on sequence public.vehicle_listing_observations_id_seq to ser
 
 create function public.save_vehicle_profile(p_id uuid,p_config jsonb) returns uuid
 language plpgsql security definer set search_path='' as $$
-declare uid uuid:=auth.uid(); pid uuid; sid uuid; rev integer;
+declare uid uuid:=auth.uid(); pid uuid; sid uuid; rev integer; old_config jsonb;
 begin
  if uid is null then raise exception 'Sign in required'; end if;
  if jsonb_typeof(p_config)<>'object' or length(coalesce(p_config->>'make','')) not between 1 and 80 or length(coalesce(p_config->>'model','')) not between 1 and 80 or coalesce(p_config->>'origin_zip','') !~ '^\d{5}$' or coalesce((p_config->>'cost_ceiling')::numeric,0)<=0 or jsonb_typeof(p_config->'allowed_batteries')<>'array' then raise exception 'Invalid profile'; end if;
@@ -82,16 +82,36 @@ begin
    values(uid,'Vehicle search','Collect the configured vehicle inventory.','investigation','America/Indiana/Indianapolis',array[0,1,2,3,4,5,6],1440,420,421,false,public.next_schedule_slot('America/Indiana/Indianapolis',array[0,1,2,3,4,5,6],1440,420,421,now()),'vehicle_search',jsonb_build_object('profile_id',pid,'profile_version',rev)) returning id into sid;
   update public.vehicle_search_profiles set schedule_id=sid where id=pid;
  else
-  select id,schedule_id,version+1 into pid,sid,rev from public.vehicle_search_profiles where id=p_id and user_id=uid for update;
+  select id,schedule_id,version+1,config into pid,sid,rev,old_config from public.vehicle_search_profiles where id=p_id and user_id=uid for update;
   if pid is null then raise exception 'Profile not found'; end if;
   update public.vehicle_search_profiles set version=rev,config=p_config where id=pid;
-  update public.task_schedules set job_payload=jsonb_build_object('profile_id',pid,'profile_version',rev) where id=sid and user_id=uid;
+  update public.task_schedules set job_payload=jsonb_build_object('profile_id',pid,'profile_version',rev),
+   enabled=enabled and lower(old_config->>'make')=lower(p_config->>'make') and lower(old_config->>'model')=lower(p_config->>'model') and old_config->>'origin_zip'=p_config->>'origin_zip'
+   where id=sid and user_id=uid;
  end if;
  insert into public.vehicle_profile_versions(profile_id,user_id,version,config) values(pid,uid,rev,p_config);
  return pid;
 end $$;
 revoke all on function public.save_vehicle_profile(uuid,jsonb) from public,anon;
 grant execute on function public.save_vehicle_profile(uuid,jsonb) to authenticated;
+
+-- Guard the shared Schedules RPC too, not just the Vehicles screen. A baseline
+-- from another collection scope cannot authorize a newly edited search.
+create function public.guard_vehicle_schedule() returns trigger
+language plpgsql security definer set search_path='' as $$
+declare cfg jsonb;
+begin
+ if new.job_kind='vehicle_search' and new.enabled then
+  select config into cfg from public.vehicle_search_profiles where id=(new.job_payload->>'profile_id')::uuid and user_id=new.user_id and schedule_id=new.id;
+  if cfg is null or not exists(
+   select 1 from public.vehicle_search_runs s where s.profile_id=(new.job_payload->>'profile_id')::uuid and s.user_id=new.user_id and s.status='success'
+   and lower(s.health->'scope'->>'make')=lower(cfg->>'make') and lower(s.health->'scope'->>'model')=lower(cfg->>'model') and s.health->'scope'->>'origin_zip'=cfg->>'origin_zip'
+  ) then raise exception 'Complete and review a successful manual baseline for this search scope before enabling daily searches'; end if;
+ end if;
+ return new;
+end $$;
+create trigger guard_vehicle_schedule before insert or update on public.task_schedules for each row execute function public.guard_vehicle_schedule();
+revoke all on function public.guard_vehicle_schedule() from public,anon,authenticated;
 
 create function public.snapshot_vehicle_job() returns trigger language plpgsql security definer set search_path='' as $$
 begin
@@ -167,10 +187,29 @@ begin
 end $$;
 create function public.verify_vehicle(p_id uuid,p_overrides jsonb) returns void
 language plpgsql security definer set search_path='' as $$
+declare existing jsonb; merged jsonb; scoped jsonb; patch record; current_listing jsonb; field text;
 begin
- if jsonb_typeof(p_overrides)<>'object' or octet_length(p_overrides::text)>20000 then raise exception 'Invalid verification'; end if;
- update public.vehicles set overrides=p_overrides where id=p_id and user_id=auth.uid();
+ if p_overrides is null or jsonb_typeof(p_overrides)<>'object' or octet_length(p_overrides::text)>20000 then raise exception 'Invalid verification'; end if;
+ select overrides into existing from public.vehicles where id=p_id and user_id=auth.uid() for update;
  if not found then raise exception 'Vehicle not found'; end if;
+ if exists(select 1 from jsonb_object_keys(p_overrides) k where k not in ('attributes','title_status','history_available','history_flags','listing_verifications')) then raise exception 'Invalid verification fields'; end if;
+ if p_overrides ? 'listing_verifications' and jsonb_typeof(p_overrides->'listing_verifications')<>'object' then raise exception 'Invalid listing verification'; end if;
+ scoped:=coalesce(existing->'listing_verifications','{}');
+ for patch in select * from jsonb_each(coalesce(p_overrides->'listing_verifications','{}')) loop
+  select data into current_listing from public.vehicle_listings where vehicle_id=p_id and user_id=auth.uid() and source=patch.value->>'source' and source_listing_id=patch.value->>'source_listing_id' for update;
+  if not found or patch.key is distinct from (patch.value->>'source')||':'||(patch.value->>'source_listing_id') then raise exception 'Listing not found'; end if;
+  foreach field in array array['source','source_listing_id','seller','seller_id','url'] loop
+   if current_listing->field is distinct from patch.value->field then raise exception 'Listing changed; refresh before verifying'; end if;
+  end loop;
+  if patch.value ? 'interior_photo' and not exists(select 1 from jsonb_array_elements(coalesce(current_listing->'photos','[]')) p where p->>'url'=patch.value->>'interior_photo') then raise exception 'Photo changed; reload the gallery'; end if;
+  if exists(select 1 from unnest(array['source','source_listing_id','seller','seller_id','url']) f where scoped->patch.key->f is distinct from patch.value->f) then scoped:=scoped-patch.key; end if;
+  -- Deep merge a single listing patch so choosing a photo cannot erase costs,
+  -- and verifying one seller cannot erase another seller's confirmations.
+  scoped:=jsonb_set(scoped,array[patch.key],coalesce(scoped->patch.key,'{}')||patch.value);
+ end loop;
+ merged:=(existing-array['price','shipping','mandatory_fees','delivery','photos','listing_verifications'])||(p_overrides-'listing_verifications')||jsonb_build_object('listing_verifications',scoped);
+ if octet_length(merged::text)>200000 then raise exception 'Too many listing verifications'; end if;
+ update public.vehicles set overrides=merged where id=p_id;
 end $$;
 revoke all on function public.set_vehicle_decision(uuid,text,integer),public.verify_vehicle(uuid,jsonb) from public,anon;
 grant execute on function public.set_vehicle_decision(uuid,text,integer),public.verify_vehicle(uuid,jsonb) to authenticated;
@@ -294,7 +333,7 @@ begin
  update public.vehicles set
   decision=case when src.decision='passed' or dst.decision='passed' then 'passed' when src.decision_at>coalesce(dst.decision_at,'-infinity'::timestamptz) then src.decision else dst.decision end,
   decision_at=greatest(src.decision_at,dst.decision_at),decision_revision=greatest(src.decision_revision,dst.decision_revision)+1,
-  overrides=src.overrides||dst.overrides,first_seen_at=least(src.first_seen_at,dst.first_seen_at),last_seen_at=greatest(src.last_seen_at,dst.last_seen_at) where id=dst.id;
+  overrides=src.overrides||dst.overrides||jsonb_build_object('listing_verifications',coalesce(src.overrides->'listing_verifications','{}')||coalesce(dst.overrides->'listing_verifications','{}')),first_seen_at=least(src.first_seen_at,dst.first_seen_at),last_seen_at=greatest(src.last_seen_at,dst.last_seen_at) where id=dst.id;
  update public.vehicle_listings set vehicle_id=dst.id,data=jsonb_set(data,'{vin}',to_jsonb(p_vin)) where vehicle_id=src.id;
  delete from public.vehicles where id=src.id;
  return dst.id;
@@ -309,7 +348,16 @@ begin
  select * into r from public.runs where id=p_run and worker_id=p_worker and vehicle_lease=p_lease and job_kind='vehicle_search' for update;
  if r.id is null then raise exception 'Active vehicle run not found'; end if;
  if r.status='completed' then select summary into result from public.vehicle_search_runs where run_id=p_run; return result; end if;
+ if r.job_payload->>'photo_vin' is not null and r.status='failed' then return jsonb_build_object('photos','failed'); end if;
  if r.status<>'working' then raise exception 'Active vehicle run not found'; end if;
+ if r.job_payload->>'photo_vin' is not null then
+  -- An optional image request is not a failed inventory enumeration. Preserve
+  -- coverage health and absence counts; surface the retry on its own task.
+  update public.runs set status='failed',finished_at=now(),error='Vehicle photo gallery could not be loaded. Open the original listing or retry.' where id=p_run;
+  update public.tasks set status='waiting' where id=r.task_id;
+  insert into public.events(task_id,run_id,user_id,type,payload) values(r.task_id,r.id,r.user_id,'run.failed',jsonb_build_object('attempt',r.attempt,'error','Vehicle photo gallery unavailable'));
+  return jsonb_build_object('photos','failed');
+ end if;
  select config into cfg from public.vehicle_profile_versions where profile_id=(r.job_payload->>'profile_id')::uuid and version=(r.job_payload->>'profile_version')::integer and user_id=r.user_id;
  delete from public.vehicle_ingestion_batches where run_id=p_run;
  result:=public.finalize_vehicle_run(p_run,p_worker,p_lease,jsonb_build_object('version',1,'source','auto.dev','status','failed','scope',cfg,'counts',jsonb_build_object('parsed',0,'reported',null,'discovered',0,'pages',0,'requests',0,'invalid',0,'duplicates',0),'warnings',jsonb_build_array('worker_collection_or_ingestion_failed')));

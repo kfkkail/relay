@@ -61,7 +61,7 @@ export type VehicleRecord = {
   vin: string | null;
   decision: Decision;
   decision_revision: number;
-  overrides: Partial<VehicleListing>;
+  overrides: VehicleOverrides;
   first_seen_at: string;
   last_seen_at: string;
   vehicle_listings: {
@@ -70,6 +70,23 @@ export type VehicleRecord = {
     last_seen_at: string;
     availability: string;
   }[];
+};
+export type ListingVerification = Pick<
+  VehicleListing,
+  "source" | "source_listing_id" | "seller" | "seller_id" | "url"
+> &
+  Partial<
+    Pick<VehicleListing, "price" | "shipping" | "mandatory_fees" | "delivery">
+  > & {
+    interior_photo?: string;
+  };
+export type VehicleOverrides = Partial<
+  Pick<
+    VehicleListing,
+    "attributes" | "title_status" | "history_available" | "history_flags"
+  >
+> & {
+  listing_verifications?: Record<string, ListingVerification>;
 };
 export type Evaluation = {
   eligibility: Eligibility;

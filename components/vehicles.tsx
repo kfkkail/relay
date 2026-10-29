@@ -10,8 +10,22 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { CarFront, Play, RefreshCw, X } from "lucide-react";
-import { SettingsMenu } from "@/components/settings-menu";
+import {
+  CarFront,
+  Play,
+  RefreshCw,
+  X,
+  Plus,
+  ArrowUpRight,
+  Eye,
+  Check,
+  ChevronDown,
+  MapPin,
+  Gauge,
+  SlidersHorizontal,
+  Activity,
+} from "lucide-react";
+import { RelayHeader } from "@/components/relay-header";
 import { defaultVehicleProfile } from "@/lib/vehicles/domain";
 import { inVehicleQueue, reviewVehicle } from "@/lib/vehicles/review";
 import type {
@@ -58,8 +72,12 @@ const money = (n: number | null) =>
         currency: "USD",
         maximumFractionDigits: 0,
       }).format(n);
-async function action(body: object) {
-  const response = await fetch("/api/vehicles", {
+export type VehicleRequest = (
+  path: string,
+  init?: RequestInit,
+) => Promise<Response>;
+async function vehicleAction(request: VehicleRequest, body: object) {
+  const response = await request("/api/vehicles", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -69,7 +87,16 @@ async function action(body: object) {
   return result.result;
 }
 
-export function Vehicles({ userEmail }: { userEmail: string }) {
+export function Vehicles({
+  userEmail,
+  request = fetch,
+  preview = false,
+}: {
+  userEmail: string;
+  request?: VehicleRequest;
+  preview?: boolean;
+}) {
+  const action = (body: object) => vehicleAction(request, body);
   const [profiles, setProfiles] = useState<Profile[]>([]),
     [records, setRecords] = useState<VehicleRecord[]>([]),
     [runs, setRuns] = useState<HealthRun[]>([]);
@@ -102,7 +129,7 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
     const all: VehicleRecord[] = [];
     let page = 0;
     while (page < 10) {
-      const response = await fetch(`/api/vehicles?page=${page}`, {
+      const response = await request(`/api/vehicles?page=${page}`, {
         cache: "no-store",
       });
       const body = await response.json();
@@ -123,7 +150,7 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
     }
     setRecords(all);
     setLoaded(true);
-  }, []);
+  }, [request]);
   useEffect(() => {
     if (!pending.length) return;
     const timer = setTimeout(() => {
@@ -229,20 +256,19 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
     setNotice("");
   }
   return (
-    <main className="vehicles-page">
-      <header className="topbar">
-        <Link href="/my-work" className="brand">
-          Relay
-        </Link>
-        <SettingsMenu userEmail={userEmail} />
-      </header>
+    <main className="app-shell vehicles-page">
+      <RelayHeader userEmail={userEmail} preview={preview} />
       <section className="vehicles-content">
+        {preview && (
+          <p className="vehicle-preview-notice" role="note">
+            Interactive sample · No live listings, API requests or worker jobs.
+            Changes reset on reload.
+          </p>
+        )}
         <div className="vehicles-heading">
           <div>
-            <p className="vehicles-eyebrow">Your next vehicle</p>
-            <h1>
-              <CarFront aria-hidden size={30} /> Vehicles
-            </h1>
+            <p className="eyebrow">Your relay</p>
+            <h1>Vehicles</h1>
             <p>
               {config.make} {config.model} · Nationwide · From{" "}
               {config.origin_zip}
@@ -250,6 +276,7 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
           </div>
           <div className="vehicle-actions">
             <button
+              className="icon-button"
               disabled={busy}
               onClick={() => void perform(refresh)}
               aria-label="Refresh vehicles"
@@ -258,10 +285,16 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
             </button>
             {profile && (
               <button
-                className="primary-button"
+                className="secondary-button compact"
                 disabled={busy}
                 onClick={() =>
                   void perform(async () => {
+                    if (preview) {
+                      setNotice(
+                        "This interactive sample does not run live searches or contact your workers.",
+                      );
+                      return;
+                    }
                     await action({
                       action: "run",
                       scheduleId: profile.schedule_id,
@@ -288,28 +321,77 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
             . Results refresh automatically.
           </p>
         )}
-        <nav className="vehicle-queues" aria-label="Vehicle queues">
-          {Object.entries(queues).map(([key, label]) => (
-            <button
-              key={key}
-              aria-current={queue === key ? "page" : undefined}
-              onClick={(event) => {
-                chooseQueue(key);
-                event.currentTarget.scrollIntoView({
-                  block: "nearest",
-                  inline: "nearest",
-                });
-              }}
+        <div className="vehicle-navigation">
+          <nav
+            className="filter-strip vehicle-queues"
+            aria-label="Vehicle queues"
+          >
+            {Object.entries(queues)
+              .filter(([key]) => !["coverage", "settings"].includes(key))
+              .map(([key, label]) => (
+                <button
+                  key={key}
+                  className={queue === key ? "active" : ""}
+                  aria-current={queue === key ? "page" : undefined}
+                  onClick={(event) => {
+                    chooseQueue(key);
+                    event.currentTarget.scrollIntoView({
+                      block: "nearest",
+                      inline: "nearest",
+                    });
+                  }}
+                >
+                  {label}
+                  {!["coverage", "settings"].includes(key) && (
+                    <span>
+                      {vehicles.filter((v) => inVehicleQueue(v, key)).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+          </nav>
+          <label className="vehicle-mobile-queue">
+            Review queue
+            <select
+              value={queue === "settings" || queue === "coverage" ? "" : queue}
+              onChange={(event) => chooseQueue(event.target.value)}
             >
-              {label}
-              {!["coverage", "settings"].includes(key) && (
-                <span>
-                  {vehicles.filter((v) => inVehicleQueue(v, key)).length}
-                </span>
-              )}
+              <option value="" disabled>
+                Choose a queue
+              </option>
+              {Object.entries(queues)
+                .filter(([key]) => !["coverage", "settings"].includes(key))
+                .map(([key, label]) => (
+                  <option value={key} key={key}>
+                    {label} (
+                    {
+                      vehicles.filter((vehicle) => inVehicleQueue(vehicle, key))
+                        .length
+                    }
+                    )
+                  </option>
+                ))}
+            </select>
+          </label>
+          <nav className="vehicle-utilities" aria-label="Search tools">
+            <button
+              className="vehicle-text-button"
+              aria-current={queue === "coverage" ? "page" : undefined}
+              onClick={() => chooseQueue("coverage")}
+            >
+              <Activity size={15} aria-hidden />
+              Coverage Health
             </button>
-          ))}
-        </nav>
+            <button
+              className="vehicle-text-button"
+              aria-current={queue === "settings" ? "page" : undefined}
+              onClick={() => chooseQueue("settings")}
+            >
+              <SlidersHorizontal size={15} aria-hidden />
+              Search settings
+            </button>
+          </nav>
+        </div>
         {error && (
           <p className="vehicle-alert" role="alert">
             {error}
@@ -412,9 +494,13 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
         {profile && !["settings", "coverage"].includes(queue) && (
           <>
             <div className="vehicle-toolbar">
-              <p>
-                {filtered.length} vehicle{filtered.length === 1 ? "" : "s"} ·
-                showing {Math.min(shown, filtered.length)}
+              <p className="vehicle-result-count">
+                {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
+                <span className="vehicle-count-shown">
+                  {" "}
+                  · showing {Math.min(shown, filtered.length)}
+                </span>
+                <span>Swipe left to pass, right to watch</span>
               </p>
               <label>
                 Sort{" "}
@@ -426,7 +512,14 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
                   <option value="distance">Nearest</option>
                 </select>
               </label>
-              <button onClick={() => setImporting(true)}>Add listing</button>
+              <button
+                className="secondary-button compact"
+                aria-label="Add listing"
+                onClick={() => setImporting(true)}
+              >
+                <Plus size={16} aria-hidden />
+                <span className="vehicle-add-label">Add listing</span>
+              </button>
             </div>
             {!filtered.length && (
               <section className="vehicle-empty">
@@ -455,7 +548,10 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
               ))}
             </div>
             {shown < filtered.length && (
-              <button onClick={() => setShown(shown + 25)}>
+              <button
+                className="secondary-button vehicle-load-more"
+                onClick={() => setShown(shown + 25)}
+              >
                 Review next 25
               </button>
             )}
@@ -464,7 +560,8 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
       </section>
       {undo && (
         <div className="vehicle-undo" role="status">
-          Decision saved{" "}
+          <Check size={17} aria-hidden />
+          <span>Decision saved</span>{" "}
           <button
             disabled={busy}
             onClick={() =>
@@ -532,6 +629,7 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
           <section>
             <button
               autoFocus
+              className="icon-button"
               onClick={() => setGallery(null)}
               aria-label="Close gallery"
             >
@@ -544,11 +642,13 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
               </a>
             )}
             <p>
-              Load the gallery on your worker, then choose the interior photo
-              you want on the review card.
+              {preview
+                ? "Illustrative sample photography. Choose the interior photo you want on the review card."
+                : "Load the gallery on your worker, then choose the interior photo you want on the review card."}
             </p>
-            {profile && gallery.vin && (
+            {profile && gallery.vin && !preview && (
               <button
+                className="secondary-button compact"
                 disabled={busy}
                 onClick={() =>
                   void perform(async () => {
@@ -575,6 +675,7 @@ export function Vehicles({ userEmail }: { userEmail: string }) {
                   alt={`${photo.category} listing photo`}
                 />
                 <button
+                  className="secondary-button compact"
                   disabled={busy}
                   onClick={() =>
                     void perform(async () => {
@@ -619,6 +720,7 @@ function VehicleImage({ url, alt }: { url?: string; alt: string }) {
   return url && !failed ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
+      draggable={false}
       src={url}
       alt={alt}
       loading="lazy"
@@ -633,7 +735,7 @@ function VehicleImage({ url, alt }: { url?: string; alt: string }) {
   );
 }
 
-function VehicleCard({
+export function VehicleCard({
   vehicle: v,
   busy,
   decide,
@@ -647,6 +749,7 @@ function VehicleCard({
   gallery: () => void;
 }) {
   const start = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
   const row = v.row,
     ev = v.evaluation;
   return (
@@ -655,9 +758,12 @@ function VehicleCard({
       style={{ touchAction: "pan-y" }}
       onPointerDown={(event) => {
         if (
-          (event.target as HTMLElement).closest("button,a,input,select,summary")
+          (event.target as HTMLElement).closest(
+            "button:not(.vehicle-photo-pair),a,input,select,details",
+          )
         )
           return;
+        swiped.current = false;
         start.current = { x: event.clientX, y: event.clientY };
       }}
       onPointerUp={(event) => {
@@ -665,8 +771,10 @@ function VehicleCard({
         start.current = null;
         if (!origin || busy || Math.abs(event.clientY - origin.y) > 60) return;
         const dx = event.clientX - origin.x;
-        if (dx < -100) decide("passed");
-        else if (dx > 100) decide("watch");
+        if (Math.abs(dx) > 100 && v.decision !== "passed") {
+          swiped.current = true;
+          decide(dx < 0 ? "passed" : "watch");
+        }
       }}
       onPointerCancel={() => {
         start.current = null;
@@ -674,70 +782,98 @@ function VehicleCard({
     >
       <button
         className="vehicle-photo-pair"
-        onClick={gallery}
+        onClick={() => {
+          if (!swiped.current) gallery();
+        }}
         aria-label="View listing photos"
       >
-        <VehicleImage url={row.photos[0]?.url} alt="Exterior" />
-        <VehicleImage
-          url={row.photos.find((photo) => photo.category === "interior")?.url}
-          alt="Interior"
-        />
+        <span className="vehicle-exterior">
+          <VehicleImage url={row.photos[0]?.url} alt="Exterior" />
+        </span>
+        <span className="vehicle-interior">
+          <VehicleImage
+            url={row.photos.find((photo) => photo.category === "interior")?.url}
+            alt="Interior"
+          />
+          <span>Interior</span>
+        </span>
+        <span className="vehicle-photo-label">
+          <Eye size={14} aria-hidden />
+          View photos
+        </span>
       </button>
       <div className="vehicle-card-body">
         <div className="vehicle-card-title">
           <h2>
             {row.year} {row.make} {row.model}
           </h2>
-          <span className="vehicle-score">{ev.score}/100</span>
+          <span
+            className="vehicle-score"
+            title="Match score; see details for the breakdown"
+          >
+            {ev.score}/100 match
+          </span>
         </div>
-        <p>
-          {row.trim} · {row.attributes.battery_pack ?? "Battery unverified"} ·{" "}
-          {row.attributes.motor ?? "Motor unverified"}
+        <p className="vehicle-configuration">
+          {[
+            row.trim,
+            row.attributes.battery_pack
+              ? `${row.attributes.battery_pack} battery`
+              : "Battery unverified",
+            row.attributes.motor ? `${row.attributes.motor} motor` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
         <div className="vehicle-price">
-          <strong>{money(row.price)}</strong>
-          <span>Effective cost {money(ev.effective_cost)}</span>
+          <div>
+            <span>Asking price</span>
+            <strong>{money(row.price)}</strong>
+          </div>
+          <div className="vehicle-total">
+            <span>With shipping &amp; fees</span>
+            <strong>
+              {ev.effective_cost === null
+                ? "Cost incomplete"
+                : money(ev.effective_cost)}
+            </strong>
+          </div>
         </div>
-        <dl>
-          <div>
-            <dt>Mileage</dt>
-            <dd>{row.mileage?.toLocaleString() ?? "Unknown"}</dd>
-          </div>
-          <div>
-            <dt>Location</dt>
-            <dd>
-              {[row.city, row.state].filter(Boolean).join(", ") || "Unknown"}
-            </dd>
-          </div>
-          <div>
-            <dt>Distance</dt>
-            <dd>
+        <div className="vehicle-facts">
+          <span>
+            <Gauge size={15} aria-hidden />
+            {row.mileage === null
+              ? "Mileage unknown"
+              : `${row.mileage.toLocaleString()} miles`}
+          </span>
+          <span>
+            <MapPin size={15} aria-hidden />
+            {[row.city, row.state].filter(Boolean).join(", ") ||
+              "Location unknown"}
+          </span>
+        </div>
+        <div className="vehicle-seller">
+          <span>
+            {row.seller || "Seller unverified"}
+            <small>
+              {ev.delivery_group}
               {ev.distance_miles === null
-                ? "Unknown"
-                : `${ev.distance_miles.toLocaleString()} mi`}{" "}
-              · {ev.delivery_group}
-            </dd>
-          </div>
-          <div>
-            <dt>Shipping</dt>
-            <dd>
-              {row.delivery === "pickup"
-                ? "Pickup selected"
-                : money(row.shipping)}
-            </dd>
-          </div>
-          <div>
-            <dt>Mandatory fees</dt>
-            <dd>{money(row.mandatory_fees)}</dd>
-          </div>
-        </dl>
-        <p>
-          {row.seller || "Seller unverified"} · {row.source} · {row.condition}
-        </p>
-        <small>
-          VIN {v.vin ?? "unverified"} · Seen{" "}
-          {new Date(v.last_seen_at).toLocaleDateString()}
-        </small>
+                ? ""
+                : ` · ${ev.distance_miles.toLocaleString()} mi away`}
+            </small>
+          </span>
+          {row.url && (
+            <a
+              href={row.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open original listing"
+            >
+              Listing
+              <ArrowUpRight size={14} aria-hidden />
+            </a>
+          )}
+        </div>
         {ev.eligibility !== "eligible" && (
           <div className="vehicle-note">
             <strong>
@@ -745,18 +881,55 @@ function VehicleCard({
                 ? "No longer matches / needs verification"
                 : "Needs attention"}
             </strong>
-            <ul>
-              {ev.reasons.map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
+            <p>{ev.reasons.join(" · ")}</p>
+            <button
+              className="vehicle-text-button"
+              disabled={busy}
+              onClick={verify}
+            >
+              Verify
+              <ArrowUpRight size={14} aria-hidden />
+            </button>
           </div>
         )}
-        {ev.warnings.length > 0 && (
-          <p className="vehicle-muted">{ev.warnings.join(" · ")}</p>
-        )}
-        <details>
-          <summary>Score and sources</summary>
+        <details className="vehicle-details">
+          <summary>
+            Details &amp; sources
+            <ChevronDown size={15} aria-hidden />
+          </summary>
+          <dl>
+            <div>
+              <dt>Shipping</dt>
+              <dd>
+                {row.delivery === "pickup"
+                  ? "Pickup selected"
+                  : money(row.shipping)}
+              </dd>
+            </div>
+            <div>
+              <dt>Mandatory fees</dt>
+              <dd>{money(row.mandatory_fees)}</dd>
+            </div>
+            <div>
+              <dt>Condition</dt>
+              <dd>{row.condition || "Unknown"}</dd>
+            </div>
+            <div>
+              <dt>VIN</dt>
+              <dd>{v.vin ?? "Unverified"}</dd>
+            </div>
+            <div>
+              <dt>Last seen</dt>
+              <dd>{new Date(v.last_seen_at).toLocaleDateString()}</dd>
+            </div>
+          </dl>
+          <p className="vehicle-muted">
+            Acquisition cost excludes tax, registration and pickup travel.
+          </p>
+          {ev.warnings.length > 0 && (
+            <p className="vehicle-note">{ev.warnings.join(" · ")}</p>
+          )}
+          <h3>Match score</h3>
           <dl>
             {Object.entries(ev.breakdown).map(([key, value]) => (
               <div key={key}>
@@ -785,28 +958,65 @@ function VehicleCard({
             Battery evidence:{" "}
             {row.attributes.battery_evidence || "Not established"}
           </p>
+          <div className="vehicle-detail-actions">
+            {ev.eligibility === "eligible" && (
+              <button
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={verify}
+              >
+                Verify
+              </button>
+            )}
+            {v.decision !== "unreviewed" && v.decision !== "passed" && (
+              <button
+                className="vehicle-text-button"
+                disabled={busy}
+                onClick={() => decide("unreviewed")}
+              >
+                Restore to Unreviewed
+              </button>
+            )}
+          </div>
         </details>
-        <div className="vehicle-actions">
-          <button disabled={busy} onClick={() => decide("passed")}>
-            Pass
-          </button>
-          <button disabled={busy} onClick={() => decide("watch")}>
-            Watch
-          </button>
-          <button
-            className="primary-button"
-            disabled={busy}
-            onClick={() => decide("shortlist")}
-          >
-            Shortlist
-          </button>
-          <button disabled={busy} onClick={verify}>
-            Verify
-          </button>
-          {v.decision !== "unreviewed" && (
-            <button disabled={busy} onClick={() => decide("unreviewed")}>
-              Restore
+        <div className="vehicle-actions vehicle-review-actions">
+          {v.decision === "passed" ? (
+            <button
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => decide("unreviewed")}
+            >
+              Restore to Unreviewed
             </button>
+          ) : (
+            <>
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => decide("passed")}
+              >
+                <X size={16} aria-hidden />
+                Pass
+              </button>
+              <button
+                className="secondary-button"
+                aria-pressed={v.decision === "watch"}
+                disabled={busy}
+                onClick={() => decide("watch")}
+              >
+                <Eye size={16} aria-hidden />
+                Watch
+              </button>
+              <button
+                className="primary-button"
+                disabled={busy}
+                aria-pressed={v.decision === "shortlist"}
+                onClick={() => decide("shortlist")}
+              >
+                <Check size={16} aria-hidden />
+                Shortlist
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1002,7 +1212,11 @@ function VehicleSettings({
           Run and review a successful manual baseline before enabling this
           schedule.
         </p>
-        <button disabled={busy} onClick={() => void schedule()}>
+        <button
+          className="secondary-button compact"
+          disabled={busy}
+          onClick={() => void schedule()}
+        >
           {profile.task_schedules.enabled
             ? "Disable daily search"
             : "Enable daily search"}
@@ -1059,7 +1273,12 @@ function VehicleEditor({
       aria-label={vehicle ? "Verify vehicle" : "Add listing"}
     >
       <section>
-        <button autoFocus onClick={close} aria-label="Close vehicle editor">
+        <button
+          className="icon-button"
+          autoFocus
+          onClick={close}
+          aria-label="Close vehicle editor"
+        >
           <X />
         </button>
         <form className="vehicle-form" onSubmit={submit}>

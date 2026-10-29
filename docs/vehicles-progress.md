@@ -21,10 +21,9 @@ Branch: `codex/auto-dev-vehicles`, based on `284e3a7` (`origin/main`).
 
 Build started 2026-10-28. Auto.dev collector and environment credential helper are
 implemented. `npm run vehicles:probe` runs a bounded, aggregate-only census with
-no saved raw API output. The full suite passes 238 tests, including final history
+no saved raw API output. The full suite passes 249 tests, including final history
 normalization and title-conflict tests; TypeScript, lint and formatting pass. A clean
-production build passes after removing the temporary browser preview route and
-its stale generated Next.js development types. Embedded PostgreSQL tests execute
+production build passes. Embedded PostgreSQL tests execute
 all repository migrations
 with stubs for Supabase auth/storage and cron/network extensions, and test
 capability-aware claiming, immutable profile snapshots, idempotent finalization,
@@ -63,7 +62,7 @@ Fixed demonstrated cross-layer defects without adding another collector:
   Optional photo-job failures remain on their own tasks, not as inventory
   coverage failures or digests.
 
-All 238 tests pass, as do lint, formatting, TypeScript and the production build.
+The cross-layer review passed 238 tests, lint, formatting, TypeScript and the production build.
 The embedded PostgreSQL suite now has 16 integration tests. Browser checks were
 repeated after these fixes, including scoped photo selection, two provisional
 vehicles with null VINs and missing-price verification (including editing the
@@ -76,14 +75,40 @@ missing and blank process secrets fail closed. The API key is still stripped
 from generic Codex child environments. Existing local OS credential entries
 were not read or deleted during this change.
 
+## Relay visual alignment — 2026-10-29
+
+- Vehicles and Schedules share a header with Relay's mark, existing main
+  navigation and settings. Vehicles remains a dropdown destination, not another
+  permanent top-level tab. Existing brand links retain Relay's text color.
+- The desktop queues use Relay filter pills; mobile uses a fully visible queue
+  selector. Coverage and profile tools are separate from the review queues.
+- Cards emphasize main/interior photos, asking price versus acquisition cost,
+  mileage, location and seller. VIN, history, scoring, sources and corrections
+  remain available in expandable details. Primary review has three actions;
+  Passed has only an explicit restore action.
+- Photo swipes work without native image dragging or accidental gallery opens.
+  Desktop, 390px/320px mobile, dark mode, decisions/Undo, verification, gallery
+  selection and profile re-evaluation passed browser checks with no page errors
+  or live vehicle API requests. The full suite now passes 249 tests.
+- `/vehicles/preview` is an isolated, in-memory sample, explicitly opted into
+  with `RELAY_VEHICLES_PREVIEW=1` in development. It always returns 404 in
+  production, even if the flag is set. It cannot start worker jobs or write live
+  inventory; global account controls are disabled. Sample photos are licensed
+  Wikimedia images with attribution, not images of actual inventory.
+  The production server was also checked with the flag deliberately set and
+  returned HTTP 404 for the sample route.
+
+Visual sign-off is still the owner's decision. PR #86 remains draft; test
+success is evidence of behavior, not a claim that the design is approved.
+
 ## Handoff and remaining gates
 
 Desktop/mobile browser checks pass with fixtures: photos, Pass/Undo, Passed
 after refresh, Watch, required-data verification, coverage warnings, profile
 re-evaluation preserving Watch, keyboard focus trapping/Escape, and mobile
 overflow. No page errors. Screenshots are in `docs/vehicles-qa/` (fixture images,
-not real inventory). The temporary preview route has been removed and the local
-test server stopped. Operations are documented in `docs/vehicles.md`; actual
+not real inventory). The earlier temporary preview was replaced by the guarded
+interactive development sample above. Operations are documented in `docs/vehicles.md`; actual
 Supabase pgTAP assertions are in `supabase/tests/vehicles.test.sql`.
 
 Run Now, task completion, meaningful digest enqueueing, photo jobs and disabled
@@ -106,6 +131,5 @@ complete, with external rollout gates explicitly outstanding. Draft PRs #85 and
 remotely migrated or enabled for daily inventory searches.
 
 The last clean production build contains `/vehicles`, owner APIs, and the
-vehicle-worker result route. No unauthenticated preview route remains. The
-temporary browser server is stopped. Browser fixture screenshots are evidence
+vehicle-worker result route. The sample is unavailable in production. Browser fixture screenshots are evidence
 of the UI only, not of a production database rollout or inventory completeness.

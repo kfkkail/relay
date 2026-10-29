@@ -32,6 +32,20 @@ separate worker job so each scan does not consume a photo request for every VIN.
 The API's gallery ordering does not establish an interior image: choose **Use as
 interior photo** after viewing the gallery.
 
+## Local interactive preview
+
+For visual review without a database or Auto.dev key, start the development
+server with `RELAY_VEHICLES_PREVIEW=1 npm run dev` and open `/vehicles/preview`
+at its printed local URL. The page uses the actual Vehicles interface with a
+separate in-memory transport. Decisions, Undo, gallery selection, verification
+and profile edits are interactive and reset on reload. Searches, scheduling,
+inventory imports and global account actions are disabled.
+
+This route requires both development mode and the explicit preview flag. It
+always returns 404 in production, even if the flag is accidentally configured.
+Sample vehicle data is fictitious; licensed illustrative photographs and their
+attribution are in `public/vehicles-demo/`. No API key is needed or read.
+
 ## Review behavior
 
 Pass, Watch and Shortlist are global per vehicle. Passing a VIN suppresses it
@@ -52,6 +66,11 @@ verification. A later advertised source price takes precedence over the fallback
 Gallery selection patches only the photo, not stale verification form fields.
 Review cards show 25 at a time, with the backlog reachable
 through **Review next 25**, and session storage retains queue/batch position.
+Vehicles shares Relay's header and controls with Schedules. Desktop uses queue
+pills; mobile uses a queue selector so none of the states are clipped off-screen.
+Secondary facts and corrections are under **Details & sources**. Swipe the
+photo/card left to Pass or right to Watch, or use the three review buttons.
+Passed cards expose an explicit Restore action rather than normal review actions.
 
 Manual import currently uses a URL plus an editable form; it does not fetch an
 arbitrary seller URL. This keeps source credentials and SSRF out of the initial
@@ -103,12 +122,13 @@ Scoring-only edits preserve an already-enabled schedule.
   cron/network extensions are stubbed only in this embedded harness.
 - `npx tsc --noEmit`, `npm run lint`, `npm run format:check`, and `npm run build`
   verify the application.
-- Final local review and the Linux-only credential update passed 238 tests on
+- Final local review, Linux-only credentials and visual alignment passed 249 tests on
   2026-10-29, including missing/blank credential checks, HTTP verification
   patches, seller-context changes, VIN-merge confirmations, optional-photo
   failures and shared-schedule baseline enforcement. Desktop/mobile fixture
   checks also exercised provisional (no-VIN) gallery selection and missing-price
-  verification. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
+  verification; the visual pass repeated shared navigation, mobile queue access,
+  photo swipes, Undo, dark mode and 320px layout. Screenshots are in `docs/vehicles-qa/`; they show fixture data,
   not live feed coverage or a deployed database.
 - `supabase db reset`, `supabase db lint --level warning`, and `supabase test db`
   remain required against a local Supabase runtime or the existing CI workflow.

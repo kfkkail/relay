@@ -46,6 +46,12 @@ This review-funnel change requires no database migration or backfill. Existing
 listing JSON is re-evaluated by the application immediately, and the next search
 upserts any newly enriched battery or motor facts for the same VINs.
 
+Choosing Interested or Shortlist automatically queues the existing deduplicated
+Auto.dev photo job when the source reports more images than Relay currently has.
+The review decision succeeds even if that optional job cannot be queued, and the
+gallery retains its manual retry button. Photo jobs complete silently and never
+change inventory coverage health.
+
 ## Local interactive preview
 
 For visual review without a database or Auto.dev key, start the development

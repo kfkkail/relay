@@ -17,13 +17,14 @@ Branch: `codex/auto-dev-vehicles`, based on `284e3a7` (`origin/main`).
 
 ## Current work
 
-Build started 2026-10-28. Auto.dev collector and Keychain credential helper are
+Build started 2026-10-28. Auto.dev collector and environment credential helper are
 implemented. The first 19 collector tests pass. `npm run vehicles:probe` runs a
 bounded, aggregate-only census with no saved raw API output. The primary Relay checkout has unrelated branch work;
 all Vehicles edits belong in this checkout. No remote migration, deployment,
-push, PR, or schedule enablement is authorized. Auto.dev access is stored in
-macOS Keychain under service `com.relay.auto-dev.api-key`, account `relay-worker`.
-Never print or store the credential in project files.
+push, PR, or schedule enablement was authorized during the initial build.
+The owner subsequently authorized PR publication. Linux workers receive
+`AUTODEV_API_KEY` through their protected process environment; no OS credential
+store or subprocess is used. Never print or commit the credential.
 
 ## Next step
 

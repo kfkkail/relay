@@ -141,15 +141,14 @@ describe("worker secret retrieval", () => {
       "test",
     );
   });
-  it("never forwards Keychain diagnostic text", async () => {
-    await expect(
-      autoDevKey({
-        env: {},
-        platform: "darwin",
-        run: async () => {
-          throw new Error("secret-data");
-        },
-      }),
-    ).rejects.toThrow("unavailable");
-  });
+  it.each([undefined, "", " \t\n "])(
+    "fails closed when the process secret is missing or blank (%j)",
+    async (value) => {
+      await expect(
+        autoDevKey({ env: { AUTODEV_API_KEY: value } }),
+      ).rejects.toThrow(
+        "Configure AUTODEV_API_KEY in the worker secret environment.",
+      );
+    },
+  );
 });

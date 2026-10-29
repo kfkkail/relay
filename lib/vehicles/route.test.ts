@@ -51,7 +51,7 @@ it("stores only owner-confirmable facts and seller-scoped costs", async () => {
         mandatory_fees: 250,
         delivery: "pickup",
         decision: "passed",
-        attributes: { battery_pack: "large" },
+        attributes: { battery_pack: "large", motor: "quad" },
       },
     }),
   );
@@ -61,7 +61,7 @@ it("stores only owner-confirmable facts and seller-scoped costs", async () => {
     p_overrides: {
       attributes: {
         battery_pack: "large",
-        motor: null,
+        motor: "quad",
         battery_evidence: null,
       },
       title_status: "unknown",

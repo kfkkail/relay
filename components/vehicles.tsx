@@ -1230,7 +1230,7 @@ function VehicleSettings({
   );
 }
 
-function VehicleEditor({
+export function VehicleEditor({
   vehicle,
   config,
   busy,
@@ -1396,17 +1396,43 @@ function VehicleEditor({
             <input
               placeholder="e.g. large or max"
               value={row.attributes?.battery_pack ?? ""}
+              onChange={(e) => {
+                const battery = e.target.value.trim().toLowerCase() || null;
+                setRow({
+                  ...row,
+                  attributes: {
+                    battery_pack: battery,
+                    motor: row.attributes?.motor ?? null,
+                    battery_evidence: battery
+                      ? "Owner verified from seller information"
+                      : null,
+                  },
+                });
+              }}
+            />
+          </label>
+          <label>
+            Confirmed motor configuration (optional)
+            <input
+              list="vehicle-motor-options"
+              placeholder="e.g. dual or quad"
+              value={row.attributes?.motor ?? ""}
               onChange={(e) =>
                 setRow({
                   ...row,
                   attributes: {
-                    battery_pack: e.target.value.toLowerCase() || null,
-                    motor: row.attributes?.motor ?? null,
-                    battery_evidence: "Owner verified from seller information",
+                    battery_pack: row.attributes?.battery_pack ?? null,
+                    motor: e.target.value.trim().toLowerCase() || null,
+                    battery_evidence: row.attributes?.battery_evidence ?? null,
                   },
                 })
               }
             />
+            <datalist id="vehicle-motor-options">
+              <option value="dual" />
+              <option value="quad" />
+              <option value="tri" />
+            </datalist>
           </label>
           <label>
             Delivery (optional until Watch or Shortlist)

@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { RelayHeader } from "./relay-header";
-import { VehicleCard } from "./vehicles";
+import { VehicleCard, VehicleEditor } from "./vehicles";
 import { createVehiclePreviewRequest } from "@/lib/vehicles/preview";
 import { defaultVehicleProfile } from "@/lib/vehicles/domain";
 import { reviewVehicle } from "@/lib/vehicles/review";
@@ -62,4 +62,24 @@ describe("Relay Vehicles presentation", () => {
       else expect(actions).not.toContain("Verify");
     },
   );
+  it("lets the owner edit optional motor configuration", async () => {
+    const data = await (
+      await createVehiclePreviewRequest()("/api/vehicles")
+    ).json();
+    const vehicle = reviewVehicle(data.vehicles[0], defaultVehicleProfile)!;
+    const html = renderToStaticMarkup(
+      <VehicleEditor
+        vehicle={vehicle}
+        config={defaultVehicleProfile}
+        busy={false}
+        close={() => {}}
+        save={async () => {}}
+      />,
+    );
+    expect(html).toContain("Confirmed motor configuration (optional)");
+    expect(html).toContain('list="vehicle-motor-options"');
+    expect(html).toContain('<option value="dual"></option>');
+    expect(html).toContain('<option value="quad"></option>');
+    expect(html).toContain('<option value="tri"></option>');
+  });
 });

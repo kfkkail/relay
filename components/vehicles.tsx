@@ -828,14 +828,39 @@ export function VehicleGalleryViewer({
   const count = gallery.photos.length;
   const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
   const current = gallery.photos[currentIndex];
-  const previousIndex = count > 1 ? (currentIndex - 1 + count) % count : null;
-  const nextIndex = count > 1 ? (currentIndex + 1) % count : null;
-  const slides = [previousIndex, current ? currentIndex : null, nextIndex].map(
-    (photoIndex) => ({
-      photoIndex,
-      photo: photoIndex === null ? undefined : gallery.photos[photoIndex],
-    }),
-  );
+  const gallerySlides = gallery.photos.map((photo, photoIndex) => ({
+    key: `photo-${photoIndex}`,
+    logicalIndex: photoIndex,
+    photo,
+    photoIndex,
+  }));
+  const slides =
+    count > 1
+      ? [
+          {
+            key: "clone-last",
+            logicalIndex: -1,
+            photo: gallery.photos[count - 1],
+            photoIndex: count - 1,
+          },
+          ...gallerySlides,
+          {
+            key: "clone-first",
+            logicalIndex: count,
+            photo: gallery.photos[0],
+            photoIndex: 0,
+          },
+        ]
+      : gallerySlides.length
+        ? gallerySlides
+        : [
+            {
+              key: "placeholder",
+              logicalIndex: 0,
+              photo: undefined,
+              photoIndex: null,
+            },
+          ];
 
   useEffect(() => {
     if (typeof Image === "undefined" || count < 2) return;
@@ -947,39 +972,58 @@ export function VehicleGalleryViewer({
       >
         <div
           className={`vehicle-gallery-track${settling !== null ? " is-settling" : ""}`}
-          style={{
-            transform: `translate3d(calc(-33.333333% + ${dragOffset}px), 0, 0)`,
-          }}
-          onTransitionEnd={(event) => {
-            if (event.propertyName !== "transform" || settling === null) return;
-            if (settling === -1) previous();
-            if (settling === 1) next();
-            setSettling(null);
-            setDragOffset(0);
-          }}
         >
-          {slides.map(({ photo, photoIndex }, slideIndex) => (
-            <div
-              className="vehicle-gallery-slide"
-              key={
-                count > 2
-                  ? (photoIndex ?? `placeholder-${slideIndex}`)
-                  : `${photoIndex ?? "placeholder"}-${slideIndex}`
-              }
-              aria-hidden={slideIndex !== 1}
-            >
-              <VehicleImage
-                url={photo?.url}
-                alt={
-                  slideIndex === 1 && current
-                    ? `Listing photo ${currentIndex + 1} of ${count}`
-                    : "Adjacent listing photo"
+          {slides.map(({ key, logicalIndex, photo, photoIndex }) => {
+            const forwardDistance =
+              photoIndex === null
+                ? count
+                : (photoIndex - currentIndex + count) % count;
+            const nearby =
+              count > 0 &&
+              (forwardDistance <= 6 || forwardDistance >= count - 2);
+            const active = key === `photo-${currentIndex}` || count === 0;
+            return (
+              <div
+                className="vehicle-gallery-slide"
+                key={key}
+                style={{
+                  left: `${(logicalIndex - currentIndex) * 100}%`,
+                  transform: `translate3d(${dragOffset}px, 0, 0)`,
+                  visibility:
+                    active || dragOffset !== 0 || settling !== null
+                      ? "visible"
+                      : "hidden",
+                }}
+                aria-hidden={!active}
+                onTransitionEnd={
+                  active
+                    ? (event) => {
+                        if (
+                          event.propertyName !== "transform" ||
+                          settling === null
+                        )
+                          return;
+                        if (settling === -1) previous();
+                        if (settling === 1) next();
+                        setSettling(null);
+                        setDragOffset(0);
+                      }
+                    : undefined
                 }
-                loading="eager"
-                fetchPriority={slideIndex === 1 ? "high" : "low"}
-              />
-            </div>
-          ))}
+              >
+                <VehicleImage
+                  url={photo?.url}
+                  alt={
+                    active && current
+                      ? `Listing photo ${currentIndex + 1} of ${count}`
+                      : "Adjacent listing photo"
+                  }
+                  loading={nearby ? "eager" : "lazy"}
+                  fetchPriority={active ? "high" : "low"}
+                />
+              </div>
+            );
+          })}
         </div>
       </div>
       <footer className="vehicle-gallery-footer">

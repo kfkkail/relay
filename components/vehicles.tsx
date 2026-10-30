@@ -816,6 +816,7 @@ export function VehicleGalleryViewer({
   selectInterior: (url: string) => void;
 }) {
   const stageRef = useRef<HTMLDivElement>(null);
+  const preloadedPhotos = useRef(new Map<string, HTMLImageElement>());
   const swipeStart = useRef<{
     pointerId: number;
     x: number;
@@ -827,22 +828,43 @@ export function VehicleGalleryViewer({
   const count = gallery.photos.length;
   const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
   const current = gallery.photos[currentIndex];
-  const previousPhoto =
-    count > 1 ? gallery.photos[(currentIndex - 1 + count) % count] : undefined;
-  const nextPhoto =
-    count > 1 ? gallery.photos[(currentIndex + 1) % count] : undefined;
+  const previousIndex = count > 1 ? (currentIndex - 1 + count) % count : null;
+  const nextIndex = count > 1 ? (currentIndex + 1) % count : null;
+  const slides = [previousIndex, current ? currentIndex : null, nextIndex].map(
+    (photoIndex) => ({
+      photoIndex,
+      photo: photoIndex === null ? undefined : gallery.photos[photoIndex],
+    }),
+  );
 
   useEffect(() => {
     if (typeof Image === "undefined" || count < 2) return;
-    const nearby = [-2, -1, 0, 1, 2].map(
-      (distance) =>
-        gallery.photos[(currentIndex + distance + count) % count]?.url,
-    );
-    for (const url of new Set(nearby)) {
+    const activeUrls = new Set(gallery.photos.map((photo) => photo.url));
+    for (const url of preloadedPhotos.current.keys()) {
+      if (!activeUrls.has(url)) preloadedPhotos.current.delete(url);
+    }
+
+    // Favor the direction people usually browse while keeping recent photos
+    // decoded for a quick back-swipe. Retaining the Image objects prevents
+    // slower source hosts from dropping in-flight preloads.
+    const distances = [0, 1, -1, 2, -2, 3, 4, 5, 6];
+    for (const distance of distances.slice(
+      0,
+      Math.min(count, distances.length),
+    )) {
+      const url =
+        gallery.photos[(currentIndex + distance + count) % count]?.url;
       if (!url) continue;
+      if (preloadedPhotos.current.has(url)) continue;
       const image = new Image();
       image.referrerPolicy = "no-referrer";
+      image.decoding = "async";
+      image.fetchPriority = distance === 0 ? "high" : "low";
+      preloadedPhotos.current.set(url, image);
       image.src = url;
+      void image.decode().catch(() => {
+        // The rendered image still handles unavailable or expired source URLs.
+      });
     }
   }, [count, currentIndex, gallery.photos]);
 
@@ -936,10 +958,14 @@ export function VehicleGalleryViewer({
             setDragOffset(0);
           }}
         >
-          {[previousPhoto, current, nextPhoto].map((photo, slideIndex) => (
+          {slides.map(({ photo, photoIndex }, slideIndex) => (
             <div
               className="vehicle-gallery-slide"
-              key={`${slideIndex}-${photo?.url ?? "placeholder"}`}
+              key={
+                count > 2
+                  ? (photoIndex ?? `placeholder-${slideIndex}`)
+                  : `${photoIndex ?? "placeholder"}-${slideIndex}`
+              }
               aria-hidden={slideIndex !== 1}
             >
               <VehicleImage

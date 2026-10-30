@@ -815,14 +815,54 @@ export function VehicleGalleryViewer({
   loadPhotos: () => void;
   selectInterior: (url: string) => void;
 }) {
+  const stageRef = useRef<HTMLDivElement>(null);
   const swipeStart = useRef<{
     pointerId: number;
     x: number;
     y: number;
+    width: number;
   } | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [settling, setSettling] = useState<-1 | 0 | 1 | null>(null);
   const count = gallery.photos.length;
   const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
   const current = gallery.photos[currentIndex];
+  const previousPhoto =
+    count > 1 ? gallery.photos[(currentIndex - 1 + count) % count] : undefined;
+  const nextPhoto =
+    count > 1 ? gallery.photos[(currentIndex + 1) % count] : undefined;
+
+  useEffect(() => {
+    if (typeof Image === "undefined" || count < 2) return;
+    const nearby = [-2, -1, 0, 1, 2].map(
+      (distance) =>
+        gallery.photos[(currentIndex + distance + count) % count]?.url,
+    );
+    for (const url of new Set(nearby)) {
+      if (!url) continue;
+      const image = new Image();
+      image.referrerPolicy = "no-referrer";
+      image.src = url;
+    }
+  }, [count, currentIndex, gallery.photos]);
+
+  const finishSwipe = (direction: -1 | 0 | 1) => {
+    const reduceMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (reduceMotion) {
+      if (direction === -1) previous();
+      if (direction === 1) next();
+      setDragOffset(0);
+      setSettling(null);
+      return;
+    }
+    setSettling(direction);
+    const width =
+      stageRef.current?.clientWidth ?? swipeStart.current?.width ?? 0;
+    setDragOffset(direction === 0 ? 0 : direction === 1 ? -width : width);
+  };
+
   return (
     <section className="vehicle-gallery-viewer">
       <header className="vehicle-gallery-header">
@@ -842,41 +882,79 @@ export function VehicleGalleryViewer({
         </button>
       </header>
       <div
+        ref={stageRef}
         className="vehicle-gallery-stage"
         onPointerDown={(event) => {
           if (event.pointerType === "mouse" || count < 2) return;
+          setSettling(null);
+          setDragOffset(0);
           swipeStart.current = {
             pointerId: event.pointerId,
             x: event.clientX,
             y: event.clientY,
+            width: event.currentTarget.clientWidth,
           };
           event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const start = swipeStart.current;
+          if (
+            !start ||
+            start.pointerId !== event.pointerId ||
+            settling !== null
+          )
+            return;
+          setDragOffset(event.clientX - start.x);
         }}
         onPointerUp={(event) => {
           const start = swipeStart.current;
           if (!start || start.pointerId !== event.pointerId) return;
-          swipeStart.current = null;
           const direction = gallerySwipeDirection(
             start.x,
             start.y,
             event.clientX,
             event.clientY,
           );
-          if (direction === -1) previous();
-          if (direction === 1) next();
+          swipeStart.current = null;
+          finishSwipe(direction);
         }}
         onPointerCancel={() => {
           swipeStart.current = null;
+          finishSwipe(0);
         }}
       >
-        {current ? (
-          <VehicleImage
-            url={current.url}
-            alt={`Listing photo ${currentIndex + 1} of ${count}`}
-          />
-        ) : (
-          <VehicleImage alt="Listing photo" />
-        )}
+        <div
+          className={`vehicle-gallery-track${settling !== null ? " is-settling" : ""}`}
+          style={{
+            transform: `translate3d(calc(-33.333333% + ${dragOffset}px), 0, 0)`,
+          }}
+          onTransitionEnd={(event) => {
+            if (event.propertyName !== "transform" || settling === null) return;
+            if (settling === -1) previous();
+            if (settling === 1) next();
+            setSettling(null);
+            setDragOffset(0);
+          }}
+        >
+          {[previousPhoto, current, nextPhoto].map((photo, slideIndex) => (
+            <div
+              className="vehicle-gallery-slide"
+              key={`${slideIndex}-${photo?.url ?? "placeholder"}`}
+              aria-hidden={slideIndex !== 1}
+            >
+              <VehicleImage
+                url={photo?.url}
+                alt={
+                  slideIndex === 1 && current
+                    ? `Listing photo ${currentIndex + 1} of ${count}`
+                    : "Adjacent listing photo"
+                }
+                loading="eager"
+                fetchPriority={slideIndex === 1 ? "high" : "low"}
+              />
+            </div>
+          ))}
+        </div>
       </div>
       <footer className="vehicle-gallery-footer">
         <div>
@@ -942,7 +1020,17 @@ export function VehicleGalleryViewer({
   );
 }
 
-function VehicleImage({ url, alt }: { url?: string; alt: string }) {
+function VehicleImage({
+  url,
+  alt,
+  loading = "lazy",
+  fetchPriority = "auto",
+}: {
+  url?: string;
+  alt: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
+}) {
   const [failed, setFailed] = useState(false);
   // Source-hosted listing photos have varying hosts and expiry. Preserve the
   // original URL without proxying through Relay, and fall back when it expires.
@@ -952,7 +1040,8 @@ function VehicleImage({ url, alt }: { url?: string; alt: string }) {
       draggable={false}
       src={url}
       alt={alt}
-      loading="lazy"
+      loading={loading}
+      fetchPriority={fetchPriority}
       referrerPolicy="no-referrer"
       onError={() => setFailed(true)}
     />

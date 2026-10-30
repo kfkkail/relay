@@ -554,6 +554,8 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  touch-action: pan-y;
+  user-select: none;
 }
 .vehicle-gallery-stage img,
 .vehicle-gallery-stage .vehicle-photo-placeholder {

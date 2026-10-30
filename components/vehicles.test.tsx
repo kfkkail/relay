@@ -5,6 +5,7 @@ import {
   VehicleCard,
   VehicleEditor,
   VehicleGalleryViewer,
+  gallerySwipeDirection,
   shouldPrefetchVehiclePhotos,
   shouldQueueVehiclePhotos,
 } from "./vehicles";
@@ -175,10 +176,17 @@ describe("Relay Vehicles presentation", () => {
     expect(html).toContain('aria-label="Previous photo"');
     expect(html).toContain('aria-label="Next photo"');
     expect(html).toContain("2 of 3");
+    expect(html).toContain("Swipe or use arrow keys");
     expect(html.match(/aria-pressed=/g)).toHaveLength(1);
     expect(html).toContain("Interior selected");
     expect(html).toContain("Load gallery");
     expect(html).toContain("Live gallery loading is disabled in the sample.");
     expect(html).not.toContain("Use as interior photo");
+  });
+  it("changes gallery photos only for deliberate horizontal swipes", () => {
+    expect(gallerySwipeDirection(200, 100, 100, 105)).toBe(1);
+    expect(gallerySwipeDirection(100, 100, 200, 95)).toBe(-1);
+    expect(gallerySwipeDirection(100, 100, 130, 100)).toBe(0);
+    expect(gallerySwipeDirection(100, 100, 160, 180)).toBe(0);
   });
 });

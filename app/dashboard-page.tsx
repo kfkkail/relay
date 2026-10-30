@@ -7,6 +7,10 @@ import type { MyWorkFilter } from "@/lib/routing";
 import { createClient } from "@/lib/supabase/server";
 import { TASK_SELECT } from "@/lib/task-select";
 import type { OwnerAction, Task, TaskStatus, Worker } from "@/lib/types";
+import {
+  onlyFinalizedOwnerActionAttachments,
+  ownerActionSelect,
+} from "@/lib/owner-actions";
 
 export async function DashboardPage({
   area,
@@ -47,17 +51,14 @@ export async function DashboardPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("owner_actions")
-        .select(
-          `
-        id,title,notes,status,due_at,snoozed_until,position,completed_at,created_at,updated_at,
-        owner_action_tasks(task_id,tasks(id,title,status))
-      `,
-        )
+        .select(ownerActionSelect)
         .order("due_at", { ascending: true, nullsFirst: false }),
     ]);
 
   const initialTasks = (tasks ?? []) as Task[];
-  const initialOwnerActions = (ownerActions ?? []) as unknown as OwnerAction[];
+  const initialOwnerActions = (ownerActions ?? []).map(
+    onlyFinalizedOwnerActionAttachments,
+  ) as unknown as OwnerAction[];
   if (taskId && !initialTasks.some((task) => task.id === taskId)) notFound();
   if (actionId && !initialOwnerActions.some((action) => action.id === actionId))
     notFound();

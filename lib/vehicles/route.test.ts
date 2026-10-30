@@ -148,6 +148,17 @@ it("does not freeze a known advertised price into a verification fallback", asyn
     ],
   ).not.toHaveProperty("price");
 });
+it("queues one bounded gallery batch", async () => {
+  const profileId = "00000000-0000-4000-8000-000000000082";
+  expect(
+    (await POST(request({ action: "photos_batch", ids: [id], profileId })))
+      .status,
+  ).toBe(200);
+  expect(mocks.rpc).toHaveBeenCalledWith("request_vehicle_photo_batch", {
+    p_vehicles: [id],
+    p_profile: profileId,
+  });
+});
 it("rejects oversized requests without relying on Content-Length", async () => {
   expect(
     (await POST(request({ action: "verify", extra: "x".repeat(100001) })))

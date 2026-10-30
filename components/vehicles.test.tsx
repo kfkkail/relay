@@ -4,6 +4,8 @@ import { RelayHeader } from "./relay-header";
 import {
   VehicleCard,
   VehicleEditor,
+  VehicleGalleryViewer,
+  shouldPrefetchVehiclePhotos,
   shouldQueueVehiclePhotos,
 } from "./vehicles";
 import { createVehiclePreviewRequest } from "@/lib/vehicles/preview";
@@ -101,7 +103,9 @@ describe("Relay Vehicles presentation", () => {
     const vehicle = {
       vin: "7FCTGAAA0NN000001",
       row: {
+        source: "auto.dev" as const,
         photo_count: 12,
+        gallery_fetched_at: null,
         photos: [
           {
             url: "https://example.test/main.jpg",
@@ -114,6 +118,19 @@ describe("Relay Vehicles presentation", () => {
     expect(shouldQueueVehiclePhotos(vehicle, "shortlist", false)).toBe(true);
     expect(shouldQueueVehiclePhotos(vehicle, "unreviewed", false)).toBe(false);
     expect(shouldQueueVehiclePhotos(vehicle, "watch", true)).toBe(false);
+    expect(shouldPrefetchVehiclePhotos(vehicle, false)).toBe(true);
+    expect(
+      shouldPrefetchVehiclePhotos(
+        {
+          ...vehicle,
+          row: {
+            ...vehicle.row,
+            gallery_fetched_at: "2026-10-29T14:00:00Z",
+          },
+        },
+        false,
+      ),
+    ).toBe(false);
     expect(
       shouldQueueVehiclePhotos({ ...vehicle, vin: null }, "shortlist", false),
     ).toBe(false);
@@ -124,5 +141,44 @@ describe("Relay Vehicles presentation", () => {
         false,
       ),
     ).toBe(false);
+  });
+  it("uses one focused gallery viewer instead of an action under every image", async () => {
+    const data = await (
+      await createVehiclePreviewRequest()("/api/vehicles")
+    ).json();
+    const vehicle = reviewVehicle(data.vehicles[0], defaultVehicleProfile)!;
+    const gallery = {
+      ...vehicle.row,
+      vehicleId: vehicle.id,
+      photos: [
+        ...vehicle.row.photos,
+        {
+          url: "https://example.test/third.jpg",
+          category: "unknown" as const,
+        },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <VehicleGalleryViewer
+        gallery={gallery}
+        index={1}
+        busy={false}
+        preview
+        canLoad={false}
+        close={() => {}}
+        previous={() => {}}
+        next={() => {}}
+        loadPhotos={() => {}}
+        selectInterior={() => {}}
+      />,
+    );
+    expect(html).toContain('aria-label="Previous photo"');
+    expect(html).toContain('aria-label="Next photo"');
+    expect(html).toContain("2 of 3");
+    expect(html.match(/aria-pressed=/g)).toHaveLength(1);
+    expect(html).toContain("Interior selected");
+    expect(html).toContain("Load gallery");
+    expect(html).toContain("Live gallery loading is disabled in the sample.");
+    expect(html).not.toContain("Use as interior photo");
   });
 });

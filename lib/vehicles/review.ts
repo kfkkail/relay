@@ -4,8 +4,20 @@ import type { VehicleListing, VehicleProfile, VehicleRecord } from "./types";
 export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
   const listings = record.vehicle_listings
     .map((listing) => {
+      const gallery = listing.photo_gallery ?? [];
       const row: VehicleListing = {
-        ...applyVehicleOverrides(listing.data, record.overrides, profile),
+        ...applyVehicleOverrides(
+          {
+            ...listing.data,
+            photos: gallery.length ? gallery : listing.data.photos,
+            gallery_fetched_at:
+              listing.gallery_fetched_at ??
+              listing.data.gallery_fetched_at ??
+              null,
+          },
+          record.overrides,
+          profile,
+        ),
         vin: record.vin,
         availability: listing.availability as VehicleListing["availability"],
       };

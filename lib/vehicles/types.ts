@@ -52,6 +52,7 @@ export type VehicleListing = {
   history_flags: string[];
   photos: { url: string; category: "exterior" | "interior" | "unknown" }[];
   photo_count: number;
+  gallery_fetched_at: string | null;
   source_created_at: string | null;
   source_updated_at: string | null;
   availability: "available" | "unavailable";
@@ -67,6 +68,8 @@ export type VehicleRecord = {
   vehicle_listings: {
     id: string;
     data: VehicleListing;
+    photo_gallery?: VehicleListing["photos"];
+    gallery_fetched_at?: string | null;
     last_seen_at: string;
     availability: string;
   }[];

@@ -96,6 +96,30 @@ Interested and Shortlist use explicit review buttons; card swipes never change
 review state.
 Passed cards expose an explicit Restore action rather than normal review actions.
 
+## Guarded bulk pass
+
+Use the maintenance script when a large, precisely defined group of review
+cards should be passed. It uses the same evaluator as the Vehicles screen and
+connects to Supabase with `NEXT_PUBLIC_SUPABASE_URL` and
+`SUPABASE_SECRET_KEY` from `.env.local` or the process environment.
+
+The command is dry-run by default:
+
+```sh
+npm run vehicles:bulk-pass -- --user-email owner@example.com --max-score 56 --min-distance 500
+```
+
+Review the candidates and the printed count. Applying requires that exact count
+to still match a fresh evaluation; stale decision revisions are skipped:
+
+```sh
+npm run vehicles:bulk-pass -- --user-email owner@example.com --max-score 56 --min-distance 500 --apply --confirm-count 116
+```
+
+The script only selects unreviewed vehicles whose current eligibility is
+`needs_verification`, whose distance is known, and whose score and distance
+meet both thresholds. It does not require a database migration.
+
 Manual import currently uses a URL plus an editable form; it does not fetch that
 URL. The worker's separate Auto.dev enrichment pass reads only provider-returned
 public seller pages under the bounded network controls above. Failed or blocked

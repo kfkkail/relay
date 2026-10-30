@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker": "node worker/index.mjs",
+    "vehicles:bulk-pass": "tsx scripts/bulk-pass-vehicles.ts",
     "vehicles:probe": "node scripts/vehicles-probe.mjs",
     "worker:service:install": "node scripts/worker-service.mjs install",
     "worker:service:update": "node scripts/worker-update.mjs",
@@ -45,6 +46,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "16.3.1",
     "prettier": "3.6.2",
+    "tsx": "^4.23.15",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   }

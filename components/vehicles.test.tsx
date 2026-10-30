@@ -175,6 +175,9 @@ describe("Relay Vehicles presentation", () => {
     );
     expect(html).toContain('aria-label="Previous photo"');
     expect(html).toContain('aria-label="Next photo"');
+    expect(html.indexOf('aria-label="Previous photo"')).toBeGreaterThan(
+      html.indexOf('class="vehicle-gallery-footer"'),
+    );
     expect(html).toContain("2 of 3");
     expect(html).toContain("Swipe or use arrow keys");
     expect(html.match(/aria-pressed=/g)).toHaveLength(1);

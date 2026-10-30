@@ -877,24 +877,6 @@ export function VehicleGalleryViewer({
         ) : (
           <VehicleImage alt="Listing photo" />
         )}
-        {count > 1 && (
-          <>
-            <button
-              className="vehicle-gallery-arrow vehicle-gallery-previous"
-              onClick={previous}
-              aria-label="Previous photo"
-            >
-              <ChevronLeft aria-hidden />
-            </button>
-            <button
-              className="vehicle-gallery-arrow vehicle-gallery-next"
-              onClick={next}
-              aria-label="Next photo"
-            >
-              <ChevronRight aria-hidden />
-            </button>
-          </>
-        )}
       </div>
       <footer className="vehicle-gallery-footer">
         <div>
@@ -913,6 +895,20 @@ export function VehicleGalleryViewer({
           </span>
         </div>
         <div className="vehicle-gallery-actions">
+          {count > 1 && (
+            <div
+              className="vehicle-gallery-navigation"
+              role="group"
+              aria-label="Photo navigation"
+            >
+              <button onClick={previous} aria-label="Previous photo">
+                <ChevronLeft aria-hidden />
+              </button>
+              <button onClick={next} aria-label="Next photo">
+                <ChevronRight aria-hidden />
+              </button>
+            </div>
+          )}
           {(canLoad || preview) && (
             <button
               className="secondary-button compact"

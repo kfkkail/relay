@@ -4,6 +4,7 @@ import { RelayHeader } from "./relay-header";
 import {
   VehicleCard,
   VehicleEditor,
+  shouldPrefetchVehiclePhotos,
   shouldQueueVehiclePhotos,
 } from "./vehicles";
 import { createVehiclePreviewRequest } from "@/lib/vehicles/preview";
@@ -101,7 +102,9 @@ describe("Relay Vehicles presentation", () => {
     const vehicle = {
       vin: "7FCTGAAA0NN000001",
       row: {
+        source: "auto.dev" as const,
         photo_count: 12,
+        gallery_fetched_at: null,
         photos: [
           {
             url: "https://example.test/main.jpg",
@@ -114,6 +117,19 @@ describe("Relay Vehicles presentation", () => {
     expect(shouldQueueVehiclePhotos(vehicle, "shortlist", false)).toBe(true);
     expect(shouldQueueVehiclePhotos(vehicle, "unreviewed", false)).toBe(false);
     expect(shouldQueueVehiclePhotos(vehicle, "watch", true)).toBe(false);
+    expect(shouldPrefetchVehiclePhotos(vehicle, false)).toBe(true);
+    expect(
+      shouldPrefetchVehiclePhotos(
+        {
+          ...vehicle,
+          row: {
+            ...vehicle.row,
+            gallery_fetched_at: "2026-10-29T14:00:00Z",
+          },
+        },
+        false,
+      ),
+    ).toBe(false);
     expect(
       shouldQueueVehiclePhotos({ ...vehicle, vin: null }, "shortlist", false),
     ).toBe(false);

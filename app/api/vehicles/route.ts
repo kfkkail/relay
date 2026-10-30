@@ -37,9 +37,10 @@ export async function GET(request: Request) {
         .limit(20),
       supabase
         .from("vehicles")
-        .select("*,vehicle_listings(id,data,last_seen_at,availability)", {
-          count: "exact",
-        })
+        .select(
+          "*,vehicle_listings(id,data,photo_gallery,gallery_fetched_at,last_seen_at,availability)",
+          { count: "exact" },
+        )
         .order("first_seen_at", { ascending: false })
         .order("id")
         .range(page * 500, page * 500 + 499),
@@ -112,13 +113,22 @@ export async function POST(request: Request) {
         const row = parseVehicleListing(body.listing, body.listing.source);
         const { data: listing, error } = await supabase
           .from("vehicle_listings")
-          .select("data")
+          .select("data,photo_gallery,gallery_fetched_at")
           .eq("vehicle_id", body.id)
           .eq("source", row.source)
           .eq("source_listing_id", row.source_listing_id)
           .single();
         if (error || !listing) throw new ApiError("Listing not found.", 404);
-        const current = parseVehicleListing(listing.data, row.source);
+        const current = parseVehicleListing(
+          {
+            ...listing.data,
+            photos: listing.photo_gallery?.length
+              ? listing.photo_gallery
+              : listing.data.photos,
+            gallery_fetched_at: listing.gallery_fetched_at,
+          },
+          row.source,
+        );
         if (!sameListingContext(current, row))
           throw new ApiError("Listing changed; refresh before verifying.", 409);
         const context = {
@@ -169,6 +179,22 @@ export async function POST(request: Request) {
           p_profile: body.profileId,
         });
         break;
+      case "photos_batch": {
+        const requestedIds = Array.isArray(body.ids) ? body.ids : [];
+        const ids = [...new Set(requestedIds.filter(uuid))];
+        if (
+          !uuid(body.profileId) ||
+          ids.length < 1 ||
+          ids.length > 25 ||
+          ids.length !== requestedIds.length
+        )
+          throw new ApiError("Invalid gallery batch.");
+        result = await supabase.rpc("request_vehicle_photo_batch", {
+          p_vehicles: ids,
+          p_profile: body.profileId,
+        });
+        break;
+      }
       case "vin":
         if (
           !uuid(body.id) ||

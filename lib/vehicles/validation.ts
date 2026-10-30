@@ -162,6 +162,7 @@ export function parseVehicleListing(
       : [],
     photos,
     photo_count: Math.min(number(v.photo_count) ?? photos.length, 100),
+    gallery_fetched_at: str(v.gallery_fetched_at, 80) || null,
     source_created_at: str(v.source_created_at, 80) || null,
     source_updated_at: str(v.source_updated_at, 80) || null,
     availability:

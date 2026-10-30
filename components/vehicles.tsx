@@ -57,7 +57,10 @@ type HealthRun = {
 type Reviewed = NonNullable<ReturnType<typeof reviewVehicle>>;
 type PhotoCandidate = {
   vin: string | null;
-  row: Pick<VehicleListing, "photo_count" | "photos">;
+  row: Pick<
+    VehicleListing,
+    "source" | "photo_count" | "photos" | "gallery_fetched_at"
+  >;
 };
 const queues = {
   unreviewed: "Unreviewed",
@@ -82,9 +85,19 @@ export function shouldQueueVehiclePhotos(
   preview: boolean,
 ) {
   return (
+    shouldPrefetchVehiclePhotos(vehicle, preview) &&
+    (decision === "watch" || decision === "shortlist")
+  );
+}
+export function shouldPrefetchVehiclePhotos(
+  vehicle: PhotoCandidate,
+  preview: boolean,
+) {
+  return (
     !preview &&
     Boolean(vehicle.vin) &&
-    (decision === "watch" || decision === "shortlist") &&
+    vehicle.row.source === "auto.dev" &&
+    !vehicle.row.gallery_fetched_at &&
     vehicle.row.photo_count > vehicle.row.photos.length
   );
 }
@@ -136,6 +149,7 @@ export function Vehicles({
     decision: Decision;
     revision: number;
   } | null>(null);
+  const requestedPhotoIds = useRef(new Set<string>());
   const profile = profiles[0];
   const galleryFocus = useVehicleModal(Boolean(gallery), () =>
     setGallery(null),
@@ -237,6 +251,31 @@ export function Vehicles({
         }),
     [vehicles, queue, sort],
   );
+  const prefetchPhotos = useEffectEvent(
+    async (ids: string[], profileId: string) => {
+      try {
+        await action({ action: "photos_batch", ids, profileId });
+        await refresh();
+      } catch {
+        ids.forEach((id) => requestedPhotoIds.current.delete(id));
+      }
+    },
+  );
+  useEffect(() => {
+    if (!loaded || !profile || preview) return;
+    const start = Math.max(0, shown - 25);
+    const ids = filtered
+      .slice(start, shown)
+      .filter(
+        (vehicle) =>
+          shouldPrefetchVehiclePhotos(vehicle, preview) &&
+          !requestedPhotoIds.current.has(vehicle.id),
+      )
+      .map((vehicle) => vehicle.id);
+    if (!ids.length) return;
+    ids.forEach((id) => requestedPhotoIds.current.add(id));
+    void prefetchPhotos(ids, profile.id);
+  }, [filtered, loaded, preview, profile, shown]);
   async function perform(work: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -681,7 +720,9 @@ export function Vehicles({
             <p>
               {preview
                 ? "Illustrative sample photography. Choose the interior photo you want on the review card."
-                : "Load the gallery on your worker, then choose the interior photo you want on the review card."}
+                : gallery.gallery_fetched_at
+                  ? "Choose the interior photo you want on the review card."
+                  : "Relay is loading fuller galleries for the vehicles you are reviewing. You can also request this one now."}
             </p>
             {profile && gallery.vin && !preview && (
               <button
@@ -702,7 +743,9 @@ export function Vehicles({
                   })
                 }
               >
-                Load photos from Auto.dev
+                {gallery.gallery_fetched_at
+                  ? "Reload photos from Auto.dev"
+                  : "Load photos from Auto.dev"}
               </button>
             )}
             {gallery.photos.map((photo) => (

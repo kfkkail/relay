@@ -181,7 +181,8 @@ describe("Relay Vehicles presentation", () => {
     expect(html).toContain("2 of 3");
     expect(html).toContain("Swipe or use arrow keys");
     expect(html).toContain('class="vehicle-gallery-track"');
-    expect(html.match(/loading="eager"/g)).toHaveLength(3);
+    expect(html.match(/class="vehicle-gallery-slide"/g)).toHaveLength(5);
+    expect(html.match(/loading="eager"/g)).toHaveLength(5);
     expect(html).toContain("Adjacent listing photo");
     expect(html.match(/aria-pressed=/g)).toHaveLength(1);
     expect(html).toContain("Interior selected");

@@ -4,6 +4,7 @@ import { RelayHeader } from "./relay-header";
 import {
   VehicleCard,
   VehicleEditor,
+  VehicleGalleryViewer,
   shouldPrefetchVehiclePhotos,
   shouldQueueVehiclePhotos,
 } from "./vehicles";
@@ -140,5 +141,44 @@ describe("Relay Vehicles presentation", () => {
         false,
       ),
     ).toBe(false);
+  });
+  it("uses one focused gallery viewer instead of an action under every image", async () => {
+    const data = await (
+      await createVehiclePreviewRequest()("/api/vehicles")
+    ).json();
+    const vehicle = reviewVehicle(data.vehicles[0], defaultVehicleProfile)!;
+    const gallery = {
+      ...vehicle.row,
+      vehicleId: vehicle.id,
+      photos: [
+        ...vehicle.row.photos,
+        {
+          url: "https://example.test/third.jpg",
+          category: "unknown" as const,
+        },
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <VehicleGalleryViewer
+        gallery={gallery}
+        index={1}
+        busy={false}
+        preview
+        canLoad={false}
+        close={() => {}}
+        previous={() => {}}
+        next={() => {}}
+        loadPhotos={() => {}}
+        selectInterior={() => {}}
+      />,
+    );
+    expect(html).toContain('aria-label="Previous photo"');
+    expect(html).toContain('aria-label="Next photo"');
+    expect(html).toContain("2 of 3");
+    expect(html.match(/aria-pressed=/g)).toHaveLength(1);
+    expect(html).toContain("Interior selected");
+    expect(html).toContain("Load gallery");
+    expect(html).toContain("Live gallery loading is disabled in the sample.");
+    expect(html).not.toContain("Use as interior photo");
   });
 });

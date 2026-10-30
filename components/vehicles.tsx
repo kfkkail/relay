@@ -20,6 +20,8 @@ import {
   Eye,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   MapPin,
   Gauge,
   SlidersHorizontal,
@@ -55,6 +57,7 @@ type HealthRun = {
   summary: Record<string, number>;
 };
 type Reviewed = NonNullable<ReturnType<typeof reviewVehicle>>;
+type GalleryVehicle = VehicleListing & { vehicleId: string };
 type PhotoCandidate = {
   vin: string | null;
   row: Pick<
@@ -141,9 +144,8 @@ export function Vehicles({
     [notice, setNotice] = useState("");
   const [editing, setEditing] = useState<Reviewed | null>(null),
     [importing, setImporting] = useState(false),
-    [gallery, setGallery] = useState<
-      (VehicleListing & { vehicleId: string }) | null
-    >(null);
+    [gallery, setGallery] = useState<GalleryVehicle | null>(null),
+    [galleryIndex, setGalleryIndex] = useState(0);
   const [undo, setUndo] = useState<{
     id: string;
     decision: Decision;
@@ -151,8 +153,22 @@ export function Vehicles({
   } | null>(null);
   const requestedPhotoIds = useRef(new Set<string>());
   const profile = profiles[0];
-  const galleryFocus = useVehicleModal(Boolean(gallery), () =>
-    setGallery(null),
+  const closeGallery = useCallback(() => {
+    setGallery(null);
+    setGalleryIndex(0);
+  }, []);
+  const moveGallery = useCallback(
+    (direction: -1 | 1) => {
+      const count = gallery?.photos.length ?? 0;
+      if (count > 1)
+        setGalleryIndex((current) => (current + direction + count) % count);
+    },
+    [gallery],
+  );
+  const galleryFocus = useVehicleModal(
+    Boolean(gallery),
+    closeGallery,
+    moveGallery,
   );
   const config = profile?.config ?? defaultVehicleProfile;
   const refresh = useCallback(async () => {
@@ -619,7 +635,10 @@ export function Vehicles({
                   busy={busy}
                   decide={(decision) => void decide(v, decision)}
                   verify={() => setEditing(v)}
-                  gallery={() => setGallery({ ...v.row, vehicleId: v.id })}
+                  gallery={() => {
+                    setGalleryIndex(0);
+                    setGallery({ ...v.row, vehicleId: v.id });
+                  }}
                 />
               ))}
             </div>
@@ -697,99 +716,184 @@ export function Vehicles({
       {gallery && (
         <div
           ref={galleryFocus}
-          className="vehicle-modal"
+          className="vehicle-modal vehicle-gallery-modal"
           role="dialog"
           aria-modal="true"
           aria-label="Vehicle photos"
         >
-          <section>
-            <button
-              autoFocus
-              className="icon-button"
-              onClick={() => setGallery(null)}
-              aria-label="Close gallery"
-            >
-              <X />
-            </button>
-            <h2>Listing photos</h2>
-            {gallery.url && (
-              <a href={gallery.url} target="_blank" rel="noreferrer">
-                Open original listing
-              </a>
-            )}
-            <p>
-              {preview
-                ? "Illustrative sample photography. Choose the interior photo you want on the review card."
-                : gallery.gallery_fetched_at
-                  ? "Choose the interior photo you want on the review card."
-                  : "Relay is loading fuller galleries for the vehicles you are reviewing. You can also request this one now."}
-            </p>
-            {profile && gallery.vin && !preview && (
-              <button
-                className="secondary-button compact"
-                disabled={busy}
-                onClick={() =>
-                  void perform(async () => {
-                    await action({
-                      action: "photos",
-                      id: gallery.vehicleId,
-                      profileId: profile.id,
-                    });
-                    await refresh();
-                    setNotice(
-                      "Photo gallery queued. Refresh when your worker finishes, then reopen the gallery.",
-                    );
-                    setGallery(null);
-                  })
-                }
-              >
-                {gallery.gallery_fetched_at
-                  ? "Reload photos from Auto.dev"
-                  : "Load photos from Auto.dev"}
-              </button>
-            )}
-            {gallery.photos.map((photo) => (
-              <div key={photo.url}>
-                <VehicleImage
-                  url={photo.url}
-                  alt={`${photo.category} listing photo`}
-                />
-                <button
-                  className="secondary-button compact"
-                  disabled={busy}
-                  onClick={() =>
-                    void perform(async () => {
-                      const updated = {
-                        ...gallery,
-                        photos: gallery.photos.map((item) => ({
-                          ...item,
-                          category:
-                            item.url === photo.url
-                              ? ("interior" as const)
-                              : item.category === "interior"
-                                ? ("unknown" as const)
-                                : item.category,
-                        })),
-                      };
-                      await action({
-                        action: "interior_photo",
-                        id: gallery.vehicleId,
-                        listing: gallery,
-                        photoUrl: photo.url,
-                      });
-                      await refresh();
-                      setGallery(updated);
-                    })
-                  }
-                >
-                  Use as interior photo
-                </button>
-              </div>
-            ))}
-          </section>
+          <VehicleGalleryViewer
+            gallery={gallery}
+            index={galleryIndex}
+            busy={busy}
+            preview={preview}
+            canLoad={Boolean(profile && gallery.vin && !preview)}
+            close={closeGallery}
+            previous={() => moveGallery(-1)}
+            next={() => moveGallery(1)}
+            loadPhotos={() =>
+              void perform(async () => {
+                if (!profile) return;
+                await action({
+                  action: "photos",
+                  id: gallery.vehicleId,
+                  profileId: profile.id,
+                });
+                await refresh();
+                setNotice(
+                  "Photo gallery queued. Refresh when your worker finishes, then reopen the gallery.",
+                );
+                closeGallery();
+              })
+            }
+            selectInterior={(photoUrl) =>
+              void perform(async () => {
+                const updated = {
+                  ...gallery,
+                  photos: gallery.photos.map((item) => ({
+                    ...item,
+                    category:
+                      item.url === photoUrl
+                        ? ("interior" as const)
+                        : item.category === "interior"
+                          ? ("unknown" as const)
+                          : item.category,
+                  })),
+                };
+                await action({
+                  action: "interior_photo",
+                  id: gallery.vehicleId,
+                  listing: gallery,
+                  photoUrl,
+                });
+                await refresh();
+                setGallery(updated);
+              })
+            }
+          />
         </div>
       )}
     </main>
+  );
+}
+
+export function VehicleGalleryViewer({
+  gallery,
+  index,
+  busy,
+  preview,
+  canLoad,
+  close,
+  previous,
+  next,
+  loadPhotos,
+  selectInterior,
+}: {
+  gallery: GalleryVehicle;
+  index: number;
+  busy: boolean;
+  preview: boolean;
+  canLoad: boolean;
+  close: () => void;
+  previous: () => void;
+  next: () => void;
+  loadPhotos: () => void;
+  selectInterior: (url: string) => void;
+}) {
+  const count = gallery.photos.length;
+  const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
+  const current = gallery.photos[currentIndex];
+  return (
+    <section className="vehicle-gallery-viewer">
+      <header className="vehicle-gallery-header">
+        <div>
+          <strong>Listing photos</strong>
+          <span aria-live="polite">
+            {count ? `${currentIndex + 1} of ${count}` : "No photos yet"}
+          </span>
+        </div>
+        <button
+          autoFocus
+          className="icon-button"
+          onClick={close}
+          aria-label="Close gallery"
+        >
+          <X />
+        </button>
+      </header>
+      <div className="vehicle-gallery-stage">
+        {current ? (
+          <VehicleImage
+            url={current.url}
+            alt={`Listing photo ${currentIndex + 1} of ${count}`}
+          />
+        ) : (
+          <VehicleImage alt="Listing photo" />
+        )}
+        {count > 1 && (
+          <>
+            <button
+              className="vehicle-gallery-arrow vehicle-gallery-previous"
+              onClick={previous}
+              aria-label="Previous photo"
+            >
+              <ChevronLeft aria-hidden />
+            </button>
+            <button
+              className="vehicle-gallery-arrow vehicle-gallery-next"
+              onClick={next}
+              aria-label="Next photo"
+            >
+              <ChevronRight aria-hidden />
+            </button>
+          </>
+        )}
+      </div>
+      <footer className="vehicle-gallery-footer">
+        <div>
+          {gallery.url && (
+            <a href={gallery.url} target="_blank" rel="noreferrer">
+              Open original listing <ArrowUpRight size={14} aria-hidden />
+            </a>
+          )}
+          <span>
+            {preview
+              ? "Illustrative sample photography"
+              : gallery.gallery_fetched_at
+                ? "Full gallery loaded"
+                : "Fuller gallery loading in the background"}
+          </span>
+        </div>
+        <div className="vehicle-gallery-actions">
+          {(canLoad || preview) && (
+            <button
+              className="secondary-button compact"
+              disabled={busy || preview}
+              onClick={loadPhotos}
+              title={
+                preview
+                  ? "Live gallery loading is disabled in the sample."
+                  : undefined
+              }
+            >
+              {gallery.gallery_fetched_at ? "Reload gallery" : "Load gallery"}
+            </button>
+          )}
+          {current && (
+            <button
+              className="primary-button compact"
+              disabled={busy || current.category === "interior"}
+              aria-pressed={current.category === "interior"}
+              onClick={() => selectInterior(current.url)}
+            >
+              <Check size={16} aria-hidden />
+              {current.category === "interior"
+                ? "Interior selected"
+                : "Set as interior"}
+            </button>
+          )}
+        </div>
+      </footer>
+    </section>
   );
 }
 
@@ -1577,9 +1681,18 @@ export function VehicleEditor({
   );
 }
 
-function useVehicleModal(open: boolean, close: () => void) {
+function useVehicleModal(
+  open: boolean,
+  close: () => void,
+  navigate?: (direction: -1 | 1) => void,
+) {
   const container = useRef<HTMLDivElement>(null);
   const onClose = useEffectEvent(close);
+  const onNavigate = useEffectEvent((direction: -1 | 1) => {
+    if (!navigate) return false;
+    navigate(direction);
+    return true;
+  });
   useEffect(() => {
     if (!open) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -1597,6 +1710,8 @@ function useVehicleModal(open: boolean, close: () => void) {
         event.preventDefault();
         onClose();
       }
+      if (event.key === "ArrowLeft" && onNavigate(-1)) event.preventDefault();
+      if (event.key === "ArrowRight" && onNavigate(1)) event.preventDefault();
       if (event.key !== "Tab") return;
       const elements = focusable(),
         first = elements[0],

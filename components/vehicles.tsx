@@ -776,6 +776,22 @@ export function Vehicles({
   );
 }
 
+export function gallerySwipeDirection(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): -1 | 0 | 1 {
+  const horizontalDistance = endX - startX;
+  const verticalDistance = endY - startY;
+  if (
+    Math.abs(horizontalDistance) < 48 ||
+    Math.abs(horizontalDistance) <= Math.abs(verticalDistance) * 1.2
+  )
+    return 0;
+  return horizontalDistance < 0 ? 1 : -1;
+}
+
 export function VehicleGalleryViewer({
   gallery,
   index,
@@ -799,6 +815,11 @@ export function VehicleGalleryViewer({
   loadPhotos: () => void;
   selectInterior: (url: string) => void;
 }) {
+  const swipeStart = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const count = gallery.photos.length;
   const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
   const current = gallery.photos[currentIndex];
@@ -820,7 +841,34 @@ export function VehicleGalleryViewer({
           <X />
         </button>
       </header>
-      <div className="vehicle-gallery-stage">
+      <div
+        className="vehicle-gallery-stage"
+        onPointerDown={(event) => {
+          if (event.pointerType === "mouse" || count < 2) return;
+          swipeStart.current = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerUp={(event) => {
+          const start = swipeStart.current;
+          if (!start || start.pointerId !== event.pointerId) return;
+          swipeStart.current = null;
+          const direction = gallerySwipeDirection(
+            start.x,
+            start.y,
+            event.clientX,
+            event.clientY,
+          );
+          if (direction === -1) previous();
+          if (direction === 1) next();
+        }}
+        onPointerCancel={() => {
+          swipeStart.current = null;
+        }}
+      >
         {current ? (
           <VehicleImage
             url={current.url}
@@ -828,24 +876,6 @@ export function VehicleGalleryViewer({
           />
         ) : (
           <VehicleImage alt="Listing photo" />
-        )}
-        {count > 1 && (
-          <>
-            <button
-              className="vehicle-gallery-arrow vehicle-gallery-previous"
-              onClick={previous}
-              aria-label="Previous photo"
-            >
-              <ChevronLeft aria-hidden />
-            </button>
-            <button
-              className="vehicle-gallery-arrow vehicle-gallery-next"
-              onClick={next}
-              aria-label="Next photo"
-            >
-              <ChevronRight aria-hidden />
-            </button>
-          </>
         )}
       </div>
       <footer className="vehicle-gallery-footer">
@@ -861,9 +891,24 @@ export function VehicleGalleryViewer({
               : gallery.gallery_fetched_at
                 ? "Full gallery loaded"
                 : "Fuller gallery loading in the background"}
+            {count > 1 ? " · Swipe or use arrow keys" : ""}
           </span>
         </div>
         <div className="vehicle-gallery-actions">
+          {count > 1 && (
+            <div
+              className="vehicle-gallery-navigation"
+              role="group"
+              aria-label="Photo navigation"
+            >
+              <button onClick={previous} aria-label="Previous photo">
+                <ChevronLeft aria-hidden />
+              </button>
+              <button onClick={next} aria-label="Next photo">
+                <ChevronRight aria-hidden />
+              </button>
+            </div>
+          )}
           {(canLoad || preview) && (
             <button
               className="secondary-button compact"

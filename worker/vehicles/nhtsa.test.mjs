@@ -35,6 +35,13 @@ describe("NHTSA VIN evidence", () => {
   it("treats missing/ambiguous fields as unknown", () => {
     expect(
       decodeNhtsaResult(
+        payload({ EVDriveUnit: "__proto__", BatteryInfo: "constructor" }),
+        vin,
+        source,
+      ).attributes,
+    ).toMatchObject({ motor: null, battery_pack: null });
+    expect(
+      decodeNhtsaResult(
         payload({
           EVDriveUnit: "",
           BatteryKWh: "",

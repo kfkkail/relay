@@ -18,26 +18,30 @@ export function decodeNhtsaResult(payload, vin, sourceUrl, now = new Date()) {
     throw new Error("NHTSA could not cleanly decode this VIN.");
   const drive = text(row.EVDriveUnit);
   const motor =
-    {
-      "dual motor": "dual",
-      "quad motor": "quad",
-      "triple motor": "tri",
-      "tri motor": "tri",
-    }[drive.toLowerCase()] ?? null;
+    new Map(
+      Object.entries({
+        "dual motor": "dual",
+        "quad motor": "quad",
+        "triple motor": "tri",
+        "tri motor": "tri",
+      }),
+    ).get(drive.toLowerCase()) ?? null;
   const batteryInfo = text(row.BatteryInfo);
   // BatteryInfo is a structured field. Accept a named pack, not prose listing
   // possible options, and never use capacity, trim, or model year to choose.
   const battery =
-    {
-      "standard pack": "standard",
-      "standard battery pack": "standard",
-      "standard+ pack": "standard+",
-      "standard plus pack": "standard+",
-      "large pack": "large",
-      "large battery pack": "large",
-      "max pack": "max",
-      "max battery pack": "max",
-    }[batteryInfo.toLowerCase().replace(/\s+/g, " ")] ?? null;
+    new Map(
+      Object.entries({
+        "standard pack": "standard",
+        "standard battery pack": "standard",
+        "standard+ pack": "standard+",
+        "standard plus pack": "standard+",
+        "large pack": "large",
+        "large battery pack": "large",
+        "max pack": "max",
+        "max battery pack": "max",
+      }),
+    ).get(batteryInfo.toLowerCase().replace(/\s+/g, " ")) ?? null;
   const capacity = (value) =>
     /^\d+(\.\d+)?$/.test(text(value)) &&
     Number(value) > 0 &&

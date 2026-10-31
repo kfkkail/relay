@@ -162,6 +162,16 @@ export function Dashboard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const workerSetupRequested = searchParams.get("settings") === "worker";
+  function closeWorkerSetup() {
+    setWorkerOpen(false);
+    if (workerSetupRequested) {
+      const query = new URLSearchParams(searchParams.toString());
+      query.delete("settings");
+      router.replace(currentPath(pathname, query), { scroll: false });
+    }
+  }
+
   const navigate = useCallback(
     (
       destination: string,
@@ -1096,11 +1106,8 @@ export function Dashboard({
         </div>
       )}
 
-      {workerOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={() => setWorkerOpen(false)}
-        >
+      {(workerOpen || workerSetupRequested) && (
+        <div className="modal-backdrop" onMouseDown={closeWorkerSetup}>
           <section
             className="sheet worker-sheet"
             role="dialog"
@@ -1113,10 +1120,7 @@ export function Dashboard({
                 <p className="eyebrow">Outbound only</p>
                 <h2 id="worker-title">Worker setup</h2>
               </div>
-              <button
-                className="icon-button"
-                onClick={() => setWorkerOpen(false)}
-              >
+              <button className="icon-button" onClick={closeWorkerSetup}>
                 <X size={20} />
               </button>
             </div>

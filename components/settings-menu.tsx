@@ -94,7 +94,11 @@ export function SettingsMenu({
             Worker setup
           </button>
         ) : (
-          <Link className="settings-row" href="/my-work">
+          <Link
+            className="settings-row"
+            href="/my-work?settings=worker"
+            onClick={() => setOpen(false)}
+          >
             <Laptop size={20} />
             Worker setup
           </Link>

@@ -42,7 +42,32 @@ export async function POST(
       return NextResponse.json({ alive: true });
     }
     let result;
-    if (body.action === "batch") {
+    if (run.job_payload.detail_vehicle) {
+      if (body.action !== "enrichment")
+        throw new ApiError("This run only accepts configuration evidence.");
+      const attr = body.attributes;
+      if (!attr || typeof attr !== "object" || Array.isArray(attr))
+        throw new ApiError("Invalid configuration evidence.");
+      const evidence = (value: unknown) =>
+        typeof value === "string" ? value.slice(0, 1500) : null;
+      result = await supabase.rpc("complete_vehicle_enrichment", {
+        p_run: runId,
+        p_worker: worker.id,
+        p_lease: body.lease,
+        p_attributes: {
+          battery_pack: ["standard", "standard+", "large", "max"].includes(
+            attr.battery_pack,
+          )
+            ? attr.battery_pack
+            : null,
+          motor: ["dual", "quad", "tri"].includes(attr.motor)
+            ? attr.motor
+            : null,
+          battery_evidence: evidence(attr.battery_evidence),
+          motor_evidence: evidence(attr.motor_evidence),
+        },
+      });
+    } else if (body.action === "batch") {
       if (
         !Number.isInteger(body.batch) ||
         body.batch < 0 ||

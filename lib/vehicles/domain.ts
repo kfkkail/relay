@@ -57,7 +57,14 @@ export function applyVehicleOverrides(
   // arbitrary identity fields must never leak onto another seller's listing.
   const verified: VehicleListing = {
     ...row,
-    attributes: { ...row.attributes, ...overrides.attributes },
+    attributes: {
+      battery_pack:
+        overrides.attributes?.battery_pack ?? row.attributes.battery_pack,
+      motor: overrides.attributes?.motor ?? row.attributes.motor,
+      battery_evidence: overrides.attributes?.battery_pack
+        ? overrides.attributes.battery_evidence
+        : row.attributes.battery_evidence,
+    },
     title_status: overrides.title_status ?? row.title_status,
     history_available: overrides.history_available ?? row.history_available,
     history_flags: overrides.history_flags ?? row.history_flags,

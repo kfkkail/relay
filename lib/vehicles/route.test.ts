@@ -39,6 +39,22 @@ const request = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
+it("queues a configuration check for a validated vehicle and profile", async () => {
+  expect(
+    (await POST(request({ action: "enrichment", id, profileId: id }))).status,
+  ).toBe(200);
+  expect(mocks.rpc).toHaveBeenCalledWith("request_vehicle_enrichment", {
+    p_vehicle: id,
+    p_profile: id,
+  });
+  mocks.rpc.mockClear();
+  expect(
+    (await POST(request({ action: "enrichment", id: "bad", profileId: id })))
+      .status,
+  ).toBe(400);
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});
+
 it("stores only owner-confirmable facts and seller-scoped costs", async () => {
   const response = await POST(
     request({

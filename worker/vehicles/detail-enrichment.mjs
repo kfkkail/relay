@@ -257,7 +257,7 @@ async function writeCache(path, cache) {
   }
 }
 
-function safePageUrl(value) {
+export function safePageUrl(value) {
   const url = new URL(value);
   if (
     !["http:", "https:"].includes(url.protocol) ||
@@ -272,7 +272,7 @@ function safePageUrl(value) {
   return url;
 }
 
-async function assertPublicHost(url, lookupImpl) {
+export async function assertPublicHost(url, lookupImpl = lookup) {
   const addresses = await lookupImpl(url.hostname, {
     all: true,
     verbatim: true,
@@ -319,7 +319,7 @@ export function isPublicAddress(address) {
   return false;
 }
 
-async function boundedText(response, maxBytes) {
+export async function boundedText(response, maxBytes, onBytes = () => {}) {
   const reader = response.body?.getReader();
   if (!reader) throw new Error("empty_response");
   const chunks = [];
@@ -329,6 +329,7 @@ async function boundedText(response, maxBytes) {
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
+      onBytes(value.byteLength);
       if (bytes > maxBytes) throw new Error("seller_page_too_large");
       chunks.push(value);
     }

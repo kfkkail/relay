@@ -84,6 +84,33 @@ const money = (n: number | null) =>
         currency: "USD",
         maximumFractionDigits: 0,
       }).format(n);
+export function canEnrichVehicle(vehicle: Reviewed) {
+  return (
+    Boolean(vehicle.vin) &&
+    vehicle.sources.some(
+      (row) =>
+        row.source === "auto.dev" &&
+        row.url &&
+        row.availability === "available" &&
+        row.make.toLowerCase() === "rivian" &&
+        row.model.toLowerCase() === "r1t",
+    )
+  );
+}
+export function shouldQueueVehicleEnrichment(
+  vehicle: Reviewed,
+  decision: Decision,
+  preview: boolean,
+) {
+  return (
+    !preview &&
+    canEnrichVehicle(vehicle) &&
+    (decision === "watch" || decision === "shortlist") &&
+    decision !== vehicle.decision &&
+    vehicle.enrichment?.status !== "queued" &&
+    (!vehicle.row.attributes.battery_pack || !vehicle.row.attributes.motor)
+  );
+}
 export function shouldQueueVehiclePhotos(
   vehicle: PhotoCandidate,
   decision: Decision,
@@ -312,6 +339,10 @@ export function Vehicles({
         profile &&
         reviewed &&
         shouldQueueVehiclePhotos(reviewed, decision, preview);
+      const queueEnrichment =
+        profile &&
+        reviewed &&
+        shouldQueueVehicleEnrichment(reviewed, decision, preview);
       const revision = await action({
         action: "decision",
         id: v.id,
@@ -326,6 +357,22 @@ export function Vehicles({
         ),
       );
       setUndo({ id: v.id, decision: v.decision, revision });
+      const queued: string[] = [];
+      const failures: string[] = [];
+      if (queueEnrichment) {
+        try {
+          await action({
+            action: "enrichment",
+            id: v.id,
+            profileId: profile.id,
+          });
+          queued.push("Battery & motor check");
+        } catch {
+          failures.push(
+            "the battery & motor check could not be queued. Use Check battery & motor to retry",
+          );
+        }
+      }
       if (queuePhotos) {
         try {
           await action({
@@ -333,16 +380,17 @@ export function Vehicles({
             id: v.id,
             profileId: profile.id,
           });
-          setNotice(
-            `${decision === "watch" ? "Interested" : "Shortlist"} saved. Full photo gallery queued.`,
-          );
-          await refresh().catch(() => {});
+          queued.push("Full photo gallery");
         } catch {
-          setError(
-            `${decision === "watch" ? "Interested" : "Shortlist"} saved, but the optional photo gallery could not be queued. Open View photos to retry.`,
+          failures.push(
+            "the photo gallery could not be queued. Open View photos to retry",
           );
         }
       }
+      if (queued.length) setNotice(`${queued.join(" and ")} queued.`);
+      if (failures.length)
+        setError(`Decision saved, but ${failures.join("; ")}.`);
+      if (queueEnrichment || queuePhotos) await refresh().catch(() => {});
     });
   }
   function chooseQueue(next: string) {
@@ -637,6 +685,23 @@ export function Vehicles({
                   busy={busy}
                   decide={(decision) => void decide(v, decision)}
                   verify={() => setEditing(v)}
+                  enrich={
+                    !preview && profile && canEnrichVehicle(v)
+                      ? () => {
+                          void perform(async () => {
+                            await action({
+                              action: "enrichment",
+                              id: v.id,
+                              profileId: profile.id,
+                            });
+                            setNotice(
+                              "Battery & motor check queued. Results will appear here when the worker finishes.",
+                            );
+                            await refresh();
+                          });
+                        }
+                      : undefined
+                  }
                   gallery={() => {
                     setGalleryIndex(0);
                     setGallery({ ...v.row, vehicleId: v.id });
@@ -1140,12 +1205,14 @@ export function VehicleCard({
   decide,
   verify,
   gallery,
+  enrich,
 }: {
   vehicle: Reviewed;
   busy: boolean;
   decide: (decision: Decision) => void;
   verify: () => void;
   gallery: () => void;
+  enrich?: () => void;
 }) {
   const row = v.row,
     ev = v.evaluation;
@@ -1207,6 +1274,22 @@ export function VehicleCard({
             .filter(Boolean)
             .join(" · ")}
         </p>
+        {v.enrichment?.status && (
+          <p className="vehicle-muted" role="status">
+            {
+              {
+                queued: "Battery & motor check queued",
+                resolved: "Battery & motor found on the seller page",
+                partial:
+                  "Some configuration evidence found; verify remaining details manually",
+                unresolved:
+                  "No unambiguous configuration evidence found; verify manually or retry",
+                failed:
+                  "Seller page could not be checked; verify manually or retry",
+              }[v.enrichment.status]
+            }
+          </p>
+        )}
         <div className="vehicle-price">
           <div>
             <span>Asking price</span>
@@ -1349,7 +1432,29 @@ export function VehicleCard({
             Battery evidence:{" "}
             {row.attributes.battery_evidence || "Not established"}
           </p>
+          {v.enrichment?.attributes?.motor_evidence && (
+            <p>Motor evidence: {v.enrichment.attributes.motor_evidence}</p>
+          )}
+          {v.enrichment?.checked_at && (
+            <p className="vehicle-muted">
+              Configuration checked{" "}
+              {new Date(v.enrichment.checked_at).toLocaleString()}
+            </p>
+          )}
           <div className="vehicle-detail-actions">
+            {enrich &&
+              (v.decision === "watch" || v.decision === "shortlist") && (
+                <button
+                  className="secondary-button compact"
+                  disabled={busy || v.enrichment?.status === "queued"}
+                  onClick={enrich}
+                >
+                  <RefreshCw size={16} aria-hidden />
+                  {v.enrichment?.status === "queued"
+                    ? "Check queued"
+                    : "Check battery & motor"}
+                </button>
+              )}
             {v.decision !== "unreviewed" && v.decision !== "passed" && (
               <button
                 className="vehicle-text-button"

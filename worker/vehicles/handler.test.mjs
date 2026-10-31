@@ -6,7 +6,34 @@ describe("vehicle worker routing", () => {
     expect(vehicleCapabilities({})).toEqual([]);
     expect(vehicleCapabilities({ RELAY_VEHICLE_SEARCH: "1" })).toEqual([
       "vehicle_search",
+      "vehicle_enrichment",
     ]);
+  });
+  it("runs a targeted check without an Auto.dev credential or inventory scan", async () => {
+    const request = vi.fn(async () => ({ result: null }));
+    const getKey = vi.fn();
+    const collect = vi.fn();
+    const attributes = { battery_pack: "large", motor: "quad" };
+    const payload = {
+      detail_vehicle: "vehicle",
+      detail_vin: "7FCTGAAA0NN000001",
+      detail_url: "https://dealer.example/truck",
+    };
+    const detail = vi.fn(async () => attributes);
+    await runVehicleJob(
+      { run: { id: "detail", lease: "lease", job_payload: payload } },
+      request,
+      { getKey, collect, detail },
+    );
+    expect(detail).toHaveBeenCalledWith(payload);
+    expect(getKey).not.toHaveBeenCalled();
+    expect(collect).not.toHaveBeenCalled();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+      action: "enrichment",
+      lease: "lease",
+      attributes,
+    });
   });
   it("uploads bounded idempotent batches and finalizes without the credential", async () => {
     const request = vi.fn(async () => ({ result: "done" }));

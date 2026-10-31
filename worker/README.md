@@ -75,6 +75,14 @@ browser provisioning when dependencies change and refuse to restart into a
 browser version that cannot launch. On Linux, a failed launch may require the
 host packages reported by Playwright; install those once and rerun worker setup.
 
+The first vehicle configuration check also downloads Chromium if it is missing,
+covering upgrades performed by an older updater that only installed the npm
+package. Concurrent checks share that download. There is no service reinstall
+required for this case. If the launch reports missing Linux libraries, run
+`npx playwright install-deps chromium` from the managed worker checkout (this may
+ask for `sudo`), then retry **Check battery & motor**. Use the same OS user who
+runs the worker service. Browser login is unnecessary.
+
 On Linux, including Raspberry Pi OS, installation checks that systemd lingering
 is enabled for the current user and enables it when necessary. That one-time
 change may prompt for `sudo`; it is required for the user service to survive the

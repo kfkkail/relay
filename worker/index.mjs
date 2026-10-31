@@ -11,6 +11,7 @@ import {
   nextIdlePollInterval,
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
+import { startRunHeartbeat } from "./run-heartbeat.mjs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +20,9 @@ const workerToken = required("RELAY_WORKER_TOKEN");
 const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
 const maxIdlePollInterval = Number(
   process.env.RELAY_MAX_IDLE_POLL_INTERVAL_MS || 60000,
+);
+const runHeartbeatInterval = Number(
+  process.env.RELAY_RUN_HEARTBEAT_INTERVAL_MS || 30000,
 );
 const taskRunner = createTaskRunner();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -81,6 +85,21 @@ async function processClaimedRun(claimed) {
   const { run, task, attachments = [] } = claimed;
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
+  let heartbeatStopped = false;
+  const stopHeartbeat =
+    run.job_kind === "vehicle_search"
+      ? async () => {}
+      : startRunHeartbeat({
+          intervalMs: runHeartbeatInterval,
+          heartbeat: () =>
+            relayRequest(`/api/worker/runs/${run.id}/heartbeat`, {
+              method: "POST",
+            }),
+          onError: (error) =>
+            console.error(
+              `Heartbeat failed for ${run.id}: ${safeError(error)}`,
+            ),
+        });
   try {
     if (run.job_kind === "vehicle_search") {
       await runVehicleJob(claimed, relayRequest);
@@ -162,6 +181,8 @@ async function processClaimedRun(claimed) {
       );
       documentIds.push(uploaded.document.id);
     }
+    await stopHeartbeat();
+    heartbeatStopped = true;
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
       body: JSON.stringify({
@@ -172,6 +193,10 @@ async function processClaimedRun(claimed) {
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {
+    if (!heartbeatStopped) {
+      await stopHeartbeat();
+      heartbeatStopped = true;
+    }
     const message = safeError(error);
     console.error(`Run ${run.id} failed: ${message}`);
     try {
@@ -185,6 +210,7 @@ async function processClaimedRun(claimed) {
       );
     }
   } finally {
+    if (!heartbeatStopped) await stopHeartbeat();
     if (attachmentDirectory)
       await rm(attachmentDirectory, { recursive: true, force: true });
   }

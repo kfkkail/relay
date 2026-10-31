@@ -3,6 +3,7 @@ import { autoDevPhotos, collectAutoDev } from "./auto-dev.mjs";
 import { enrichSellerListings } from "./detail-enrichment.mjs";
 import { enrichVehicle } from "./browser-enrichment.mjs";
 import { SellerPageError } from "./seller-error.mjs";
+import { runNhtsaBackfill } from "./nhtsa-backfill.mjs";
 
 export function vehicleCapabilities(env = process.env) {
   return env.RELAY_VEHICLE_SEARCH === "1"
@@ -19,6 +20,7 @@ export async function runVehicleJob(
     enrich = enrichSellerListings,
     photos = autoDevPhotos,
     detail = enrichVehicle,
+    nhtsa = runNhtsaBackfill,
   } = {},
 ) {
   const endpoint = `/api/worker/runs/${claimed.run.id}/vehicles`;
@@ -42,6 +44,12 @@ export async function runVehicleJob(
   heartbeat.unref();
   try {
     if (claimed.run.job_payload?.detail_vehicle) {
+      // Independent evidence survives even if the seller later blocks Chromium.
+      await request({ action: "nhtsa", lease }).catch(() => {
+        console.error(
+          `Vehicle enrichment run ${claimed.run.id}: NHTSA decode unavailable; continuing seller check.`,
+        );
+      });
       let attributes;
       try {
         attributes = await detail(claimed.run.job_payload);
@@ -99,9 +107,19 @@ export async function runVehicleJob(
       };
       await retryRelay(() => request(body));
     }
-    return await retryRelay(() =>
+    const finalized = await retryRelay(() =>
       request({ action: "finalize", lease, health }),
     );
+    // Do not turn an otherwise successful inventory scan into a failed one if
+    // the supplemental government data source is unavailable.
+    try {
+      await nhtsa(relayRequest);
+    } catch {
+      console.error(
+        `Vehicle run ${claimed.run.id}: supplemental NHTSA backfill unavailable.`,
+      );
+    }
+    return finalized;
   } finally {
     clearInterval(heartbeat);
   }

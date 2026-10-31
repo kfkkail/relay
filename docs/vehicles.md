@@ -76,8 +76,16 @@ Failed or ambiguous checks leave unresolved fields available for manual
 verification. Durable evidence survives later inventory snapshots; optional
 checks never change inventory coverage, absence counts or notification digests.
 Requests and redirects receive public-network checks at connection time;
-non-GET requests, downloads, images, frames and WebSockets are blocked. Each
-check is bounded to 40 requests, 5 MB total and a 25-second page session.
+HTTPS uses an authenticated loopback CONNECT tunnel that validates and pins
+public DNS answers. It does not terminate TLS, pull pages through Node HTTPS,
+or substitute responses. Chromium owns TLS/HTTP, redirects, JavaScript, and its
+fresh per-check cookie jar. No personal browser profile or worker secrets are
+loaded. Images, fonts, subframes, and GET/HEAD/OPTIONS plus POST fetch/XHR are
+allowed for rendering; document POSTs, downloads, popups and WebSockets are
+blocked. Exact read-only **View All Features and Specs → Specs** controls are
+opened when present. Each check is bounded to 180 routed requests, 160 proxy
+connection attempts, 40 MB transported bytes and a 45-second page session.
+The worker never clicks purchase, sign-in, notification, or challenge controls.
 
 Configuration failures now retain a bounded diagnostic on the card and run:
 seller hostname, HTTP status (when received), and a network error code when
@@ -90,6 +98,12 @@ evidence and manual confirmations remain intact. This requires migration
 update; earlier failed runs need a manual retry to gain a new diagnostic.
 
 ### Source access assessment (2026-10-31)
+
+The owner's direct native-Chromium probe on the Pi also received HTTP 403,
+**Just a moment… / Performing security verification**, with no VIN or specs.
+Removing the old HTTP interception therefore does **not** establish Carvana
+access on the Pi. Model-driven clicks in that same blocked session are not a
+remedy. Keep blocked/unresolved states and verify using an accessible source.
 
 The Carvana and CarMax listing URLs reported by the owner returned HTTP 403 to
 Relay's public request transport in a local live probe. Chromium startup is
@@ -108,6 +122,55 @@ unresolved. A future integration must keep `ambiguity=false`, accept only explic
 VIN-specific evidence and leave ambiguous answers unverified. This change does
 not enable that paid endpoint or claim it resolves Rivian battery packs. Existing
 Auto.dev inventory and photo requests continue using their current API paths.
+
+### NHTSA VIN decoding
+
+NHTSA [vPIC](https://vpic.nhtsa.dot.gov/api/) requires no API key. Every completed
+inventory scan runs an owner-scoped NHTSA backfill, and targeted checks decode
+the VIN before opening the seller page. NHTSA failure does not prevent a seller
+check or turn a successful inventory scan into a failure. **Coverage Health →
+Decode all VINs with NHTSA** manually processes all stored vehicles, including
+Passed, unavailable and manual listings (confirmed VINs only), not merely the
+visible queue. The API handles ten records per page with two concurrent public
+lookups and caches clean results for 30 days. Failed decoding can be retried.
+
+Results live in `vehicles.nhtsa`, separate from owner overrides, seller evidence
+and provider snapshots. Only clean, exact-VIN responses are accepted. Explicit
+`EVDriveUnit` can fill an unknown motor; explicit `BatteryInfo` pack labels can
+fill an unknown pack. Battery capacity/type remain separate facts and are never
+mapped to Large/Max. Missing data is unknown. Owner confirmations and existing
+listing/seller values retain precedence. Updates recheck owner and VIN; an
+identity merge cannot put old evidence on a different VIN. The card shows the
+NHTSA source, reported motor/capacity and timestamp after web deployment.
+
+Requires `20261031030000_vehicle_nhtsa.sql` and the matching web deployment.
+An operator may also run the backfill with the existing worker environment:
+
+```bash
+node --env-file=.env.worker scripts/vehicles-nhtsa.mjs
+```
+
+For an initial backfill before web deployment, the operator-only script uses an
+existing Supabase CLI Management API login, refuses projects with multiple
+vehicle owners, and touches only the NHTSA column:
+
+```bash
+node scripts/vehicles-nhtsa-admin.mjs PROJECT_REF --apply-schema
+```
+
+`--apply-schema` adds only the isolated evidence column. The migration is
+idempotent so the later normal deployment can record it safely. No app/worker
+deployment, owner overrides or seller data is changed by that script.
+
+For a one-off NHTSA + Chromium diagnostic (does not save vehicle data):
+
+```bash
+npm run vehicles:check -- VIN https://seller.example/listing
+```
+
+Set `RELAY_VEHICLE_BROWSER_HEADLESS=0` only on a host with a graphical display
+to observe its isolated Chromium session. No model or API key is required for
+these deterministic steps; site access is not guaranteed in either mode.
 
 ## Local interactive preview
 

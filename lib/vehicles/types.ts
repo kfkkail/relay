@@ -63,6 +63,20 @@ export type VehicleRecord = {
   decision: Decision;
   decision_revision: number;
   overrides: VehicleOverrides;
+  nhtsa?: {
+    vin: string;
+    status: "decoded";
+    checked_at: string;
+    source_url: string;
+    identity: { year: string; make: string; model: string; trim: string };
+    attributes: Partial<VehicleListing["attributes"]> & {
+      motor_evidence?: string | null;
+    };
+    battery_kwh: number | null;
+    battery_kwh_to: number | null;
+    battery_type: string | null;
+    battery_info: string | null;
+  };
   enrichment?: {
     status?:
       | "queued"

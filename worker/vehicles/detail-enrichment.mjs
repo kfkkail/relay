@@ -3,6 +3,8 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { boundedText } from "./bounded-text.mjs";
+export { boundedText } from "./bounded-text.mjs";
 
 const DEFAULT_CACHE = fileURLToPath(
   new URL("../../.relay/vehicle-enrichment.json", import.meta.url),
@@ -317,26 +319,6 @@ export function isPublicAddress(address) {
     );
   }
   return false;
-}
-
-export async function boundedText(response, maxBytes, onBytes = () => {}) {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("empty_response");
-  const chunks = [];
-  let bytes = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      bytes += value.byteLength;
-      onBytes(value.byteLength);
-      if (bytes > maxBytes) throw new Error("seller_page_too_large");
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks).toString("utf8");
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
 }
 
 function decodeEntities(value) {

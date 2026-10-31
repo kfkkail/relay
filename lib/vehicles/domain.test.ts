@@ -356,6 +356,47 @@ describe("durable review and re-evaluation", () => {
     expect(reviewed.row.attributes).toEqual(r.overrides.attributes);
     expect(reviewed.decision).toBe(r.decision);
   });
+  it("fills unknown fields from exact-VIN NHTSA evidence without replacing known values or inferring a pack", () => {
+    const r = record();
+    r.vehicle_listings[0].data.attributes = {
+      motor: null,
+      battery_pack: null,
+      battery_evidence: null,
+    };
+    r.nhtsa = {
+      vin: r.vin!,
+      status: "decoded",
+      checked_at: new Date().toISOString(),
+      source_url: "https://vpic.nhtsa.dot.gov/api/",
+      identity: { year: "2022", make: "RIVIAN", model: "R1T", trim: "" },
+      attributes: {
+        motor: "quad",
+        motor_evidence: "NHTSA EVDriveUnit: Quad Motor",
+      },
+      battery_kwh: 128.9,
+      battery_kwh_to: null,
+      battery_type: null,
+      battery_info: null,
+    };
+    expect(reviewVehicle(r, profile)!.row.attributes).toMatchObject({
+      motor: "quad",
+      battery_pack: null,
+    });
+    r.overrides.attributes = {
+      motor: "dual",
+      battery_pack: "max",
+      battery_evidence: "Owner confirmed",
+    };
+    expect(reviewVehicle(r, profile)!.row.attributes).toEqual(
+      r.overrides.attributes,
+    );
+    r.overrides = {};
+    r.vehicle_listings[0].data.attributes.motor = "dual";
+    expect(reviewVehicle(r, profile)!.row.attributes.motor).toBe("dual");
+    r.vehicle_listings[0].data.attributes.motor = null;
+    r.nhtsa.vin = "7FCTGAAA0NN000099";
+    expect(reviewVehicle(r, profile)!.row.attributes.motor).toBeNull();
+  });
 });
 
 describe("notifications and input validation", () => {

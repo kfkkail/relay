@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useVehiclePhotoZoom } from "./use-vehicle-photo-zoom";
 import {
   useCallback,
   useEffect,
@@ -828,6 +829,11 @@ export function VehicleGalleryViewer({
   const count = gallery.photos.length;
   const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
   const current = gallery.photos[currentIndex];
+  const zoomGesture = useVehiclePhotoZoom(stageRef, current?.url, () => {
+    swipeStart.current = null;
+    setDragOffset(0);
+    setSettling(null);
+  });
   const gallerySlides = gallery.photos.map((photo, photoIndex) => ({
     key: `photo-${photoIndex}`,
     logicalIndex: photoIndex,
@@ -932,7 +938,12 @@ export function VehicleGalleryViewer({
         ref={stageRef}
         className="vehicle-gallery-stage"
         onPointerDown={(event) => {
-          if (event.pointerType === "mouse" || count < 2) return;
+          if (
+            event.pointerType === "mouse" ||
+            count < 2 ||
+            zoomGesture.current
+          )
+            return;
           setSettling(null);
           setDragOffset(0);
           swipeStart.current = {
@@ -944,6 +955,7 @@ export function VehicleGalleryViewer({
           event.currentTarget.setPointerCapture(event.pointerId);
         }}
         onPointerMove={(event) => {
+          if (zoomGesture.current) return;
           const start = swipeStart.current;
           if (
             !start ||
@@ -954,6 +966,7 @@ export function VehicleGalleryViewer({
           setDragOffset(event.clientX - start.x);
         }}
         onPointerUp={(event) => {
+          if (zoomGesture.current) return;
           const start = swipeStart.current;
           if (!start || start.pointerId !== event.pointerId) return;
           const direction = gallerySwipeDirection(
@@ -966,6 +979,7 @@ export function VehicleGalleryViewer({
           finishSwipe(direction);
         }}
         onPointerCancel={() => {
+          if (zoomGesture.current) return;
           swipeStart.current = null;
           finishSwipe(0);
         }}

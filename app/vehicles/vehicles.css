@@ -801,3 +801,10 @@
     transition: none;
   }
 }
+
+/* Reserve mobile photo gestures for image zoom and carousel navigation. */
+@media (max-width: 767px) and (pointer: coarse) {
+  .vehicle-gallery-stage {
+    touch-action: none;
+  }
+}

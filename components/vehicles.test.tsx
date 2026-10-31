@@ -87,6 +87,9 @@ describe("Relay Vehicles presentation", () => {
         save={async () => {}}
       />,
     );
+    expect(html).toContain(
+      "Asking price (leave blank to use the listing price)",
+    );
     expect(html).toContain("Confirmed battery pack (required)");
     expect(html).toContain('<option value="standard">Standard</option>');
     expect(html).toContain('<option value="standard+">Standard+</option>');

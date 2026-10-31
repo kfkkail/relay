@@ -129,7 +129,7 @@ it("does not accept an arbitrary interior photo URL", async () => {
   ).toBe(409);
   expect(mocks.rpc).not.toHaveBeenCalled();
 });
-it("does not freeze a known advertised price into a verification fallback", async () => {
+it("saves an edited advertised price for the selected listing", async () => {
   current.price = 51000;
   expect(
     (
@@ -146,7 +146,7 @@ it("does not freeze a known advertised price into a verification fallback", asyn
     mocks.rpc.mock.calls[0][1].p_overrides.listing_verifications[
       `auto.dev:${original.vin}`
     ],
-  ).not.toHaveProperty("price");
+  ).toHaveProperty("price", 50000);
 });
 it("queues one bounded gallery batch", async () => {
   const profileId = "00000000-0000-4000-8000-000000000082";
@@ -170,5 +170,21 @@ it.each([null, [], "not an object"])(
   "rejects non-object JSON: %j",
   async (body) => {
     expect((await POST(request(body))).status).toBe(400);
+  },
+);
+
+it.each([null, 51000])(
+  "clears the price override when submitted price is %s",
+  async (price) => {
+    current.price = 51000;
+    const response = await POST(
+      request({ action: "verify", id, listing: { ...current, price } }),
+    );
+    expect(response.status).toBe(200);
+    expect(
+      mocks.rpc.mock.calls[0][1].p_overrides.listing_verifications[
+        `auto.dev:${original.vin}`
+      ],
+    ).toHaveProperty("price", null);
   },
 );

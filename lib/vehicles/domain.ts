@@ -64,7 +64,7 @@ export function applyVehicleOverrides(
   };
   const scoped = overrides.listing_verifications?.[listingVerificationKey(row)];
   if (scoped && sameListingContext(row, scoped)) {
-    verified.price = row.price ?? scoped.price ?? null;
+    verified.price = scoped.price ?? row.price ?? null;
     verified.shipping =
       scoped.shipping === undefined ? row.shipping : scoped.shipping;
     verified.mandatory_fees =

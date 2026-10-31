@@ -938,11 +938,7 @@ export function VehicleGalleryViewer({
         ref={stageRef}
         className="vehicle-gallery-stage"
         onPointerDown={(event) => {
-          if (
-            event.pointerType === "mouse" ||
-            count < 2 ||
-            zoomGesture.current
-          )
+          if (event.pointerType === "mouse" || count < 2 || zoomGesture.current)
             return;
           setSettling(null);
           setDragOffset(0);
@@ -1202,6 +1198,13 @@ export function VehicleCard({
           <div>
             <span>Asking price</span>
             <strong>{money(row.price)}</strong>
+            <button
+              className="vehicle-text-button"
+              disabled={busy}
+              onClick={verify}
+            >
+              Edit price
+            </button>
           </div>
           <div className="vehicle-total">
             <span>With shipping &amp; fees</span>
@@ -1633,12 +1636,6 @@ export function VehicleEditor({
   save: (listing: Partial<VehicleListing>) => Promise<void>;
 }) {
   const modalFocus = useVehicleModal(true, close);
-  const missingSourcePrice = vehicle?.vehicle_listings.some(
-    (listing) =>
-      listing.data.source === vehicle.row.source &&
-      listing.data.source_listing_id === vehicle.row.source_listing_id &&
-      listing.data.price === null,
-  );
   const [row, setRow] = useState<Partial<VehicleListing>>(
     vehicle?.row ?? {
       source: "manual",
@@ -1660,7 +1657,7 @@ export function VehicleEditor({
       className="vehicle-modal"
       role="dialog"
       aria-modal="true"
-      aria-label={vehicle ? "Verify vehicle" : "Add listing"}
+      aria-label={vehicle ? "Edit vehicle" : "Add listing"}
     >
       <section>
         <button
@@ -1672,7 +1669,7 @@ export function VehicleEditor({
           <X />
         </button>
         <form className="vehicle-form" onSubmit={submit}>
-          <h2>{vehicle ? "Verify required details" : "Add a listing"}</h2>
+          <h2>{vehicle ? "Edit vehicle details" : "Add a listing"}</h2>
           <p>
             Confirm details from the seller. Zero is a confirmed amount; leave
             unknown costs blank.
@@ -1753,12 +1750,13 @@ export function VehicleEditor({
               </label>
             </>
           )}
-          {vehicle && missingSourcePrice && (
+          {vehicle && (
             <label>
-              Confirmed advertised price
+              Asking price (leave blank to use the listing price)
               <input
                 type="number"
                 min="1"
+                step="0.01"
                 value={row.price ?? ""}
                 onChange={(e) =>
                   setRow({

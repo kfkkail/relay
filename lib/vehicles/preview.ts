@@ -181,6 +181,11 @@ export function createVehiclePreviewRequest(): VehicleRequest {
       }
       if (body.action === "verify" && record) {
         const row = parseVehicleListing(body.listing, body.listing.source);
+        const current = record.vehicle_listings.find(
+          (listing) =>
+            listing.data.source === row.source &&
+            listing.data.source_listing_id === row.source_listing_id,
+        )?.data;
         record.overrides = {
           ...record.overrides,
           attributes: row.attributes,
@@ -195,7 +200,7 @@ export function createVehiclePreviewRequest(): VehicleRequest {
               seller: row.seller,
               seller_id: row.seller_id,
               url: row.url,
-              price: row.price,
+              price: row.price === current?.price ? null : row.price,
               shipping: row.shipping,
               mandatory_fees: row.mandatory_fees,
               delivery: row.delivery,

@@ -13,6 +13,7 @@ import {
 } from "react";
 import {
   CarFront,
+  Pencil,
   Play,
   RefreshCw,
   X,
@@ -1172,15 +1173,27 @@ export function VehicleCard({
       </button>
       <div className="vehicle-card-body">
         <div className="vehicle-card-title">
-          <h2>
-            {row.year} {row.make} {row.model}
-          </h2>
-          <span
-            className="vehicle-score"
-            title="Match score; see details for the breakdown"
+          <div className="vehicle-card-heading">
+            <h2>
+              {row.year} {row.make} {row.model}
+            </h2>
+            <span
+              className="vehicle-score"
+              title="Match score; see details for the breakdown"
+            >
+              {ev.score}/100 match
+            </span>
+          </div>
+          <button
+            type="button"
+            className="vehicle-edit-button"
+            disabled={busy}
+            onClick={verify}
+            aria-label={`Edit and verify ${row.year} ${row.make} ${row.model}`}
+            title="Edit price & verify details"
           >
-            {ev.score}/100 match
-          </span>
+            <Pencil size={18} aria-hidden />
+          </button>
         </div>
         <p className="vehicle-configuration">
           {[
@@ -1198,13 +1211,6 @@ export function VehicleCard({
           <div>
             <span>Asking price</span>
             <strong>{money(row.price)}</strong>
-            <button
-              className="vehicle-text-button"
-              disabled={busy}
-              onClick={verify}
-            >
-              Edit price
-            </button>
           </div>
           <div className="vehicle-total">
             <span>With shipping &amp; fees</span>
@@ -1275,14 +1281,6 @@ export function VehicleCard({
                 : "Needs attention"}
             </strong>
             <p>{ev.reasons.join(" · ")}</p>
-            <button
-              className="vehicle-text-button"
-              disabled={busy}
-              onClick={verify}
-            >
-              Verify
-              <ArrowUpRight size={14} aria-hidden />
-            </button>
           </div>
         )}
         <details className="vehicle-details">
@@ -1352,15 +1350,6 @@ export function VehicleCard({
             {row.attributes.battery_evidence || "Not established"}
           </p>
           <div className="vehicle-detail-actions">
-            {ev.eligibility === "eligible" && (
-              <button
-                className="secondary-button compact"
-                disabled={busy}
-                onClick={verify}
-              >
-                Verify
-              </button>
-            )}
             {v.decision !== "unreviewed" && v.decision !== "passed" && (
               <button
                 className="vehicle-text-button"

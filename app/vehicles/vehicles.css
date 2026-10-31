@@ -130,7 +130,47 @@
   line-height: 1.5;
 }
 .vehicle-card-title {
+  align-items: flex-start;
+  flex-wrap: nowrap;
   gap: 8px;
+}
+.vehicle-card-heading {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vehicle-card-heading h2 {
+  overflow-wrap: anywhere;
+}
+.vehicle-edit-button {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink-soft);
+  background: transparent;
+  cursor: pointer;
+}
+.vehicle-edit-button:hover:not(:disabled) {
+  color: var(--ink);
+  background: var(--forest-soft);
+  border-color: var(--control-border);
+}
+.vehicle-edit-button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.vehicle-edit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 .vehicle-score {
   border-radius: 999px;

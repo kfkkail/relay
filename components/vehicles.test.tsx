@@ -73,6 +73,35 @@ describe("Relay Vehicles presentation", () => {
       }
     },
   );
+  it.each([false, true])(
+    "provides one header editor for every sample listing (busy=%s)",
+    async (busy) => {
+      const data = await (
+        await createVehiclePreviewRequest()("/api/vehicles")
+      ).json();
+      for (const record of data.vehicles) {
+        const vehicle = reviewVehicle(record, defaultVehicleProfile)!;
+        const html = renderToStaticMarkup(
+          <VehicleCard
+            vehicle={vehicle}
+            busy={busy}
+            decide={() => {}}
+            verify={() => {}}
+            gallery={() => {}}
+          />,
+        );
+        expect(html.match(/class="vehicle-edit-button"/g)).toHaveLength(1);
+        const header = html.slice(
+          html.indexOf('class="vehicle-card-title"'),
+          html.indexOf('class="vehicle-configuration"'),
+        );
+        expect(header).toContain('aria-label="Edit and verify ');
+        expect(header).toContain('title="Edit price &amp; verify details"');
+        expect(header.includes('disabled=""')).toBe(busy);
+        expect(html).not.toMatch(/>\s*(Edit price|Verify)\s*</);
+      }
+    },
+  );
   it("offers the normalized battery and motor choices", async () => {
     const data = await (
       await createVehiclePreviewRequest()("/api/vehicles")

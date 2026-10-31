@@ -9,6 +9,20 @@ export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
         ...applyVehicleOverrides(
           {
             ...listing.data,
+            attributes: {
+              ...listing.data.attributes,
+              battery_pack:
+                listing.data.attributes.battery_pack ||
+                record.enrichment?.attributes?.battery_pack ||
+                null,
+              battery_evidence: listing.data.attributes.battery_pack
+                ? listing.data.attributes.battery_evidence
+                : record.enrichment?.attributes?.battery_evidence || null,
+              motor:
+                listing.data.attributes.motor ||
+                record.enrichment?.attributes?.motor ||
+                null,
+            },
             photos: gallery.length ? gallery : listing.data.photos,
             gallery_fetched_at:
               listing.gallery_fetched_at ??

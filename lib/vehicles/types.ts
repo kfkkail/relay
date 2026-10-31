@@ -63,6 +63,14 @@ export type VehicleRecord = {
   decision: Decision;
   decision_revision: number;
   overrides: VehicleOverrides;
+  enrichment?: {
+    status?: "queued" | "resolved" | "partial" | "unresolved" | "failed";
+    checked_at?: string;
+    source_url?: string;
+    attributes?: Partial<VehicleListing["attributes"]> & {
+      motor_evidence?: string;
+    };
+  };
   first_seen_at: string;
   last_seen_at: string;
   vehicle_listings: {

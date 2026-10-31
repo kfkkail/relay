@@ -52,6 +52,33 @@ The review decision succeeds even if that optional job cannot be queued, and the
 gallery retains its manual retry button. Photo jobs complete silently and never
 change inventory coverage health.
 
+Moving an R1T into Interested or Shortlist also queues a configuration check when
+battery or motor is missing. Existing Interested and Shortlist cards offer
+**Check battery & motor** under **Details & sources**; use it to request a check
+or retry a failed/unresolved page without changing the review decision. Duplicate
+queued/working requests share one job. Cards show the check result and evidence;
+they refresh automatically while jobs are pending.
+
+This feature requires migration `20261031010000_vehicle_enrichment.sql`, the
+matching web/worker update, and Playwright browser provisioning (see
+`worker/README.md`). Updated workers advertise `vehicle_enrichment`; older
+workers skip these jobs instead of running a full inventory scan. No Auto.dev
+API key is needed for the targeted check itself.
+If auto-update installed Playwright without downloading its browser, the first
+configuration check installs Chromium automatically. Linux system libraries may
+still need the one-time host setup described in `worker/README.md`.
+
+The check opens the available Auto.dev-provided public R1T seller page in an
+isolated Chromium context, allowing client-rendered text. It requires the exact
+VIN and explicit, unambiguous battery/motor labels. It does not infer a pack from
+trim, bypass blocked pages, use login cookies, or overwrite owner confirmations.
+Failed or ambiguous checks leave unresolved fields available for manual
+verification. Durable evidence survives later inventory snapshots; optional
+checks never change inventory coverage, absence counts or notification digests.
+Requests and redirects receive public-network checks at connection time;
+non-GET requests, downloads, images, frames and WebSockets are blocked. Each
+check is bounded to 40 requests, 5 MB total and a 25-second page session.
+
 ## Local interactive preview
 
 For visual review without a database or Auto.dev key, start the development

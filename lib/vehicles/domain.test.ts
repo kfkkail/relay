@@ -317,6 +317,45 @@ describe("durable review and re-evaluation", () => {
     )!;
     expect(v.row.attributes.battery_pack).toBe("max");
   });
+  it("uses durable evidence for missing fields, with owner confirmations taking priority", () => {
+    const r = record({
+      enrichment: {
+        status: "resolved",
+        attributes: {
+          battery_pack: "max",
+          motor: "quad",
+          battery_evidence: "Seller page: Max Pack",
+        },
+      },
+    });
+    r.vehicle_listings[0].data.attributes = {
+      battery_pack: null,
+      motor: null,
+      battery_evidence: null,
+    };
+    // Saving an unrelated manual correction with unknown configuration does not
+    // suppress later seller evidence.
+    r.overrides.attributes = {
+      battery_pack: null,
+      motor: null,
+      battery_evidence: null,
+    };
+    let reviewed = reviewVehicle(r, profile)!;
+    expect(reviewed.row.attributes).toEqual({
+      battery_pack: "max",
+      motor: "quad",
+      battery_evidence: "Seller page: Max Pack",
+    });
+    expect(reviewed.evaluation.eligibility).toBe("eligible");
+    r.overrides.attributes = {
+      battery_pack: "large",
+      motor: "dual",
+      battery_evidence: "Owner confirmed",
+    };
+    reviewed = reviewVehicle(r, profile)!;
+    expect(reviewed.row.attributes).toEqual(r.overrides.attributes);
+    expect(reviewed.decision).toBe(r.decision);
+  });
 });
 
 describe("notifications and input validation", () => {

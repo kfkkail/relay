@@ -8,6 +8,7 @@ import {
   gallerySwipeDirection,
   shouldPrefetchVehiclePhotos,
   shouldQueueVehiclePhotos,
+  shouldQueueVehicleEnrichment,
 } from "./vehicles";
 import { createVehiclePreviewRequest } from "@/lib/vehicles/preview";
 import { defaultVehicleProfile } from "@/lib/vehicles/domain";
@@ -15,6 +16,54 @@ import { reviewVehicle } from "@/lib/vehicles/review";
 import type { Decision } from "@/lib/vehicles/types";
 
 describe("Relay Vehicles presentation", () => {
+  it("offers manual checks for existing Interested vehicles and queues missing configuration on review", async () => {
+    const data = await (
+      await createVehiclePreviewRequest()("/api/vehicles")
+    ).json();
+    const record = data.vehicles[0];
+    record.vehicle_listings[0].data.attributes = {
+      battery_pack: null,
+      motor: null,
+      battery_evidence: null,
+    };
+    const initial = reviewVehicle(record, defaultVehicleProfile)!;
+    expect(shouldQueueVehicleEnrichment(initial, "watch", false)).toBe(true);
+    expect(shouldQueueVehicleEnrichment(initial, "shortlist", false)).toBe(
+      true,
+    );
+    expect(shouldQueueVehicleEnrichment(initial, "passed", false)).toBe(false);
+    expect(shouldQueueVehicleEnrichment(initial, "watch", true)).toBe(false);
+    const interested = { ...initial, decision: "watch" as const };
+    const html = renderToStaticMarkup(
+      <VehicleCard
+        vehicle={interested}
+        busy={false}
+        decide={() => {}}
+        verify={() => {}}
+        gallery={() => {}}
+        enrich={() => {}}
+      />,
+    );
+    expect(html).toContain("Check battery &amp; motor");
+    expect(shouldQueueVehicleEnrichment(interested, "watch", false)).toBe(
+      false,
+    );
+    const queued = { ...interested, enrichment: { status: "queued" as const } };
+    const queuedHtml = renderToStaticMarkup(
+      <VehicleCard
+        vehicle={queued}
+        busy={false}
+        decide={() => {}}
+        verify={() => {}}
+        gallery={() => {}}
+        enrich={() => {}}
+      />,
+    );
+    expect(queuedHtml).toContain("Check queued");
+    expect(shouldQueueVehicleEnrichment(queued, "shortlist", false)).toBe(
+      false,
+    );
+  });
   it("shares Relay branding and navigation without a top-level Vehicles slot", () => {
     const html = renderToStaticMarkup(
       <RelayHeader userEmail="sample@relay.local" active="schedules" />,

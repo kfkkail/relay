@@ -1,9 +1,12 @@
 import { autoDevKey } from "./credentials.mjs";
 import { autoDevPhotos, collectAutoDev } from "./auto-dev.mjs";
 import { enrichSellerListings } from "./detail-enrichment.mjs";
+import { enrichVehicle } from "./browser-enrichment.mjs";
 
 export function vehicleCapabilities(env = process.env) {
-  return env.RELAY_VEHICLE_SEARCH === "1" ? ["vehicle_search"] : [];
+  return env.RELAY_VEHICLE_SEARCH === "1"
+    ? ["vehicle_search", "vehicle_enrichment"]
+    : [];
 }
 
 export async function runVehicleJob(
@@ -14,6 +17,7 @@ export async function runVehicleJob(
     collect = collectAutoDev,
     enrich = enrichSellerListings,
     photos = autoDevPhotos,
+    detail = enrichVehicle,
   } = {},
 ) {
   const endpoint = `/api/worker/runs/${claimed.run.id}/vehicles`;
@@ -36,6 +40,14 @@ export async function runVehicleJob(
   }, 30000);
   heartbeat.unref();
   try {
+    if (claimed.run.job_payload?.detail_vehicle) {
+      const attributes = await detail(claimed.run.job_payload);
+      if (leaseFailed)
+        throw new Error("Vehicle worker lease could not be renewed.");
+      return await retryRelay(() =>
+        request({ action: "enrichment", lease, attributes }),
+      );
+    }
     const key = await getKey();
     const photoVin = claimed.run.job_payload?.photo_vin;
     if (photoVin) {

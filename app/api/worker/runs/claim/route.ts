@@ -14,7 +14,10 @@ export async function POST(request: Request) {
     ) {
       const { data: vehicleJob, error: vehicleError } = await supabase.rpc(
         "claim_vehicle_run",
-        { p_worker_id: worker.id },
+        {
+          p_worker_id: worker.id,
+          p_enrichment: body.capabilities.includes("vehicle_enrichment"),
+        },
       );
       if (vehicleError) throw vehicleError;
       if (vehicleJob)

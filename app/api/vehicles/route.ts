@@ -171,6 +171,14 @@ export async function POST(request: Request) {
         });
         break;
       }
+      case "enrichment":
+        if (!uuid(body.id) || !uuid(body.profileId))
+          throw new ApiError("Invalid configuration request.");
+        result = await supabase.rpc("request_vehicle_enrichment", {
+          p_vehicle: body.id,
+          p_profile: body.profileId,
+        });
+        break;
       case "photos":
         if (!uuid(body.id) || !uuid(body.profileId))
           throw new ApiError("Invalid gallery request.");

@@ -68,7 +68,15 @@ export async function updateManagedClone(root, run = runCommand) {
       cwd: root,
       timeout: DEPENDENCY_INSTALL_TIMEOUT_MS,
     });
+    await run(
+      process.execPath,
+      [`${root}/node_modules/playwright/cli.js`, "install", "chromium"],
+      { cwd: root, timeout: DEPENDENCY_INSTALL_TIMEOUT_MS },
+    );
   }
+  await run(process.execPath, [`${root}/worker/browser-smoke.mjs`], {
+    cwd: root,
+  });
   await run(process.execPath, ["--check", `${root}/worker/index.mjs`], {
     cwd: root,
   });

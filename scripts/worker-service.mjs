@@ -360,6 +360,24 @@ async function prepareManagedInstall() {
     installationRoot,
     10 * 60_000,
   );
+  console.log("Installing the Relay worker browser...");
+  run(
+    process.execPath,
+    [
+      join(installationRoot, "node_modules/playwright/cli.js"),
+      "install",
+      "chromium",
+    ],
+    false,
+    installationRoot,
+    10 * 60_000,
+  );
+  run(
+    process.execPath,
+    [join(installationRoot, "worker/browser-smoke.mjs")],
+    false,
+    installationRoot,
+  );
   return installationRoot;
 }
 

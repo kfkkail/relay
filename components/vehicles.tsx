@@ -1213,7 +1213,24 @@ export function VehicleCard({
         </div>
         <div className="vehicle-seller">
           <span>
-            {row.seller || "Seller unverified"}
+            {row.seller?.trim() ? (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  [row.seller, row.city, row.state]
+                    .map((value) => value?.trim())
+                    .filter(Boolean)
+                    .join(", "),
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Find ${row.seller.trim()} on Google Maps`}
+              >
+                {row.seller}
+                <ArrowUpRight size={14} aria-hidden />
+              </a>
+            ) : (
+              "Seller unverified"
+            )}
             <small>
               {ev.delivery_group}
               {ev.distance_miles === null

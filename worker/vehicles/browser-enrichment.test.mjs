@@ -6,6 +6,7 @@ import {
   fetchPublicResource,
 } from "./browser-enrichment.mjs";
 import { assertPublicHost } from "./detail-enrichment.mjs";
+import { SellerPageError, sellerPageError } from "./seller-error.mjs";
 
 const vin = "7FCTGAAA0NN000001";
 const url = "https://dealer.example/truck";
@@ -135,7 +136,7 @@ describe("public browser resources", () => {
         ...options,
         fetchImpl: async () => new Response(null, { status: 403 }),
       }),
-    ).rejects.toThrow("seller_page_unavailable");
+    ).rejects.toThrow("HTTP 403");
     await expect(
       fetchPublicResource(url, {
         ...options,
@@ -146,6 +147,93 @@ describe("public browser resources", () => {
     await expect(
       fetchPublicResource("http://localhost/truck", options),
     ).rejects.toThrow("unsafe_url");
+  });
+});
+
+describe("seller failure diagnostics", () => {
+  it.each([
+    [401, "access_denied"],
+    [403, "access_denied"],
+    [429, "rate_limited"],
+    [404, "http_error"],
+    [503, "http_error"],
+  ])(
+    "preserves HTTP %s without response bodies or query parameters",
+    async (status, code) => {
+      const error = await fetchPublicResource(`${url}?token=private`, {
+        validateHost: async () => {},
+        fetchImpl: async () =>
+          new Response("secret seller response", { status }),
+      }).catch((e) => e);
+      expect(error).toBeInstanceOf(SellerPageError);
+      expect(error.diagnostic).toEqual({
+        code,
+        host: "dealer.example",
+        http_status: status,
+      });
+      expect(error.message).toContain(`HTTP ${status}`);
+      expect(error.message).not.toMatch(/private|secret|token/);
+    },
+  );
+  it("retains connection failure codes and classifies unsafe URLs and timeouts", () => {
+    expect(
+      sellerPageError(
+        Object.assign(new Error("private details"), { code: "ECONNRESET" }),
+        url,
+      ).diagnostic,
+    ).toEqual({
+      code: "network_error",
+      host: "dealer.example",
+      network_code: "ECONNRESET",
+    });
+    expect(
+      sellerPageError(new DOMException("secret", "TimeoutError"), url)
+        .diagnostic.code,
+    ).toBe("timeout");
+    expect(
+      sellerPageError(new Error("unsafe_address"), url).diagnostic.code,
+    ).toBe("unsafe_destination");
+  });
+  it("does not replace the underlying document failure with Chromium ERR_FAILED", async () => {
+    let handler;
+    const page = {
+      mainFrame: () => "main",
+      goto: async () => {
+        await handler({
+          request: () => ({
+            method: () => "GET",
+            url: () => url,
+            resourceType: () => "document",
+            frame: () => "main",
+            isNavigationRequest: () => true,
+          }),
+          abort: async () => {},
+        });
+        throw new Error("net::ERR_FAILED");
+      },
+    };
+    const close = vi.fn(async () => {});
+    const context = {
+      routeWebSocket: async () => {},
+      newPage: async () => page,
+      route: async (_, fn) => {
+        handler = fn;
+      },
+    };
+    const error = await enrichVehicle(
+      { detail_url: url, detail_vin: vin },
+      {
+        ensureBrowser: async () => {},
+        launch: async () => ({ newContext: async () => context, close }),
+        resource: async () => {
+          throw new SellerPageError("access_denied", url, { httpStatus: 403 });
+        },
+      },
+    ).catch((e) => e);
+    expect(error.message).toBe(
+      "dealer.example: seller denied automated access (HTTP 403)",
+    );
+    expect(close).toHaveBeenCalledOnce();
   });
 });
 

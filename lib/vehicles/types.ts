@@ -64,7 +64,19 @@ export type VehicleRecord = {
   decision_revision: number;
   overrides: VehicleOverrides;
   enrichment?: {
-    status?: "queued" | "resolved" | "partial" | "unresolved" | "failed";
+    status?:
+      | "queued"
+      | "resolved"
+      | "partial"
+      | "unresolved"
+      | "failed"
+      | "blocked";
+    failure?: {
+      code: string;
+      host: string;
+      http_status?: number;
+      network_code?: string;
+    };
     checked_at?: string;
     source_url?: string;
     attributes?: Partial<VehicleListing["attributes"]> & {

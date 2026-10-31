@@ -1286,10 +1286,38 @@ export function VehicleCard({
                   "No unambiguous configuration evidence found; verify manually or retry",
                 failed:
                   "Seller page could not be checked; verify manually or retry",
+                blocked:
+                  v.enrichment.failure?.code === "rate_limited"
+                    ? "Seller rate limited the check. Wait before retrying, or verify manually."
+                    : "Seller blocked the configuration check. Open the listing and verify battery & motor manually.",
               }[v.enrichment.status]
             }
           </p>
         )}
+        {["blocked", "failed"].includes(v.enrichment?.status || "") &&
+          v.enrichment?.failure && (
+            <p className="vehicle-muted">
+              {v.enrichment.failure.host}
+              {v.enrichment.failure.http_status
+                ? ` · HTTP ${v.enrichment.failure.http_status}`
+                : ""}
+              {v.enrichment.failure.code === "timeout"
+                ? " · Request timed out"
+                : ""}
+              {v.enrichment.failure.code === "response_too_large"
+                ? " · Page exceeded the size limit"
+                : ""}
+              {v.enrichment.failure.code === "request_limit"
+                ? " · Page exceeded the request limit"
+                : ""}
+              {v.enrichment.failure.code === "unsafe_destination"
+                ? " · Destination failed network checks"
+                : ""}
+              {v.enrichment.failure.network_code
+                ? ` · ${v.enrichment.failure.network_code}`
+                : ""}
+            </p>
+          )}
         <div className="vehicle-price">
           <div>
             <span>Asking price</span>

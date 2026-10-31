@@ -79,6 +79,36 @@ Requests and redirects receive public-network checks at connection time;
 non-GET requests, downloads, images, frames and WebSockets are blocked. Each
 check is bounded to 40 requests, 5 MB total and a 25-second page session.
 
+Configuration failures now retain a bounded diagnostic on the card and run:
+seller hostname, HTTP status (when received), and a network error code when
+available. HTTP 401/403 and 429 show **blocked** rather than a generic browser
+failure. Logs include the run ID and real cause, such as
+`www.carvana.com: seller denied automated access (HTTP 403)`. Response bodies,
+query strings and credentials are never included in these diagnostics. Existing
+evidence and manual confirmations remain intact. This requires migration
+`20261031020000_vehicle_enrichment_failures.sql` and the matching web/worker
+update; earlier failed runs need a manual retry to gain a new diagnostic.
+
+### Source access assessment (2026-10-31)
+
+The Carvana and CarMax listing URLs reported by the owner returned HTTP 403 to
+Relay's public request transport in a local live probe. Chromium startup is
+working; these denials occur before configuration extraction. No documented
+public vehicle-detail API for those retailers was identified. CarMax's
+[published terms](https://www.carmax.com/terms) also require prior written consent
+for automated gathering. Do not treat a passing fixture browser test as proof
+that a live seller is accessible, and do not retry denials through alternate
+identities, cookies or undisclosed endpoints. Use the original listing and
+owner verification for blocked sources.
+
+Auto.dev's documented [Specifications API](https://docs.auto.dev/v2/products/specifications)
+is a potential supported provider path for VIN-specific configuration data. It
+requires a Growth or Scale plan, and VIN ambiguity can leave battery/style
+unresolved. A future integration must keep `ambiguity=false`, accept only explicit
+VIN-specific evidence and leave ambiguous answers unverified. This change does
+not enable that paid endpoint or claim it resolves Rivian battery packs. Existing
+Auto.dev inventory and photo requests continue using their current API paths.
+
 ## Local interactive preview
 
 For visual review without a database or Auto.dev key, start the development

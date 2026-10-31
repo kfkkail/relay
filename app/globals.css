@@ -1860,6 +1860,7 @@ textarea {
   }
   .detail-panel {
     position: static;
+    z-index: auto;
     min-width: 0;
     max-height: calc(100dvh - 72px);
     transform: none;
@@ -2012,6 +2013,9 @@ textarea {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 12px 40px #0002;
+}
+.settings-panel a {
+  text-decoration: none;
 }
 .settings-heading {
   display: flex;

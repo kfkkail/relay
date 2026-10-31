@@ -3,13 +3,40 @@ import {
   configurationEvidence,
   ensureChromium,
   enrichVehicle,
-  fetchPublicResource,
 } from "./browser-enrichment.mjs";
-import { assertPublicHost } from "./detail-enrichment.mjs";
 import { SellerPageError, sellerPageError } from "./seller-error.mjs";
+import { createServer, request as httpRequest } from "node:http";
+import { once } from "node:events";
+import { startBrowserProxy } from "./browser-proxy.mjs";
 
 const vin = "7FCTGAAA0NN000001";
 const url = "https://dealer.example/truck";
+const nativeHttpFailure = (status, target) =>
+  enrichVehicle(
+    { detail_url: target, detail_vin: vin },
+    {
+      ensureBrowser: async () => {},
+      startProxy: async () => ({
+        proxy: {},
+        failure: () => undefined,
+        close: async () => {},
+      }),
+      launch: async () => ({
+        close: async () => {},
+        newContext: async () => ({
+          routeWebSocket: async () => {},
+          route: async () => {},
+          newPage: async () => ({
+            goto: async () => ({
+              ok: () => false,
+              status: () => status,
+              url: () => target,
+            }),
+          }),
+        }),
+      }),
+    },
+  );
 describe("browser bootstrap after an older worker auto-update", () => {
   it("shares a missing-browser install across concurrent jobs and skips an existing browser", async () => {
     let ready = false;
@@ -48,6 +75,10 @@ describe("browser bootstrap after an older worker auto-update", () => {
 describe("targeted configuration evidence", () => {
   it("requires the exact VIN and explicit labels, and retains evidence", () => {
     expect(
+      configurationEvidence(`${vin} Engine Quad Electric Motors`, vin, url)
+        .motor,
+    ).toBe("quad");
+    expect(
       configurationEvidence(`${vin} Adventure Large Pack Quad-Motor`, vin, url),
     ).toMatchObject({
       battery_pack: "large",
@@ -81,75 +112,6 @@ describe("targeted configuration evidence", () => {
   });
 });
 
-describe("public browser resources", () => {
-  it("validates each redirect and never forwards cookies or credentials", async () => {
-    const validateHost = vi.fn(async () => {});
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(null, {
-          status: 302,
-          headers: { location: "https://other.example/listing" },
-        }),
-      )
-      .mockResolvedValueOnce(new Response("R1T"));
-    expect(
-      (await fetchPublicResource(url, { fetchImpl, validateHost })).body,
-    ).toBe("R1T");
-    expect(validateHost.mock.calls.map(([u]) => u.hostname)).toEqual([
-      "dealer.example",
-      "other.example",
-    ]);
-    expect(fetchImpl.mock.calls[0][1]).toMatchObject({
-      redirect: "manual",
-      headers: { "User-Agent": "Relay vehicle research/1.0" },
-    });
-    expect(Object.keys(fetchImpl.mock.calls[0][1].headers)).toHaveLength(1);
-  });
-  it("blocks private redirects before fetching them", async () => {
-    const fetchImpl = vi.fn(
-      async () =>
-        new Response(null, {
-          status: 302,
-          headers: { location: "http://127.0.0.1/admin" },
-        }),
-    );
-    const validateHost = (u) =>
-      assertPublicHost(u, async () => [
-        { address: u.hostname === "dealer.example" ? "8.8.8.8" : "127.0.0.1" },
-      ]);
-    await expect(
-      fetchPublicResource(url, { fetchImpl, validateHost }),
-    ).rejects.toThrow("unsafe_address");
-    expect(fetchImpl).toHaveBeenCalledOnce();
-  });
-  it("bounds page size, redirects and failed responses", async () => {
-    const options = { validateHost: async () => {} };
-    await expect(
-      fetchPublicResource(url, {
-        ...options,
-        fetchImpl: async () => new Response("x".repeat(1_500_001)),
-      }),
-    ).rejects.toThrow("seller_page_too_large");
-    await expect(
-      fetchPublicResource(url, {
-        ...options,
-        fetchImpl: async () => new Response(null, { status: 403 }),
-      }),
-    ).rejects.toThrow("HTTP 403");
-    await expect(
-      fetchPublicResource(url, {
-        ...options,
-        fetchImpl: async () =>
-          new Response(null, { status: 302, headers: { location: "/loop" } }),
-      }),
-    ).rejects.toThrow("unsafe_redirect");
-    await expect(
-      fetchPublicResource("http://localhost/truck", options),
-    ).rejects.toThrow("unsafe_url");
-  });
-});
-
 describe("seller failure diagnostics", () => {
   it.each([
     [401, "access_denied"],
@@ -160,11 +122,10 @@ describe("seller failure diagnostics", () => {
   ])(
     "preserves HTTP %s without response bodies or query parameters",
     async (status, code) => {
-      const error = await fetchPublicResource(`${url}?token=private`, {
-        validateHost: async () => {},
-        fetchImpl: async () =>
-          new Response("secret seller response", { status }),
-      }).catch((e) => e);
+      const error = await nativeHttpFailure(
+        status,
+        `${url}?token=private`,
+      ).catch((e) => e);
       expect(error).toBeInstanceOf(SellerPageError);
       expect(error.diagnostic).toEqual({
         code,
@@ -194,70 +155,89 @@ describe("seller failure diagnostics", () => {
       sellerPageError(new Error("unsafe_address"), url).diagnostic.code,
     ).toBe("unsafe_destination");
   });
-  it("does not replace the underlying document failure with Chromium ERR_FAILED", async () => {
-    let handler;
+  it("retains native HTTP failure status and cleans up Chromium and proxy", async () => {
     const page = {
       mainFrame: () => "main",
-      goto: async () => {
-        await handler({
-          request: () => ({
-            method: () => "GET",
-            url: () => url,
-            resourceType: () => "document",
-            frame: () => "main",
-            isNavigationRequest: () => true,
-          }),
-          abort: async () => {},
-        });
-        throw new Error("net::ERR_FAILED");
-      },
+      goto: async () => ({
+        ok: () => false,
+        status: () => 403,
+        url: () => url,
+      }),
     };
     const close = vi.fn(async () => {});
     const context = {
       routeWebSocket: async () => {},
       newPage: async () => page,
-      route: async (_, fn) => {
-        handler = fn;
-      },
+      route: async () => {},
     };
+    const proxyClose = vi.fn(async () => {});
     const error = await enrichVehicle(
       { detail_url: url, detail_vin: vin },
       {
         ensureBrowser: async () => {},
         launch: async () => ({ newContext: async () => context, close }),
-        resource: async () => {
-          throw new SellerPageError("access_denied", url, { httpStatus: 403 });
-        },
+        startProxy: async () => ({
+          proxy: {},
+          failure: () => undefined,
+          close: proxyClose,
+        }),
       },
     ).catch((e) => e);
     expect(error.message).toBe(
       "dealer.example: seller denied automated access (HTTP 403)",
     );
     expect(close).toHaveBeenCalledOnce();
+    expect(proxyClose).toHaveBeenCalledOnce();
   });
 });
 
-// Opt-in real Chromium test. Network responses are fixtures, so this checks
-// JavaScript rendering and request blocking without contacting a seller.
+// Real native HTTP through the proxy, not route.fulfill: cookies gate the API
+// and configuration only appears after the specs button and tab are clicked.
 it.skipIf(process.env.RELAY_BROWSER_TESTS !== "1")(
-  "extracts client-rendered details using real Chromium",
+  "uses native Chromium cookies, JavaScript, POST data and specs-panel clicks",
   async () => {
-    const requests = [];
-    const resource = async (requestUrl) => {
-      requests.push(requestUrl);
-      const script = requestUrl.endsWith("/app.js");
-      return {
-        url: requestUrl,
-        contentType: script ? "text/javascript" : "text/html",
-        body: script
-          ? `document.body.append(' ${vin} Large Pack Quad-Motor'); fetch('/write', {method:'POST'});`
-          : '<html><body><script src="/app.js"></script><img src="/photo.jpg"></body></html>',
-      };
-    };
-    expect(
-      await enrichVehicle({ detail_vin: vin, detail_url: url }, { resource }),
-    ).toMatchObject({ battery_pack: "large", motor: "quad" });
-    expect(requests).toEqual([url, "https://dealer.example/app.js"]);
+    let cookieSeen = false;
+    const seen = [];
+    const fixture = createServer((req, res) => {
+      seen.push(`${req.method} ${req.url}`);
+      if (req.url === "/specs") {
+        cookieSeen = req.headers.cookie === "session=fixture";
+        res.writeHead(cookieSeen ? 200 : 403, {
+          "Content-Type": "application/json",
+        });
+        res.end(JSON.stringify({ text: "Large Pack Quad Electric Motors" }));
+        return;
+      }
+      res.writeHead(200, {
+        "Content-Type": "text/html",
+        "Set-Cookie": "session=fixture; Path=/; HttpOnly",
+      });
+      res.end(
+        `<html><body><p>${vin}</p><button onclick="document.querySelector('[role=tab]').hidden=false">View All Features and Specs</button><button role="tab" hidden onclick="fetch('/specs',{method:'POST'}).then(r=>r.json()).then(d=>{document.querySelector('#result').textContent=d.text})">Specs</button><section id="result"></section></body></html>`,
+      );
+    });
+    fixture.listen(0, "127.0.0.1");
+    await once(fixture, "listening");
+    const startProxy = () =>
+      startBrowserProxy({
+        resolve: async () => [{ address: "8.8.8.8", family: 4 }],
+        httpRequestImpl: (options, cb) =>
+          httpRequest(
+            { ...options, hostname: "127.0.0.1", port: fixture.address().port },
+            cb,
+          ),
+      });
+    try {
+      const result = await enrichVehicle(
+        { detail_vin: vin, detail_url: "http://dealer.example/truck" },
+        { startProxy },
+      );
+      expect(cookieSeen, JSON.stringify(seen)).toBe(true);
+      expect(result).toMatchObject({ battery_pack: "large", motor: "quad" });
+    } finally {
+      fixture.closeAllConnections();
+      await new Promise((done) => fixture.close(done));
+    }
   },
-  30000,
+  60000,
 );

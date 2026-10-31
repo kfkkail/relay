@@ -4,11 +4,14 @@ import { requireWorker } from "@/lib/worker-auth";
 import { applyVehicleOverrides, evaluateVehicle } from "@/lib/vehicles/domain";
 import type { VehicleListing } from "@/lib/vehicles/types";
 import { readVehicleJson } from "@/lib/vehicles/request";
+import { decodeNhtsa, freshNhtsa } from "@/worker/vehicles/nhtsa.mjs";
 import {
   parseVehicleHealth,
   parseVehicleListing,
   parseVehicleProfile,
 } from "@/lib/vehicles/validation";
+
+export const maxDuration = 60;
 
 export async function POST(
   request: Request,
@@ -43,6 +46,30 @@ export async function POST(
     }
     let result;
     if (run.job_payload.detail_vehicle) {
+      if (body.action === "nhtsa") {
+        if (run.status !== "working")
+          throw new ApiError("Active vehicle run required.", 409);
+        const { data: vehicle, error } = await supabase
+          .from("vehicles")
+          .select("id,vin,nhtsa")
+          .eq("id", run.job_payload.detail_vehicle)
+          .eq("user_id", worker.user_id)
+          .single();
+        if (error) throw error;
+        if (!vehicle || vehicle.vin !== run.job_payload.detail_vin)
+          throw new ApiError("Vehicle identity changed.", 409);
+        if (!freshNhtsa(vehicle.nhtsa, vehicle.vin)) {
+          const decoded = await decodeNhtsa(vehicle.vin);
+          const saved = await supabase
+            .from("vehicles")
+            .update({ nhtsa: decoded })
+            .eq("id", vehicle.id)
+            .eq("user_id", worker.user_id)
+            .eq("vin", vehicle.vin);
+          if (saved.error) throw saved.error;
+        }
+        return NextResponse.json({ nhtsa: "decoded" });
+      }
       if (body.action === "enrichment_failure") {
         const failure = body.failure;
         if (

@@ -601,6 +601,44 @@ export function Vehicles({
         {queue === "coverage" && (
           <section className="vehicle-health">
             <h2>Coverage Health</h2>
+            {!preview && (
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() =>
+                  void perform(async () => {
+                    let cursor: string | null = null;
+                    let checked = 0,
+                      cached = 0,
+                      failed = 0,
+                      missing = 0;
+                    do {
+                      const response = await request("/api/vehicles/nhtsa", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ cursor }),
+                      });
+                      const result = await response.json();
+                      if (!response.ok)
+                        throw new Error(
+                          result.error || "NHTSA decoding failed.",
+                        );
+                      checked += result.checked;
+                      cached += result.cached;
+                      failed += result.failed;
+                      missing += result.missing_vin;
+                      cursor = result.nextCursor;
+                      setNotice(
+                        `NHTSA: ${checked} decoded, ${cached} cached, ${failed} failed, ${missing} without VIN. ${cursor ? "Continuing…" : "Complete."}`,
+                      );
+                    } while (cursor);
+                    await refresh();
+                  })
+                }
+              >
+                {busy ? "Working…" : "Decode all VINs with NHTSA"}
+              </button>
+            )}
             <p>
               Auto.dev supplies the initial inventory. Dealer names and
               destination links identify observed coverage; they do not
@@ -1460,6 +1498,20 @@ export function VehicleCard({
             Battery evidence:{" "}
             {row.attributes.battery_evidence || "Not established"}
           </p>
+          {v.nhtsa?.vin === v.vin && v.nhtsa?.status === "decoded" && (
+            <p>
+              <a href={v.nhtsa.source_url} target="_blank" rel="noreferrer">
+                NHTSA VIN decode
+              </a>
+              {v.nhtsa.attributes.motor_evidence
+                ? ` · ${v.nhtsa.attributes.motor_evidence}`
+                : " · Motor not reported"}
+              {v.nhtsa.battery_kwh !== null
+                ? ` · Battery capacity: ${v.nhtsa.battery_kwh}${v.nhtsa.battery_kwh_to !== null ? `–${v.nhtsa.battery_kwh_to}` : ""} kWh (does not establish pack name)`
+                : ""}
+              {` · Checked ${new Date(v.nhtsa.checked_at).toLocaleString()}`}
+            </p>
+          )}
           {v.enrichment?.attributes?.motor_evidence && (
             <p>Motor evidence: {v.enrichment.attributes.motor_evidence}</p>
           )}

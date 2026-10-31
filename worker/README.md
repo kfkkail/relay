@@ -1,7 +1,9 @@
 # Relay laptop worker
 
-The worker makes outbound HTTPS requests to Relay. It never opens a listening
-port, so an offline laptop simply leaves runs in the queue. A running worker
+The worker makes outbound HTTPS requests to Relay. It exposes no remote listening
+port; vehicle-browser checks briefly use an authenticated loopback-only proxy
+to enforce public-network destinations without replacing Chromium's TLS/HTTP.
+An offline laptop simply leaves runs in the queue. A running worker
 claims and processes up to five runs at once; additional runs remain queued
 until an agent slot becomes available.
 

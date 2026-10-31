@@ -2,6 +2,7 @@ import { applyVehicleOverrides, evaluateVehicle } from "./domain";
 import type { VehicleListing, VehicleProfile, VehicleRecord } from "./types";
 
 export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
+  const nhtsa = record.nhtsa?.vin === record.vin ? record.nhtsa : undefined;
   const listings = record.vehicle_listings
     .map((listing) => {
       const gallery = listing.photo_gallery ?? [];
@@ -14,13 +15,17 @@ export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
               battery_pack:
                 listing.data.attributes.battery_pack ||
                 record.enrichment?.attributes?.battery_pack ||
+                nhtsa?.attributes.battery_pack ||
                 null,
               battery_evidence: listing.data.attributes.battery_pack
                 ? listing.data.attributes.battery_evidence
-                : record.enrichment?.attributes?.battery_evidence || null,
+                : record.enrichment?.attributes?.battery_pack
+                  ? record.enrichment.attributes.battery_evidence || null
+                  : nhtsa?.attributes.battery_evidence || null,
               motor:
                 listing.data.attributes.motor ||
                 record.enrichment?.attributes?.motor ||
+                nhtsa?.attributes.motor ||
                 null,
             },
             photos: gallery.length ? gallery : listing.data.photos,

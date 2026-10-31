@@ -30,8 +30,9 @@ describe("vehicle worker routing", () => {
         },
       );
       expect(result).toEqual({ enrichment_failed: true });
-      expect(request).toHaveBeenCalledTimes(1);
-      expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(request.mock.calls[0][1].body).action).toBe("nhtsa");
+      expect(JSON.parse(request.mock.calls[1][1].body)).toEqual({
         action: "enrichment_failure",
         lease: "lease",
         failure: {
@@ -55,6 +56,28 @@ describe("vehicle worker routing", () => {
       "vehicle_enrichment",
     ]);
   });
+  it("still checks the seller if NHTSA is unavailable", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const detail = vi.fn(async () => ({}));
+    const request = vi.fn(async (_, init) => {
+      if (JSON.parse(init.body).action === "nhtsa")
+        throw new Error("government API unavailable");
+      return { result: null };
+    });
+    try {
+      await runVehicleJob(
+        { run: { id: "detail", job_payload: { detail_vehicle: "vehicle" } } },
+        request,
+        { detail },
+      );
+      expect(detail).toHaveBeenCalledOnce();
+      expect(JSON.parse(request.mock.calls.at(-1)[1].body).action).toBe(
+        "enrichment",
+      );
+    } finally {
+      log.mockRestore();
+    }
+  });
   it("runs a targeted check without an Auto.dev credential or inventory scan", async () => {
     const request = vi.fn(async () => ({ result: null }));
     const getKey = vi.fn();
@@ -74,8 +97,9 @@ describe("vehicle worker routing", () => {
     expect(detail).toHaveBeenCalledWith(payload);
     expect(getKey).not.toHaveBeenCalled();
     expect(collect).not.toHaveBeenCalled();
-    expect(request).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(request.mock.calls[0][1].body).action).toBe("nhtsa");
+    expect(JSON.parse(request.mock.calls[1][1].body)).toEqual({
       action: "enrichment",
       lease: "lease",
       attributes,
@@ -94,6 +118,7 @@ describe("vehicle worker routing", () => {
       {
         getKey: async () => "test-secret",
         collect,
+        nhtsa: async () => {},
         enrich: async ({ listings }) => ({
           listings,
           counts: {

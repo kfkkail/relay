@@ -160,7 +160,7 @@ export async function POST(request: Request) {
                 ...(interior
                   ? { interior_photo: body.photoUrl }
                   : {
-                      ...(current.price === null ? { price: row.price } : {}),
+                      price: row.price === current.price ? null : row.price,
                       shipping: row.shipping,
                       mandatory_fees: row.mandatory_fees,
                       delivery: row.delivery,

@@ -187,7 +187,7 @@ describe("durable review and re-evaluation", () => {
       expect(evaluation.effective_cost).toBeNull();
     }
   });
-  it("uses a scoped confirmed price only while the feed price is missing", () => {
+  it("uses the edited price over the feed price only for the same listing", () => {
     const row = listing({ price: null });
     const overrides = {
       listing_verifications: {
@@ -203,9 +203,31 @@ describe("durable review and re-evaluation", () => {
       },
     };
     expect(applyVehicleOverrides(row, overrides, profile).price).toBe(51000);
+    const cleared = structuredClone(overrides);
+    const key = listingVerificationKey(row);
+    const clearedOverrides = {
+      listing_verifications: {
+        [key]: { ...cleared.listing_verifications[key], price: null },
+      },
+    };
+    expect(
+      applyVehicleOverrides({ ...row, price: 49000 }, clearedOverrides, profile)
+        .price,
+    ).toBe(49000);
+    expect(
+      evaluateVehicle(
+        applyVehicleOverrides(
+          { ...row, price: 49000, shipping: 1000, mandatory_fees: 200 },
+          overrides,
+          profile,
+        ),
+        profile,
+      ).effective_cost,
+    ).toBe(51200);
+
     expect(
       applyVehicleOverrides({ ...row, price: 49000 }, overrides, profile).price,
-    ).toBe(49000);
+    ).toBe(51000);
     expect(
       applyVehicleOverrides(
         { ...row, seller: "Different Dealer" },

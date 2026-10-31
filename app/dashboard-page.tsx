@@ -33,6 +33,9 @@ export async function DashboardPage({
   } = await supabase.auth.getUser();
   if (!user) return <SignIn />;
 
+  const { error: expiryError } = await supabase.rpc("expire_stale_agent_runs");
+  if (expiryError) throw expiryError;
+
   const [{ data: tasks }, { data: workers }, { data: ownerActions }] =
     await Promise.all([
       supabase

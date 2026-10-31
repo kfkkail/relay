@@ -7,6 +7,10 @@ import { deliverableConflict, parseDeliverable } from "@/lib/deliverables";
 export async function GET() {
   try {
     const { supabase } = await requireUser();
+    const { error: expiryError } = await supabase.rpc(
+      "expire_stale_agent_runs",
+    );
+    if (expiryError) throw expiryError;
     const { data, error } = await supabase
       .from("tasks")
       .select(TASK_SELECT)

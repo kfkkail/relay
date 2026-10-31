@@ -16,6 +16,40 @@ import { reviewVehicle } from "@/lib/vehicles/review";
 import type { Decision } from "@/lib/vehicles/types";
 
 describe("Relay Vehicles presentation", () => {
+  it("shows the seller denial and keeps manual retry available", async () => {
+    const data = await (
+      await createVehiclePreviewRequest()("/api/vehicles")
+    ).json();
+    const vehicle = reviewVehicle(
+      {
+        ...data.vehicles[0],
+        decision: "watch",
+        enrichment: {
+          status: "blocked",
+          failure: {
+            code: "access_denied",
+            host: "www.carvana.com",
+            http_status: 403,
+          },
+        },
+      },
+      defaultVehicleProfile,
+    )!;
+    const html = renderToStaticMarkup(
+      <VehicleCard
+        vehicle={vehicle}
+        busy={false}
+        decide={() => {}}
+        verify={() => {}}
+        gallery={() => {}}
+        enrich={() => {}}
+      />,
+    );
+    expect(html).toContain("Seller blocked the configuration check");
+    expect(html).toContain("www.carvana.com");
+    expect(html).toContain("HTTP 403");
+    expect(html).toContain("Check battery &amp; motor");
+  });
   it("offers manual checks for existing Interested vehicles and queues missing configuration on review", async () => {
     const data = await (
       await createVehiclePreviewRequest()("/api/vehicles")

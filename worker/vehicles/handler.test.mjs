@@ -1,7 +1,53 @@
 import { describe, expect, it, vi } from "vitest";
 import { runVehicleJob, vehicleCapabilities } from "./handler.mjs";
+import { SellerPageError } from "./seller-error.mjs";
 
 describe("vehicle worker routing", () => {
+  it("reports a blocked detail job once and logs the real reason", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const request = vi.fn(async () => ({ result: null }));
+      const result = await runVehicleJob(
+        {
+          run: {
+            id: "blocked-run",
+            lease: "lease",
+            job_payload: { detail_vehicle: "vehicle" },
+          },
+        },
+        request,
+        {
+          detail: async () => {
+            throw new SellerPageError(
+              "access_denied",
+              "https://www.carvana.com/vehicle/123?secret=private",
+              { httpStatus: 403 },
+            );
+          },
+          getKey: () => {
+            throw new Error("must not request credentials");
+          },
+        },
+      );
+      expect(result).toEqual({ enrichment_failed: true });
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(request.mock.calls[0][1].body)).toEqual({
+        action: "enrichment_failure",
+        lease: "lease",
+        failure: {
+          code: "access_denied",
+          host: "www.carvana.com",
+          http_status: 403,
+        },
+      });
+      expect(log.mock.calls[0][0]).toContain(
+        "blocked-run could not check configuration: www.carvana.com: seller denied automated access (HTTP 403)",
+      );
+      expect(JSON.stringify(log.mock.calls)).not.toContain("private");
+    } finally {
+      log.mockRestore();
+    }
+  });
   it("advertises only with explicit worker opt-in", () => {
     expect(vehicleCapabilities({})).toEqual([]);
     expect(vehicleCapabilities({ RELAY_VEHICLE_SEARCH: "1" })).toEqual([

@@ -2,6 +2,7 @@ import { autoDevKey } from "./credentials.mjs";
 import { autoDevPhotos, collectAutoDev } from "./auto-dev.mjs";
 import { enrichSellerListings } from "./detail-enrichment.mjs";
 import { enrichVehicle } from "./browser-enrichment.mjs";
+import { SellerPageError } from "./seller-error.mjs";
 
 export function vehicleCapabilities(env = process.env) {
   return env.RELAY_VEHICLE_SEARCH === "1"
@@ -41,7 +42,23 @@ export async function runVehicleJob(
   heartbeat.unref();
   try {
     if (claimed.run.job_payload?.detail_vehicle) {
-      const attributes = await detail(claimed.run.job_payload);
+      let attributes;
+      try {
+        attributes = await detail(claimed.run.job_payload);
+      } catch (error) {
+        if (!(error instanceof SellerPageError) || leaseFailed) throw error;
+        console.error(
+          `Vehicle enrichment run ${claimed.run.id} could not check configuration: ${error.message}`,
+        );
+        await retryRelay(() =>
+          request({
+            action: "enrichment_failure",
+            lease,
+            failure: error.diagnostic,
+          }),
+        );
+        return { enrichment_failed: true };
+      }
       if (leaseFailed)
         throw new Error("Vehicle worker lease could not be renewed.");
       return await retryRelay(() =>

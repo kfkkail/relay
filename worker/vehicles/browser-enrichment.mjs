@@ -15,6 +15,7 @@ import {
   safePageUrl,
   sellerPageAttributes,
 } from "./detail-enrichment.mjs";
+import { SellerPageError, sellerPageError } from "./seller-error.mjs";
 
 const MAX_BYTES = 1_500_000;
 const run = promisify(execFile);
@@ -135,7 +136,15 @@ export async function fetchPublicResource(
     }
     if (!response.ok) {
       await response.body?.cancel();
-      throw new Error("seller_page_unavailable");
+      throw new SellerPageError(
+        [401, 403].includes(response.status)
+          ? "access_denied"
+          : response.status === 429
+            ? "rate_limited"
+            : "http_error",
+        url.href,
+        { httpStatus: response.status },
+      );
     }
     const body = await boundedText(response, MAX_BYTES, onBytes);
     // Preserve the final base for relative scripts on redirected pages.
@@ -191,6 +200,7 @@ export async function enrichVehicle(
     controller.abort();
     void browser.close().catch(() => {});
   }, 25_000);
+  let limitFailure;
   try {
     const context = await browser.newContext({
       serviceWorkers: "block",
@@ -200,25 +210,34 @@ export async function enrichVehicle(
     const page = await context.newPage();
     let requests = 0;
     let bytes = 0;
+    let documentFailure;
     await context.route("**/*", async (route) => {
       const request = route.request();
+      let mainDocument = false;
       try {
+        const frame = request.frame();
+        mainDocument =
+          request.isNavigationRequest() && frame === page.mainFrame();
         if (
-          ++requests > 40 ||
           request.method() !== "GET" ||
           !["document", "script", "stylesheet", "xhr", "fetch"].includes(
             request.resourceType(),
           ) ||
-          request.frame() !== page.mainFrame()
+          frame !== page.mainFrame()
         )
           return await route.abort();
+        if (++requests > 40) {
+          limitFailure ??= new SellerPageError("request_limit", url);
+          return await route.abort();
+        }
         const result = await resource(request.url(), {
           signal: controller.signal,
           onBytes(chunkBytes) {
             bytes += chunkBytes;
             if (bytes > 5_000_000) {
+              limitFailure ??= new SellerPageError("response_too_large", url);
               controller.abort();
-              throw new Error("seller_page_too_large");
+              throw limitFailure;
             }
           },
         });
@@ -233,24 +252,37 @@ export async function enrichVehicle(
           contentType: result.contentType,
           body,
         });
-      } catch {
+      } catch (error) {
+        if (mainDocument)
+          documentFailure ??= sellerPageError(error, request.url());
         await route.abort().catch(() => {});
       }
     });
-    const response = await page.goto(url, {
-      waitUntil: "domcontentloaded",
-      timeout: 15_000,
-    });
+    let response;
+    try {
+      response = await page.goto(url, {
+        waitUntil: "domcontentloaded",
+        timeout: 15_000,
+      });
+    } catch (error) {
+      throw documentFailure || limitFailure || sellerPageError(error, url);
+    }
     if (!response?.ok()) throw new Error("seller_page_unavailable");
     // Allow client-rendered configuration to settle, within the overall bound.
     await page
       .waitForLoadState("networkidle", { timeout: 5_000 })
       .catch(() => {});
+    if (limitFailure) throw limitFailure;
     const text = await page.locator("body").innerText({ timeout: 2_000 });
     return configurationEvidence(text, vin, url);
+  } catch (error) {
+    if (limitFailure) throw limitFailure;
+    if (controller.signal.aborted || error?.name === "TimeoutError")
+      throw new SellerPageError("timeout", url);
+    throw error;
   } finally {
     clearTimeout(timer);
     controller.abort();
-    await browser.close();
+    await browser.close().catch(() => {});
   }
 }

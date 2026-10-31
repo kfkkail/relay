@@ -102,7 +102,8 @@ async function processClaimedRun(claimed) {
         });
   try {
     if (run.job_kind === "vehicle_search") {
-      await runVehicleJob(claimed, relayRequest);
+      const result = await runVehicleJob(claimed, relayRequest);
+      if (result?.enrichment_failed) return;
       console.log(`Completed vehicle run ${run.id}`);
       return;
     }

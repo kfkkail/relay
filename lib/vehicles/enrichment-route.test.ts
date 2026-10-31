@@ -68,3 +68,47 @@ it("cannot finalize an inventory scan or upload batches using a targeted job", a
   }
   expect(mocks.rpc).not.toHaveBeenCalled();
 });
+it("accepts only bounded structured failure diagnostics", async () => {
+  expect(
+    (
+      await result({
+        action: "enrichment_failure",
+        failure: {
+          code: "access_denied",
+          host: "www.carvana.com",
+          http_status: 403,
+          responseBody: "secret",
+        },
+      })
+    ).status,
+  ).toBe(200);
+  expect(mocks.rpc).toHaveBeenCalledWith("fail_vehicle_enrichment", {
+    p_run: "run",
+    p_worker: "worker",
+    p_lease: "lease",
+    p_failure: {
+      code: "access_denied",
+      host: "www.carvana.com",
+      http_status: 403,
+    },
+  });
+  mocks.rpc.mockClear();
+  for (const patch of [
+    { code: "unknown" },
+    { host: "https://user:secret@example.com/path" },
+    { host: "dealer.example\n" },
+    { http_status: 999 },
+    { network_code: "secret\nlog injection" },
+    { network_code: "ECONNRESET\n" },
+  ]) {
+    expect(
+      (
+        await result({
+          action: "enrichment_failure",
+          failure: { code: "network_error", host: "dealer.example", ...patch },
+        })
+      ).status,
+    ).toBe(400);
+  }
+  expect(mocks.rpc).not.toHaveBeenCalled();
+});

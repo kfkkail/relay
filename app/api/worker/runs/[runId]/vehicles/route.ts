@@ -43,30 +43,77 @@ export async function POST(
     }
     let result;
     if (run.job_payload.detail_vehicle) {
-      if (body.action !== "enrichment")
-        throw new ApiError("This run only accepts configuration evidence.");
-      const attr = body.attributes;
-      if (!attr || typeof attr !== "object" || Array.isArray(attr))
-        throw new ApiError("Invalid configuration evidence.");
-      const evidence = (value: unknown) =>
-        typeof value === "string" ? value.slice(0, 1500) : null;
-      result = await supabase.rpc("complete_vehicle_enrichment", {
-        p_run: runId,
-        p_worker: worker.id,
-        p_lease: body.lease,
-        p_attributes: {
-          battery_pack: ["standard", "standard+", "large", "max"].includes(
-            attr.battery_pack,
-          )
-            ? attr.battery_pack
-            : null,
-          motor: ["dual", "quad", "tri"].includes(attr.motor)
-            ? attr.motor
-            : null,
-          battery_evidence: evidence(attr.battery_evidence),
-          motor_evidence: evidence(attr.motor_evidence),
-        },
-      });
+      if (body.action === "enrichment_failure") {
+        const failure = body.failure;
+        if (
+          !failure ||
+          typeof failure !== "object" ||
+          ![
+            "access_denied",
+            "rate_limited",
+            "http_error",
+            "timeout",
+            "unsafe_destination",
+            "response_too_large",
+            "request_limit",
+            "network_error",
+          ].includes(failure.code) ||
+          typeof failure.host !== "string" ||
+          !failure.host.length ||
+          failure.host.length > 253 ||
+          /[^a-z0-9.-]/i.test(failure.host) ||
+          (failure.http_status !== undefined &&
+            (!Number.isInteger(failure.http_status) ||
+              failure.http_status < 400 ||
+              failure.http_status > 599)) ||
+          (failure.network_code !== undefined &&
+            (typeof failure.network_code !== "string" ||
+              !failure.network_code.length ||
+              failure.network_code.length > 40 ||
+              /[^A-Z0-9_]/.test(failure.network_code)))
+        )
+          throw new ApiError("Invalid configuration failure.");
+        result = await supabase.rpc("fail_vehicle_enrichment", {
+          p_run: runId,
+          p_worker: worker.id,
+          p_lease: body.lease,
+          p_failure: {
+            code: failure.code,
+            host: failure.host,
+            ...(failure.http_status !== undefined
+              ? { http_status: failure.http_status }
+              : {}),
+            ...(failure.network_code
+              ? { network_code: failure.network_code }
+              : {}),
+          },
+        });
+      } else {
+        if (body.action !== "enrichment")
+          throw new ApiError("This run only accepts configuration evidence.");
+        const attr = body.attributes;
+        if (!attr || typeof attr !== "object" || Array.isArray(attr))
+          throw new ApiError("Invalid configuration evidence.");
+        const evidence = (value: unknown) =>
+          typeof value === "string" ? value.slice(0, 1500) : null;
+        result = await supabase.rpc("complete_vehicle_enrichment", {
+          p_run: runId,
+          p_worker: worker.id,
+          p_lease: body.lease,
+          p_attributes: {
+            battery_pack: ["standard", "standard+", "large", "max"].includes(
+              attr.battery_pack,
+            )
+              ? attr.battery_pack
+              : null,
+            motor: ["dual", "quad", "tri"].includes(attr.motor)
+              ? attr.motor
+              : null,
+            battery_evidence: evidence(attr.battery_evidence),
+            motor_evidence: evidence(attr.motor_evidence),
+          },
+        });
+      }
     } else if (body.action === "batch") {
       if (
         !Number.isInteger(body.batch) ||

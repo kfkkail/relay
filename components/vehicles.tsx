@@ -1507,7 +1507,7 @@ export function VehicleCard({
                 ? ` · ${v.nhtsa.attributes.motor_evidence}`
                 : " · Motor not reported"}
               {v.nhtsa.battery_kwh !== null
-                ? ` · Battery capacity: ${v.nhtsa.battery_kwh}${v.nhtsa.battery_kwh_to !== null ? `–${v.nhtsa.battery_kwh_to}` : ""} kWh (does not establish pack name)`
+                ? ` · Battery capacity: ${v.nhtsa.battery_kwh}${v.nhtsa.battery_kwh_to !== null ? `–${v.nhtsa.battery_kwh_to}` : ""} kWh${v.nhtsa.attributes.battery_pack ? ` · Mapped pack: ${v.nhtsa.attributes.battery_pack}` : " (pack not established)"}`
                 : ""}
               {` · Checked ${new Date(v.nhtsa.checked_at).toLocaleString()}`}
             </p>

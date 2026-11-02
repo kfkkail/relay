@@ -5,8 +5,41 @@ const vinPattern = /^[A-HJ-NPR-Z0-9]{17}$/;
 const text = (value) =>
   typeof value === "string" ? value.trim().slice(0, 1500) : "";
 
+// Gen 1 Rivian pack capacities supplied by the owner. Keep the marketing and
+// decoded/raw values because vPIC has returned both forms for the Large packs.
+// Do not extend this table by interpolation: an unknown capacity stays unknown.
+export const RIVIAN_GEN1_BATTERIES = Object.freeze([
+  { pack: "standard", official_kwh: 106, raw_kwh: 106 },
+  { pack: "standard+", official_kwh: 121, raw_kwh: 121 },
+  { pack: "large", official_kwh: 131, raw_kwh: 128.9 },
+  { pack: "max", official_kwh: 141, raw_kwh: 141 },
+  { pack: "large+", official_kwh: 142, raw_kwh: 142.3 },
+]);
+
+export function rivianGen1Battery(capacity, identity = {}) {
+  const year = Number(identity.year);
+  if (
+    text(identity.make).toUpperCase() !== "RIVIAN" ||
+    text(identity.model).toUpperCase() !== "R1T" ||
+    !Number.isInteger(year) ||
+    year < 2022 ||
+    year > 2024 ||
+    typeof capacity !== "number" ||
+    !Number.isFinite(capacity)
+  )
+    return null;
+  return (
+    RIVIAN_GEN1_BATTERIES.find(({ official_kwh, raw_kwh }) =>
+      [official_kwh, raw_kwh].some(
+        (expected) => Math.abs(capacity - expected) <= 0.11,
+      ),
+    ) ?? null
+  );
+}
+
 // NHTSA describes what the manufacturer encoded, not necessarily every option
-// on this vehicle. In particular, kWh is never converted to a marketing pack.
+// on this vehicle. Capacity is mapped only for the bounded Gen 1 R1T table
+// above; every other vehicle and unexpected value remains unresolved.
 export function decodeNhtsaResult(payload, vin, sourceUrl, now = new Date()) {
   const rows = payload?.Results;
   const row = Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
@@ -38,6 +71,9 @@ export function decodeNhtsaResult(payload, vin, sourceUrl, now = new Date()) {
         "standard plus pack": "standard+",
         "large pack": "large",
         "large battery pack": "large",
+        "large+ pack": "large+",
+        "large plus pack": "large+",
+        "large+ battery pack": "large+",
         "max pack": "max",
         "max battery pack": "max",
       }),
@@ -48,24 +84,36 @@ export function decodeNhtsaResult(payload, vin, sourceUrl, now = new Date()) {
     Number(value) <= 1000
       ? Number(value)
       : null;
+  const batteryKwh = capacity(row.BatteryKWh);
+  const identity = {
+    year: text(row.ModelYear),
+    make: text(row.Make),
+    model: text(row.Model),
+    trim: text(row.Trim),
+  };
+  // An unexpected non-empty BatteryInfo value may contradict a capacity-only
+  // interpretation. Use the table only when NHTSA supplied no pack label.
+  const mapped =
+    battery || batteryInfo ? null : rivianGen1Battery(batteryKwh, identity);
+  const resolvedBattery = battery ?? mapped?.pack ?? null;
   return {
     vin,
     status: "decoded",
+    decoder_version: 2,
     checked_at: now.toISOString(),
     source_url: sourceUrl,
-    identity: {
-      year: text(row.ModelYear),
-      make: text(row.Make),
-      model: text(row.Model),
-      trim: text(row.Trim),
-    },
+    identity,
     attributes: {
       motor,
       motor_evidence: motor ? `NHTSA EVDriveUnit: ${drive}` : null,
-      battery_pack: battery,
-      battery_evidence: battery ? `NHTSA BatteryInfo: ${batteryInfo}` : null,
+      battery_pack: resolvedBattery,
+      battery_evidence: battery
+        ? `NHTSA BatteryInfo: ${batteryInfo}`
+        : mapped
+          ? `NHTSA BatteryKWh: ${batteryKwh} kWh (Rivian Gen 1 ${mapped.pack} capacity map)`
+          : null,
     },
-    battery_kwh: capacity(row.BatteryKWh),
+    battery_kwh: batteryKwh,
     battery_kwh_to: capacity(row.BatteryKWh_to),
     battery_type: text(row.BatteryType) || null,
     battery_info: batteryInfo || null,
@@ -108,6 +156,7 @@ export function freshNhtsa(value, vin, now = Date.now()) {
   return (
     value?.vin === vin &&
     value?.status === "decoded" &&
+    value?.decoder_version === 2 &&
     Number.isFinite(checked) &&
     checked <= now &&
     now - checked < 30 * 86400_000

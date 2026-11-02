@@ -19,6 +19,11 @@ conversion was used. All other named packs remain unresolved by this source.
 Only `vehicles.nhtsa` was updated; owner overrides, decisions, seller evidence,
 listing snapshots, coverage and notification state were not written.
 
+Follow-up decoder version 2 adds the bounded Gen 1 R1T capacity mapping described
+in `docs/vehicles.md`. This table was not applied to the counts above. The
+version change makes these version-1 cache entries eligible for a repeat decode;
+run the backfill again after deployment to populate mapped pack names.
+
 The matching web deployment is still required to display this evidence and
 apply it as a fallback for unknown fields. The migration uses `if not exists`
 so the normal deployment can record the already-added column safely. A repeat

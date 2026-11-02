@@ -550,9 +550,9 @@ export function Vehicles({
           <section className="vehicle-empty">
             <h2>Make this search yours</h2>
             <p>
-              Start with the editable Rivian R1T profile: Large or Max battery,
-              nationwide, up to $70,000 effective cost. Daily collection starts
-              disabled.
+              Start with the editable Rivian R1T profile: Large, Large+, or Max
+              battery, nationwide, up to $70,000 effective cost. Daily
+              collection starts disabled.
             </p>
             <button
               className="primary-button"
@@ -1507,7 +1507,7 @@ export function VehicleCard({
                 ? ` · ${v.nhtsa.attributes.motor_evidence}`
                 : " · Motor not reported"}
               {v.nhtsa.battery_kwh !== null
-                ? ` · Battery capacity: ${v.nhtsa.battery_kwh}${v.nhtsa.battery_kwh_to !== null ? `–${v.nhtsa.battery_kwh_to}` : ""} kWh (does not establish pack name)`
+                ? ` · Battery capacity: ${v.nhtsa.battery_kwh}${v.nhtsa.battery_kwh_to !== null ? `–${v.nhtsa.battery_kwh_to}` : ""} kWh${v.nhtsa.attributes.battery_pack ? ` · Mapped pack: ${v.nhtsa.attributes.battery_pack}` : " (pack not established)"}`
                 : ""}
               {` · Checked ${new Date(v.nhtsa.checked_at).toLocaleString()}`}
             </p>
@@ -1974,6 +1974,7 @@ export function VehicleEditor({
               <option value="standard">Standard</option>
               <option value="standard+">Standard+</option>
               <option value="large">Large</option>
+              <option value="large+">Large+</option>
               <option value="max">Max</option>
             </select>
           </label>

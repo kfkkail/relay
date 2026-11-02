@@ -136,9 +136,14 @@ lookups and caches clean results for 30 days. Failed decoding can be retried.
 
 Results live in `vehicles.nhtsa`, separate from owner overrides, seller evidence
 and provider snapshots. Only clean, exact-VIN responses are accepted. Explicit
-`EVDriveUnit` can fill an unknown motor; explicit `BatteryInfo` pack labels can
-fill an unknown pack. Battery capacity/type remain separate facts and are never
-mapped to Large/Max. Missing data is unknown. Owner confirmations and existing
+`EVDriveUnit` can fill an unknown motor and explicit `BatteryInfo` can fill an
+unknown pack. When `BatteryInfo` is empty, an R1T model year 2022–2024 can also
+use the owner-provided Gen 1 capacity table: Standard 106 kWh, Standard+ 121 kWh,
+Large 128.9/131 kWh, Max 141 kWh, and Large+ 142/142.3 kWh. Values must be within
+0.11 kWh of an entry; other models, years, capacities, and unexpected non-empty
+pack labels remain unknown. Existing profiles that allow Large also accept
+Large+. Decoder version 2 invalidates the earlier 30-day decode cache so a
+repeat backfill applies the mapping. Owner confirmations and existing
 listing/seller values retain precedence. Updates recheck owner and VIN; an
 identity merge cannot put old evidence on a different VIN. The card shows the
 NHTSA source, reported motor/capacity and timestamp after web deployment.

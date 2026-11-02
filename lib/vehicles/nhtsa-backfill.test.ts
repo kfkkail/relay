@@ -42,6 +42,7 @@ describe("owner-scoped NHTSA backfill", () => {
     const nhtsa = {
       vin,
       status: "decoded",
+      decoder_version: 2,
       checked_at: new Date().toISOString(),
     };
     const rows = Array.from({ length: 10 }, (_, id) => ({
@@ -61,6 +62,7 @@ describe("owner-scoped NHTSA backfill", () => {
     const cached = {
       vin,
       status: "decoded",
+      decoder_version: 2,
       checked_at: new Date().toISOString(),
     };
     const { db, writes, filters } = database([

@@ -84,6 +84,20 @@ describe("vehicle hard rules", () => {
       ).eligibility,
     ).toBe("ineligible");
   });
+  it("accepts Large+ for existing profiles that allow Large", () => {
+    expect(
+      evaluateVehicle(
+        listing({
+          attributes: {
+            battery_pack: "large+",
+            motor: "dual",
+            battery_evidence: "NHTSA capacity map",
+          },
+        }),
+        profile,
+      ).eligibility,
+    ).not.toBe("ineligible");
+  });
   it("keeps missing shipping or fees visible without blocking initial review", () => {
     const unknownDelivery = evaluateVehicle(
       listing({ delivery: "unknown", shipping: null }),

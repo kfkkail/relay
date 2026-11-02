@@ -128,9 +128,13 @@ export async function POST(
           p_worker: worker.id,
           p_lease: body.lease,
           p_attributes: {
-            battery_pack: ["standard", "standard+", "large", "max"].includes(
-              attr.battery_pack,
-            )
+            battery_pack: [
+              "standard",
+              "standard+",
+              "large",
+              "large+",
+              "max",
+            ].includes(attr.battery_pack)
               ? attr.battery_pack
               : null,
             motor: ["dual", "quad", "tri"].includes(attr.motor)

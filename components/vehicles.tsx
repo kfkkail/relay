@@ -550,9 +550,9 @@ export function Vehicles({
           <section className="vehicle-empty">
             <h2>Make this search yours</h2>
             <p>
-              Start with the editable Rivian R1T profile: Large or Max battery,
-              nationwide, up to $70,000 effective cost. Daily collection starts
-              disabled.
+              Start with the editable Rivian R1T profile: Large, Large+, or Max
+              battery, nationwide, up to $70,000 effective cost. Daily
+              collection starts disabled.
             </p>
             <button
               className="primary-button"
@@ -1974,6 +1974,7 @@ export function VehicleEditor({
               <option value="standard">Standard</option>
               <option value="standard+">Standard+</option>
               <option value="large">Large</option>
+              <option value="large+">Large+</option>
               <option value="max">Max</option>
             </select>
           </label>

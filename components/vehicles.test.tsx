@@ -206,6 +206,7 @@ describe("Relay Vehicles presentation", () => {
     expect(html).toContain('<option value="standard">Standard</option>');
     expect(html).toContain('<option value="standard+">Standard+</option>');
     expect(html).toMatch(/<option value="large"[^>]*>Large<\/option>/);
+    expect(html).toContain('<option value="large+">Large+</option>');
     expect(html).toContain('<option value="max">Max</option>');
     expect(html).toContain("Confirmed motor configuration (optional)");
     expect(html).toContain('<option value="dual">Dual</option>');

@@ -27,7 +27,7 @@ export const defaultVehicleProfile: VehicleProfile = {
   origin_coordinates: [-86.11, 41.75],
   local_miles: 150,
   cost_ceiling: 70000,
-  allowed_batteries: ["large", "max"],
+  allowed_batteries: ["large", "large+", "max"],
   preferred_miles: 40000,
   high_miles: 75000,
   excluded_titles: [
@@ -131,7 +131,13 @@ export function evaluateVehicle(
     reasons.push("VIN unverified; cross-source suppression is uncertain");
   if (profile.allowed_batteries.length) {
     if (!row.attributes.battery_pack) reasons.push("Battery pack unverified");
-    else if (!profile.allowed_batteries.includes(row.attributes.battery_pack))
+    else if (
+      !profile.allowed_batteries.includes(row.attributes.battery_pack) &&
+      !(
+        row.attributes.battery_pack === "large+" &&
+        profile.allowed_batteries.includes("large")
+      )
+    )
       fail("Battery pack does not meet requirement");
   }
   if (profile.excluded_titles.includes(row.title_status.toLowerCase()))

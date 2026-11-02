@@ -66,6 +66,7 @@ export type VehicleRecord = {
   nhtsa?: {
     vin: string;
     status: "decoded";
+    decoder_version?: number;
     checked_at: string;
     source_url: string;
     identity: { year: string; make: string; model: string; trim: string };

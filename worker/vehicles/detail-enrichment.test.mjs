@@ -7,6 +7,7 @@ import {
   fetchSellerPage,
   isPublicAddress,
   sellerPageAttributes,
+  sellerMarketingColors,
 } from "./detail-enrichment.mjs";
 
 const directories = [];
@@ -62,6 +63,75 @@ describe("seller detail evidence", () => {
         "https://dealer.example/truck",
       ).battery_pack,
     ).toBeNull();
+  });
+});
+
+describe("marketing color evidence", () => {
+  const vin = "7FCTGAAA0NN000001";
+  it("reads labeled marketing names for the matching vehicle", () => {
+    expect(
+      sellerMarketingColors(
+        `${vin}<dl><dt>Exterior Color:</dt><dd>forest green</dd><dt>Interior:</dt><dd>Ocean Coast</dd></dl>`,
+        vin,
+      ),
+    ).toEqual({
+      exterior_color: "Forest Green",
+      interior_color: "Ocean Coast",
+    });
+  });
+  it.each([
+    "Exterior: Green Interior: Gray",
+    "Available options: Forest Green, Ocean Coast",
+    "Exterior: Forest Green Exterior: Launch Green",
+    "Exterior: Forest Green, Launch Green",
+    "<script>Exterior: Forest Green</script>",
+  ])(
+    "does not guess from generic, unrelated, or conflicting text: %s",
+    (text) => {
+      expect(sellerMarketingColors(`${vin} ${text}`, vin)).toEqual({});
+    },
+  );
+  it("rejects missing or multiple vehicle identities", () => {
+    expect(sellerMarketingColors("Exterior: Forest Green", vin)).toEqual({});
+    expect(
+      sellerMarketingColors(
+        `${vin} 7FCTGAAA0NN000002 Exterior: Forest Green`,
+        vin,
+      ),
+    ).toEqual({});
+  });
+  it("enriches colors even when battery is known and caches them for the listing", async () => {
+    const cachePath = await cache();
+    const row = listing(vin, {
+      exterior_color: "Green",
+      interior_color: "Gray",
+      attributes: { battery_pack: "large" },
+    });
+    const fetchPage = vi.fn(
+      async () => `${vin} Exterior: Launch Green Interior Color: Ocean Coast`,
+    );
+    const options = {
+      listings: [row],
+      profile: { make: "Rivian", model: "R1T" },
+      cachePath,
+      fetchPage,
+    };
+    const first = await enrichSellerListings(options);
+    expect(first.listings[0]).toMatchObject({
+      exterior_color: "Launch Green",
+      interior_color: "Ocean Coast",
+    });
+    expect(row.exterior_color).toBe("Green");
+    const second = await enrichSellerListings(options);
+    expect(second.listings[0].interior_color).toBe("Ocean Coast");
+    expect(fetchPage).toHaveBeenCalledOnce();
+    fetchPage.mockResolvedValueOnce("Unavailable");
+    const changed = await enrichSellerListings({
+      ...options,
+      listings: [{ ...row, url: "https://another.example/truck" }],
+    });
+    expect(changed.listings[0].exterior_color).toBe("Green");
+    expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 });
 

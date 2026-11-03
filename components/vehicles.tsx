@@ -1383,6 +1383,16 @@ export function VehicleCard({
               "Location unknown"}
           </span>
         </div>
+        <dl aria-label="Listing colors">
+          <div>
+            <dt>Exterior color</dt>
+            <dd>{row.exterior_color?.trim() || "Unknown"}</dd>
+          </div>
+          <div>
+            <dt>Interior color</dt>
+            <dd>{row.interior_color?.trim() || "Unknown"}</dd>
+          </div>
+        </dl>
         <div className="vehicle-seller">
           <span>
             {row.seller?.trim() ? (

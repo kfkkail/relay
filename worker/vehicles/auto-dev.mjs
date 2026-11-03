@@ -94,6 +94,8 @@ export function normalizeAutoDev(row, { make, model }) {
     model: text(v.model, 80),
     trim: text(v.trim, 200),
     attributes,
+    exterior_color: text(v.exteriorColor, 200) || null,
+    interior_color: text(v.interiorColor, 200) || null,
     raw_series: text(v.series, 1000),
     price: amount(l.price) > 0 ? l.price : null,
     mileage: amount(l.miles),

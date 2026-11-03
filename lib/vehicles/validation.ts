@@ -138,6 +138,8 @@ export function parseVehicleListing(
       motor: str(attr.motor, 60) || null,
       battery_evidence: str(attr.battery_evidence, 1500) || null,
     },
+    exterior_color: str(v.exterior_color, 200) || null,
+    interior_color: str(v.interior_color, 200) || null,
     raw_series: str(v.raw_series, 1000),
     price: number(v.price) && Number(v.price) > 0 ? Number(v.price) : null,
     mileage: number(v.mileage),

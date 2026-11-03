@@ -79,6 +79,8 @@ export function createVehiclePreviewRequest(): VehicleRequest {
       make: "Rivian",
       model: "R1T",
       trim: i % 2 ? "Launch Edition" : "Adventure",
+      exterior_color: i % 2 ? "Glacier White" : "Forest Green",
+      interior_color: i === 3 ? null : "Black Mountain",
       price: example.price,
       mileage: example.mileage,
       city: example.city,

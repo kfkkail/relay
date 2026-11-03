@@ -33,6 +33,8 @@ export type VehicleListing = {
     motor: string | null;
     battery_evidence: string | null;
   };
+  exterior_color?: string | null;
+  interior_color?: string | null;
   raw_series: string;
   price: number | null;
   mileage: number | null;

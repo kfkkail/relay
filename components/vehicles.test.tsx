@@ -16,6 +16,44 @@ import { reviewVehicle } from "@/lib/vehicles/review";
 import type { Decision } from "@/lib/vehicles/types";
 
 describe("Relay Vehicles presentation", () => {
+  it.each([
+    [
+      "Forest Green / Black",
+      "Ocean Coast",
+      "Forest Green / Black",
+      "Ocean Coast",
+    ],
+    ["White", null, "White", "Unknown"],
+    [undefined, undefined, "Unknown", "Unknown"],
+    [" ", "", "Unknown", "Unknown"],
+  ])(
+    "shows exterior %s and interior %s on the collapsed card",
+    async (exterior, interior, expectedExterior, expectedInterior) => {
+      const data = await (
+        await createVehiclePreviewRequest()("/api/vehicles")
+      ).json();
+      const record = data.vehicles[0];
+      record.vehicle_listings[0].data.exterior_color = exterior;
+      record.vehicle_listings[0].data.interior_color = interior;
+      const vehicle = reviewVehicle(record, defaultVehicleProfile)!;
+      const html = renderToStaticMarkup(
+        <VehicleCard
+          vehicle={vehicle}
+          busy={false}
+          decide={() => {}}
+          verify={() => {}}
+          gallery={() => {}}
+        />,
+      );
+      const visible = html.split("<details")[0];
+      expect(visible).toContain(
+        `<dt>Exterior color</dt><dd>${expectedExterior}</dd>`,
+      );
+      expect(visible).toContain(
+        `<dt>Interior color</dt><dd>${expectedInterior}</dd>`,
+      );
+    },
+  );
   it("shows the seller denial and keeps manual retry available", async () => {
     const data = await (
       await createVehiclePreviewRequest()("/api/vehicles")

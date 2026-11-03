@@ -41,6 +41,25 @@ const collect = (fetchImpl, options = {}) =>
   });
 
 describe("Rivian evidence", () => {
+  it("preserves listing color names and rejects non-string color options", () => {
+    const input = sample();
+    input.vehicle.exteriorColor = "  Forest Green / Black  ";
+    input.vehicle.interiorColor = "Ocean Coast";
+    expect(
+      normalizeAutoDev(input, { make: "Rivian", model: "R1T" }),
+    ).toMatchObject({
+      exterior_color: "Forest Green / Black",
+      interior_color: "Ocean Coast",
+    });
+    input.vehicle.exteriorColor = ["White", "Green"];
+    input.vehicle.interiorColor = " ";
+    expect(
+      normalizeAutoDev(input, { make: "Rivian", model: "R1T" }),
+    ).toMatchObject({
+      exterior_color: null,
+      interior_color: null,
+    });
+  });
   it("retains reported accidents, owners and usage without inferring a clean title", () => {
     expect(
       normalizeAutoDevHistory({

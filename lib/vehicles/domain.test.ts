@@ -52,6 +52,27 @@ const record = (changes: Partial<VehicleRecord> = {}): VehicleRecord => ({
 });
 
 describe("vehicle hard rules", () => {
+  it("preserves bounded color names and accepts older listings without colors", () => {
+    expect(
+      listing({
+        exterior_color: " Forest Green ",
+        interior_color: "Ocean Coast",
+      }),
+    ).toMatchObject({
+      exterior_color: "Forest Green",
+      interior_color: "Ocean Coast",
+    });
+    expect(listing()).toMatchObject({
+      exterior_color: null,
+      interior_color: null,
+    });
+    expect(
+      listing({ exterior_color: " ", interior_color: "x".repeat(201) }),
+    ).toMatchObject({
+      exterior_color: null,
+      interior_color: "x".repeat(200),
+    });
+  });
   it("allows missing history with a warning", () => {
     expect(evaluateVehicle(listing(), profile)).toMatchObject({
       eligibility: "eligible",

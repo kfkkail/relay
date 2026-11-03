@@ -294,3 +294,11 @@ Scoring-only edits preserve an already-enabled schedule.
 This implementation is published in draft PRs #85 and #86. Merge, production
 deployment, remote migration and schedule enablement remain separate owner
 actions.
+
+### Card colors
+
+Cards show exterior and interior listing colors, with Unknown for missing values.
+Auto.dev imports preserve `vehicle.exteriorColor` and `vehicle.interiorColor`;
+existing listings receive colors on their next inventory refresh when supplied.
+These are listing-reported names, not VIN-decoded or factory-verified colors.
+No colors are inferred from photos or model option lists.

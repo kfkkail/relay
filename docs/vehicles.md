@@ -301,4 +301,14 @@ Cards show exterior and interior listing colors, with Unknown for missing values
 Auto.dev imports preserve `vehicle.exteriorColor` and `vehicle.interiorColor`;
 existing listings receive colors on their next inventory refresh when supplied.
 These are listing-reported names, not VIN-decoded or factory-verified colors.
+During Rivian R1T inventory refreshes, the bounded seller-page enrichment also
+looks for explicitly labeled marketing names (for example, Forest Green and
+Ocean Coast), including listings whose battery is already known. A matching,
+single VIN must appear in the page. Conflicting names, generic colors, scripts,
+and unlabeled option lists are not evidence. Confirmed marketing names replace
+the provider's generic colors and are cached against the seller URL. Existing
+cache entries without a color check are eligible for a lookup. A successful
+check is cached even when no marketing name can be established; unavailable or
+unrecognized names retain the provider value. The existing per-run fetch limit
+means a full inventory may require several refreshes.
 No colors are inferred from photos or model option lists.

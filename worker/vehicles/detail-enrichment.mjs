@@ -12,6 +12,55 @@ const DEFAULT_CACHE = fileURLToPath(
 const MAX_CACHE_ENTRIES = 10_000;
 const MAX_HTML_BYTES = 1_500_000;
 const allowedPacks = new Set(["standard", "standard+", "large", "max"]);
+// Match explicit labeled values only; generic colors cannot identify a finish.
+const marketingColors = {
+  exterior: [
+    "Glacier White",
+    "LA Silver",
+    "El Cap Granite",
+    "Midnight",
+    "Rivian Blue",
+    "Forest Green",
+    "Launch Green",
+    "Limestone",
+    "Compass Yellow",
+    "Red Canyon",
+    "Storm Blue",
+    "Borealis",
+  ],
+  interior: [
+    "Black Mountain",
+    "Ocean Coast",
+    "Forest Edge",
+    "Slate Sky",
+    "Laguna Beach",
+  ],
+};
+
+export function sellerMarketingColors(html, vin) {
+  const content = decodeEntities(String(html))
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ");
+  const vins = new Set(content.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/g));
+  if (!vins.has(vin) || vins.size !== 1) return {};
+  const result = {};
+  for (const [kind, names] of Object.entries(marketingColors)) {
+    const pattern = new RegExp(
+      `\\b${kind}(?:\\s+(?:paint|color|colour))?\\s*[:–-]?\\s*(${names.join("|")})\\b(?!\\s*(?:,|/|or)\\s*(?:${names.join("|")})\\b)`,
+      "gi",
+    );
+    const matches = new Set(
+      [...content.matchAll(pattern)].map((m) =>
+        names.find((name) => name.toLowerCase() === m[1].toLowerCase()),
+      ),
+    );
+    if (matches.size === 1) result[`${kind}_color`] = [...matches][0];
+  }
+  return result;
+}
+
 const allowedMotors = new Set(["dual", "quad", "tri"]);
 
 export function sellerPageAttributes(html, sourceUrl) {
@@ -93,7 +142,13 @@ export async function enrichSellerListings({
         row.vin &&
         row.url &&
         row.availability !== "unavailable" &&
-        !row.attributes.battery_pack,
+        (!row.attributes.battery_pack ||
+          ((!row.exterior_color ||
+            !marketingColors.exterior.includes(row.exterior_color) ||
+            !row.interior_color ||
+            !marketingColors.interior.includes(row.interior_color)) &&
+            (cache.entries[row.vin]?.url !== row.url ||
+              !cache.entries[row.vin]?.colors_checked))),
     )
     .sort((a, b) => candidateOrder(a, b, cache.entries));
   const selected = candidates.slice(0, Math.max(0, Math.min(50, limit)));
@@ -110,13 +165,14 @@ export async function enrichSellerListings({
         const row = selected[cursor++];
         const checkedAt = now().toISOString();
         try {
-          const attributes = sellerPageAttributes(
-            await fetchPage(row.url),
-            row.url,
-          );
+          const html = await fetchPage(row.url);
+          const attributes = sellerPageAttributes(html, row.url);
+          const colors = sellerMarketingColors(html, row.vin);
           cache.entries[row.vin] = {
             checked_at: checkedAt,
             url: row.url,
+            colors_checked: true,
+            ...colors,
             battery_pack: attributes.battery_pack,
             motor: attributes.motor,
             battery_evidence: attributes.battery_evidence,
@@ -184,6 +240,13 @@ function configuredLimit() {
 
 function applyCachedAttributes(row, cached) {
   if (!cached) return;
+  if (cached.url === row.url) {
+    for (const kind of ["exterior", "interior"]) {
+      const field = `${kind}_color`;
+      if (marketingColors[kind].includes(cached[field]))
+        row[field] = cached[field];
+    }
+  }
   if (!row.attributes.battery_pack && allowedPacks.has(cached.battery_pack)) {
     row.attributes.battery_pack = cached.battery_pack;
     row.attributes.battery_evidence = cached.battery_evidence;
@@ -218,6 +281,13 @@ async function readCache(path) {
       )
         continue;
       entries[vin] = {
+        colors_checked: item.colors_checked === true,
+        exterior_color: marketingColors.exterior.includes(item.exterior_color)
+          ? item.exterior_color
+          : null,
+        interior_color: marketingColors.interior.includes(item.interior_color)
+          ? item.interior_color
+          : null,
         checked_at:
           typeof item.checked_at === "string"
             ? item.checked_at.slice(0, 80)

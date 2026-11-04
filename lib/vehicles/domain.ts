@@ -101,7 +101,21 @@ export function distanceMiles(
   a: [number, number] | null,
   b: [number, number] | null,
 ) {
-  if (!a || !b) return null;
+  // Feeds use [0, 0] for missing coordinates. Handle stored snapshots here too,
+  // so they do not need another inventory scan to stop showing a false distance.
+  if (
+    !a ||
+    !b ||
+    [a, b].some(
+      ([lon, lat]) =>
+        !Number.isFinite(lon) ||
+        !Number.isFinite(lat) ||
+        Math.abs(lon) > 180 ||
+        Math.abs(lat) > 90 ||
+        (lon === 0 && lat === 0),
+    )
+  )
+    return null;
   const radians = (v: number) => (v * Math.PI) / 180;
   const lat = radians(b[1] - a[1]);
   const lon = radians(b[0] - a[0]);

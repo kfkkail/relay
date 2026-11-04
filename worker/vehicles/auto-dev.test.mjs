@@ -41,6 +41,27 @@ const collect = (fetchImpl, options = {}) =>
   });
 
 describe("Rivian evidence", () => {
+  it("discards placeholder coordinates without losing the seller location", () => {
+    const input = sample("7FCTGAAA0NN016242");
+    input.location = [0, 0];
+    Object.assign(input.retailListing, {
+      city: "Raleigh",
+      state: "NC",
+      zip: "27612",
+    });
+    expect(
+      normalizeAutoDev(input, { make: "Rivian", model: "R1T" }),
+    ).toMatchObject({
+      coordinates: null,
+      city: "Raleigh",
+      state: "NC",
+      zip: "27612",
+    });
+    input.location = [-78.64, 35.78];
+    expect(
+      normalizeAutoDev(input, { make: "Rivian", model: "R1T" }).coordinates,
+    ).toEqual([-78.64, 35.78]);
+  });
   it("preserves listing color names and rejects non-string color options", () => {
     const input = sample();
     input.vehicle.exteriorColor = "  Forest Green / Black  ";

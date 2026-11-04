@@ -18,7 +18,8 @@ const coordinates = (v: unknown): [number, number] | null =>
   v.length === 2 &&
   v.every((n) => typeof n === "number" && Number.isFinite(n)) &&
   Math.abs(v[0]) <= 180 &&
-  Math.abs(v[1]) <= 90
+  Math.abs(v[1]) <= 90 &&
+  !(v[0] === 0 && v[1] === 0)
     ? [v[0], v[1]]
     : null;
 export function safeVehicleUrl(value: unknown) {

@@ -14,6 +14,7 @@ import {
   parseVehicleProfile,
 } from "./validation";
 import type { VehicleListing, VehicleRecord } from "./types";
+import { decodeNhtsaResult } from "../../worker/vehicles/nhtsa.mjs";
 
 const listing = (changes: Partial<VehicleListing> = {}) =>
   parseVehicleListing({
@@ -171,10 +172,74 @@ describe("vehicle hard rules", () => {
   it("uses bounded straight-line distances", () => {
     expect(distanceMiles([-86.11, 41.75], [-86.11, 41.75])).toBe(0);
     expect(distanceMiles(null, [-86, 41])).toBeNull();
+    expect(distanceMiles(profile.origin_coordinates, [0, 0])).toBeNull();
+    expect(distanceMiles([0, 0], [-78.64, 35.78])).toBeNull();
+    expect(distanceMiles(profile.origin_coordinates, [-78.64, 35.78])).toBe(
+      576,
+    );
+  });
+  it("treats placeholder coordinates as unknown in new and stored listings", () => {
+    expect(listing({ coordinates: [0, 0] }).coordinates).toBeNull();
+    expect(
+      parseVehicleProfile({ ...profile, origin_coordinates: [0, 0] })
+        .origin_coordinates,
+    ).toBeNull();
+    const stored = { ...listing(), coordinates: [0, 0] as [number, number] };
+    const evaluated = evaluateVehicle(stored, profile);
+    expect(evaluated.distance_miles).toBeNull();
+    expect(evaluated.delivery_group).toBe("Pickup Required");
   });
 });
 
 describe("durable review and re-evaluation", () => {
+  it("reviews CarMax 29270431 as Large/Quad despite its feed motor and missing coordinates", () => {
+    const vin = "7FCTGAAA0NN016242";
+    const r = record({ vin });
+    r.vehicle_listings[0].data = {
+      ...listing({
+        vin,
+        year: 2022,
+        attributes: {
+          battery_pack: "large",
+          motor: "dual",
+          battery_evidence: "Inventory: Large",
+        },
+        city: "Raleigh",
+        state: "NC",
+        delivery: "unknown",
+      }),
+      coordinates: [0, 0],
+    };
+    // Relevant fields from the live vPIC response on 2026-11-04. CarMax's
+    // 105 kWh / 260-mile claims contradict this exact-VIN factory evidence.
+    r.nhtsa = decodeNhtsaResult(
+      {
+        Results: [
+          {
+            VIN: vin,
+            ErrorCode: "0",
+            Make: "RIVIAN",
+            Model: "R1T",
+            ModelYear: "2022",
+            EVDriveUnit: "Quad Motor",
+            BatteryKWh: "128.90",
+            BatteryInfo: "",
+          },
+        ],
+      },
+      vin,
+      `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`,
+    );
+    const reviewed = reviewVehicle(r, profile)!;
+    expect(reviewed.row.attributes).toMatchObject({
+      battery_pack: "large",
+      motor: "quad",
+    });
+    expect(reviewed.evaluation.distance_miles).toBeNull();
+    expect(reviewed.row.city).toBe("Raleigh");
+    expect(reviewed.evaluation.delivery_group).toBe("Delivery Unknown");
+    expect(reviewed.nhtsa?.battery_kwh).toBe(128.9);
+  });
   it("scopes seller cost confirmations while battery follows the VIN", () => {
     const row = listing({
       shipping: null,
@@ -391,7 +456,7 @@ describe("durable review and re-evaluation", () => {
     expect(reviewed.row.attributes).toEqual(r.overrides.attributes);
     expect(reviewed.decision).toBe(r.decision);
   });
-  it("fills unknown fields from exact-VIN NHTSA evidence without replacing known values or inferring a pack", () => {
+  it("prefers exact-VIN NHTSA motor evidence over feed labels while retaining owner priority", () => {
     const r = record();
     r.vehicle_listings[0].data.attributes = {
       motor: null,
@@ -427,9 +492,11 @@ describe("durable review and re-evaluation", () => {
     );
     r.overrides = {};
     r.vehicle_listings[0].data.attributes.motor = "dual";
+    expect(reviewVehicle(r, profile)!.row.attributes.motor).toBe("quad");
+    // A mismatched decoder must not replace the feed's value.
+    r.nhtsa.vin = "7FCTGAAA0NN000099";
     expect(reviewVehicle(r, profile)!.row.attributes.motor).toBe("dual");
     r.vehicle_listings[0].data.attributes.motor = null;
-    r.nhtsa.vin = "7FCTGAAA0NN000099";
     expect(reviewVehicle(r, profile)!.row.attributes.motor).toBeNull();
   });
 });

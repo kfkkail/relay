@@ -79,7 +79,8 @@ export function normalizeAutoDev(row, { make, model }) {
     row.location.length === 2 &&
     row.location.every(Number.isFinite) &&
     Math.abs(row.location[0]) <= 180 &&
-    Math.abs(row.location[1]) <= 90
+    Math.abs(row.location[1]) <= 90 &&
+    !(row.location[0] === 0 && row.location[1] === 0)
       ? row.location
       : null;
   return {

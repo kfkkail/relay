@@ -2,7 +2,12 @@ import { applyVehicleOverrides, evaluateVehicle } from "./domain";
 import type { VehicleListing, VehicleProfile, VehicleRecord } from "./types";
 
 export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
-  const nhtsa = record.nhtsa?.vin === record.vin ? record.nhtsa : undefined;
+  const nhtsa =
+    record.vin &&
+    record.nhtsa?.vin === record.vin &&
+    record.nhtsa.status === "decoded"
+      ? record.nhtsa
+      : undefined;
   const listings = record.vehicle_listings
     .map((listing) => {
       const gallery = listing.photo_gallery ?? [];
@@ -23,9 +28,12 @@ export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
                   ? record.enrichment.attributes.battery_evidence || null
                   : nhtsa?.attributes.battery_evidence || null,
               motor:
+                // The VIN decoder names the factory drive unit; inventory
+                // labels can be incorrect even when they are non-empty.
+                // applyVehicleOverrides still gives owner confirmations priority.
+                nhtsa?.attributes.motor ||
                 listing.data.attributes.motor ||
                 record.enrichment?.attributes?.motor ||
-                nhtsa?.attributes.motor ||
                 null,
             },
             photos: gallery.length ? gallery : listing.data.photos,

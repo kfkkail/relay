@@ -183,6 +183,21 @@ Set `RELAY_VEHICLE_BROWSER_HEADLESS=0` only on a host with a graphical display
 to observe its isolated Chromium session. No model or API key is required for
 these deterministic steps; site access is not guaranteed in either mode.
 
+## Motor evidence and missing coordinates
+
+Exact-VIN NHTSA motor evidence takes priority over inventory and seller labels;
+owner confirmations still take priority over both. This corrects listings such
+as CarMax stock 29270431 (VIN 7FCTGAAA0NN016242), whose inventory label says Dual
+but whose NHTSA EVDriveUnit is Quad Motor. Battery evidence precedence is unchanged.
+On 2026-11-04 CarMax also displayed 105 kWh and 260 miles when new for this VIN,
+while vPIC reported 128.90 kWh, supporting the existing Gen 1 Large-pack mapping.
+Range alone is not used to classify the battery or estimate its current health.
+
+Coordinates `[0, 0]` are treated as missing during ingestion, validation, and
+distance calculation, including existing stored listings. A city name alone does
+not establish coordinates, so those cards omit distance until coordinates are
+available. These corrections require no migration or inventory backfill.
+
 ## Local interactive preview
 
 For visual review without a database or Auto.dev key, start the development

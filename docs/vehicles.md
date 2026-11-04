@@ -123,6 +123,12 @@ VIN-specific evidence and leave ambiguous answers unverified. This change does
 not enable that paid endpoint or claim it resolves Rivian battery packs. Existing
 Auto.dev inventory and photo requests continue using their current API paths.
 
+### Exterior and interior colors
+
+See [VIN color feasibility](vehicle-vin-colors.md) for what can be obtained from
+VIN-matched sources, why NHTSA cannot provide colors, and a proposed inventory
+and owner-verification implementation. Color capture is not yet implemented.
+
 ### NHTSA VIN decoding
 
 NHTSA [vPIC](https://vpic.nhtsa.dot.gov/api/) requires no API key. Every completed

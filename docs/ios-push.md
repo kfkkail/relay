@@ -20,6 +20,31 @@ attribution. The exact banner layout can vary by iOS version.
 
 Reference: [Notification options](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification#parameters).
 
+## Would a native iOS app give more control?
+
+Relay already controls the notification title and message through Web Push; a
+native app is not required to change those. A native iOS app using Apple's User
+Notifications framework would add options such as a subtitle, custom sounds,
+attachments, and notification actions. A notification content extension can
+customize the expanded notification interface.
+
+Native notifications still use system presentation. iOS controls the app identity
+and the surrounding banner layout; a content extension does not replace the
+compact system banner. Moving to native notifications is therefore not a
+supported guarantee that every attribution line will disappear. Verify the exact
+appearance on the target iOS version before deciding to build an app for this
+reason.
+
+A native implementation would require an iOS app with push capabilities, device
+token registration, and APNs delivery in addition to Relay's existing Web Push
+path. Simply wrapping the website does not convert its Web Push notifications
+into native notifications. Keep Web Push if the goal is only to edit the title
+or message; consider native delivery when the additional notification features
+justify maintaining an iOS app.
+
+References: [Apple User Notifications](https://developer.apple.com/documentation/usernotifications),
+[Customizing the appearance of notifications](https://developer.apple.com/documentation/usernotificationsui/customizing-the-appearance-of-notifications).
+
 ## Deployment
 
 1. Deploy the new migration through the existing migration workflow.

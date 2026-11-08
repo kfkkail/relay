@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
-import { ownerActionSelect } from "@/lib/owner-actions";
+import {
+  onlyFinalizedOwnerActionAttachments,
+  ownerActionSelect,
+} from "@/lib/owner-actions";
 
 export async function POST(
   request: Request,
@@ -18,12 +21,16 @@ export async function POST(
       user_id: user.id,
     });
     if (error) throw error;
-    const { data } = await supabase
+    const { data, error: actionError } = await supabase
       .from("owner_actions")
       .select(ownerActionSelect)
       .eq("id", actionId)
       .single();
-    return NextResponse.json({ action: data }, { status: 201 });
+    if (actionError || !data) throw new ApiError("Action not found.", 404);
+    return NextResponse.json(
+      { action: onlyFinalizedOwnerActionAttachments(data) },
+      { status: 201 },
+    );
   } catch (error) {
     return apiErrorResponse(error);
   }

@@ -1,9 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
   futureOptionalDate,
+  onlyFinalizedOwnerActionAttachments,
   optionalDate,
   ownerActionDateUpdates,
 } from "./owner-actions";
+
+describe("owner action attachments", () => {
+  it("hides uploads until they are finalized", () => {
+    const action = onlyFinalizedOwnerActionAttachments({
+      id: "action-1",
+      owner_action_attachments: [
+        { id: "ready", finalized_at: "2026-08-28T12:00:00.000Z" },
+        { id: "pending", finalized_at: null },
+      ],
+    });
+
+    expect(action.owner_action_attachments).toEqual([
+      { id: "ready", finalized_at: "2026-08-28T12:00:00.000Z" },
+    ]);
+  });
+});
 
 describe("owner action dates", () => {
   it("normalizes optional dates", () => {

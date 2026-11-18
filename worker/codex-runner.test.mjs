@@ -219,6 +219,27 @@ process.exit(1);
 });
 
 describe("worker backend selection", () => {
+  it.each([undefined, ""])(
+    "pins the Codex model when RELAY_CODEX_MODEL is %s",
+    async (model) => {
+      const calls = [];
+      const runner = createTaskRunner(
+        { RELAY_WORKER_BACKEND: "codex", RELAY_CODEX_MODEL: model },
+        {
+          runCodex: async (_input, options) => {
+            calls.push(codexArguments(options.model));
+            return { resultMarkdown: "done", documents: [] };
+          },
+        },
+      );
+
+      await runner.run("task", "Return a report.");
+
+      const args = calls[0];
+      expect(args[args.indexOf("--model") + 1]).toBe("gpt-6.2-sol");
+    },
+  );
+
   it("uses the local Codex CLI without requiring an OpenAI API key", async () => {
     const calls = [];
     const runner = createTaskRunner(

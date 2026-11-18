@@ -1,5 +1,6 @@
 import { CHAT_CONTRACT } from "./chat-contract.mjs";
 import { createTaskRunner } from "./task-runner.mjs";
+import { runVehicleJob, vehicleCapabilities } from "./vehicles/handler.mjs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,14 +9,22 @@ import deliverables from "../lib/deliverables.json" with { type: "json" };
 import {
   DEFAULT_MAX_CONCURRENT_RUNS,
   fillAvailableSlots,
+  nextIdlePollInterval,
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
+import { startRunHeartbeat } from "./run-heartbeat.mjs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
 const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
+const maxIdlePollInterval = Number(
+  process.env.RELAY_MAX_IDLE_POLL_INTERVAL_MS || 60000,
+);
+const runHeartbeatInterval = Number(
+  process.env.RELAY_RUN_HEARTBEAT_INTERVAL_MS || 30000,
+);
 const taskRunner = createTaskRunner();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkForUpdate = createAutoUpdater({ root });
@@ -29,20 +38,24 @@ console.log(
 );
 
 const activeRuns = new Set();
+let idlePollInterval = pollInterval;
 while (!stopping) {
+  let claimedRuns = 0;
   try {
-    await fillAvailableSlots({
+    claimedRuns = await fillAvailableSlots({
       activeRuns,
       claim: () =>
         relayRequest("/api/worker/runs/claim", {
           method: "POST",
-          body: JSON.stringify({ chat: true }),
+          body: JSON.stringify({ capabilities: vehicleCapabilities(), chat: true }),
         }),
       run: processClaimedRun,
     });
   } catch (error) {
     console.error(`Claim failed: ${safeError(error)}`);
   }
+
+  if (claimedRuns > 0) idlePollInterval = pollInterval;
 
   if (!activeRuns.size) {
     const update = await checkForUpdate();
@@ -55,7 +68,11 @@ while (!stopping) {
         `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
       );
     }
-    await sleep(pollInterval);
+    await sleep(idlePollInterval);
+    idlePollInterval = nextIdlePollInterval(idlePollInterval, {
+      baseInterval: pollInterval,
+      maxInterval: maxIdlePollInterval,
+    });
     continue;
   }
 
@@ -69,7 +86,28 @@ async function processClaimedRun(claimed) {
   const { run, task, attachments = [] } = claimed;
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
+  let heartbeatStopped = false;
+  const stopHeartbeat =
+    run.job_kind === "vehicle_search"
+      ? async () => {}
+      : startRunHeartbeat({
+          intervalMs: runHeartbeatInterval,
+          heartbeat: () =>
+            relayRequest(`/api/worker/runs/${run.id}/heartbeat`, {
+              method: "POST",
+            }),
+          onError: (error) =>
+            console.error(
+              `Heartbeat failed for ${run.id}: ${safeError(error)}`,
+            ),
+        });
   try {
+    if (run.job_kind === "vehicle_search") {
+      const result = await runVehicleJob(claimed, relayRequest);
+      if (result?.enrichment_failed) return;
+      console.log(`Completed vehicle run ${run.id}`);
+      return;
+    }
     const localAttachments = [];
     if (attachments.length) {
       attachmentDirectory = await mkdtemp(join(tmpdir(), `relay-${run.id}-`));
@@ -145,6 +183,8 @@ async function processClaimedRun(claimed) {
       );
       documentIds.push(uploaded.document.id);
     }
+    await stopHeartbeat();
+    heartbeatStopped = true;
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
       body: JSON.stringify({
@@ -155,12 +195,16 @@ async function processClaimedRun(claimed) {
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {
+    if (!heartbeatStopped) {
+      await stopHeartbeat();
+      heartbeatStopped = true;
+    }
     const message = safeError(error);
     console.error(`Run ${run.id} failed: ${message}`);
     try {
       await relayRequest(`/api/worker/runs/${run.id}/fail`, {
         method: "POST",
-        body: JSON.stringify({ error: message }),
+        body: JSON.stringify({ error: message, lease: run.lease }),
       });
     } catch (reportError) {
       console.error(
@@ -168,6 +212,7 @@ async function processClaimedRun(claimed) {
       );
     }
   } finally {
+    if (!heartbeatStopped) await stopHeartbeat();
     if (attachmentDirectory)
       await rm(attachmentDirectory, { recursive: true, force: true });
   }

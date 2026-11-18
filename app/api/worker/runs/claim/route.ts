@@ -8,6 +8,23 @@ export async function POST(request: Request) {
   try {
     const { supabase, worker } = await requireWorker(request);
     const body = await request.json().catch(() => ({}));
+    if (
+      Array.isArray(body.capabilities) &&
+      body.capabilities.includes("vehicle_search")
+    ) {
+      const { data: vehicleJob, error: vehicleError } = await supabase.rpc(
+        "claim_vehicle_run",
+        {
+          p_worker_id: worker.id,
+          p_enrichment: body.capabilities.includes("vehicle_enrichment"),
+        },
+      );
+      if (vehicleError) throw vehicleError;
+      if (vehicleJob)
+        return NextResponse.json(vehicleJob, {
+          headers: { "Cache-Control": "no-store" },
+        });
+    }
     const { data, error } = await supabase.rpc("claim_next_run_with_chat", {
       p_worker_id: worker.id,
       p_include_chat: body?.chat === true,

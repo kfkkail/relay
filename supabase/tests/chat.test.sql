@@ -15,7 +15,10 @@ select is((select count(*)::integer from public.runs where task_id='00000000-000
 select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000094','What needs attention?');
 select is((select count(*)::integer from public.runs where task_id='00000000-0000-4000-8000-000000000094'),1,'Network retry is idempotent');
 select throws_ok($$select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000095','Another message')$$,'P0001','Wait for the current reply before sending another message','Pending reply serializes turns');
+-- Worker completion is privileged; application users must not update runs directly.
+reset role;
 update public.runs set status='completed',result_markdown='Prepare for tomorrow.' where task_id='00000000-0000-4000-8000-000000000094';
+set local role authenticated;
 select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000095','Tell me more');
 select ok((select instructions like '%Prepare for tomorrow.%' from public.tasks where id='00000000-0000-4000-8000-000000000095'),'Follow-up includes previous answer');
 select is((select deliverable from public.tasks where id='00000000-0000-4000-8000-000000000095'),'investigation','Older workers receive an investigation contract');

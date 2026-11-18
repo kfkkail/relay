@@ -1,8 +1,12 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(14);
 insert into auth.users(id) values ('00000000-0000-4000-8000-000000000091'),('00000000-0000-4000-8000-000000000092');
 select ok(not has_function_privilege('anon','public.send_chat_message(uuid,uuid,text)','EXECUTE'),'Anonymous chat is denied');
+select ok(has_table_privilege('authenticated','public.conversations','SELECT'),'Authenticated users can read their own conversations');
+select ok(has_table_privilege('authenticated','public.conversations','INSERT'),'Authenticated users can create conversations');
+select ok(pg_get_functiondef('public.claim_next_run_with_chat(uuid,boolean)'::regprocedure) like '%r.job_kind = ''agent''%','Chat claim excludes vehicle jobs');
+select ok(pg_get_functiondef('public.claim_next_run_with_chat(uuid,boolean)'::regprocedure) like '%agent_heartbeat_at = now()%','Chat claim initializes agent heartbeat');
 select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000091',true);
 set local role authenticated;
 select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000094','What needs attention?');

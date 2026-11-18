@@ -169,6 +169,27 @@ Only the run ID, status, and bounded error category are written to stdout; task
 instructions, results, credentials, model responses, and raw Codex diagnostics
 are not logged.
 
+## Long-running tasks and heartbeats
+
+Agent runs renew their heartbeat every 30 seconds, including while Codex runs,
+documents upload, and the completion or failure request finishes. Each Relay
+request has a 30-second deadline covering both response headers and body.
+A stalled heartbeat times out so the next interval can renew the run; slow
+requests do not accumulate queued renewals. These deadlines do not limit the
+total task duration.
+
+Relay marks a run failed when its last heartbeat is over five minutes old. The
+message **Worker heartbeat expired** means renewals stopped reaching Relay;
+it is independent of the Codex execution limit. Codex defaults to 15 minutes per
+task, configurable with `RELAY_CODEX_TIMEOUT_MS` in `.env.worker`. Reaching that
+limit reports **Codex CLI timed out** instead. Increasing that setting does not
+fix heartbeat failures.
+
+For an expired run, check worker service logs for **Heartbeat failed for** and
+verify the worker is on the current revision. A sleeping/offline machine or
+stopped worker cannot renew a run. Review any partial external changes before
+retrying because expiration does not undo them.
+
 ## Task results
 
 Relay displays a text/Markdown result for each run. Codex-backed workers may
@@ -192,6 +213,7 @@ All endpoints use `Authorization: Bearer <worker token>`.
 
 - `POST /api/worker/runs/claim` atomically claims the oldest queued run for the
   token owner, or returns `204` when no work is available.
+- `POST /api/worker/runs/:id/heartbeat` renews the worker's active agent run.
 - `POST /api/worker/runs/:id/documents` stages a validated document for the
   worker's active run.
 - `POST /api/worker/runs/:id/complete` accepts a Markdown result, optional

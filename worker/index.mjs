@@ -47,7 +47,10 @@ while (!stopping) {
       claim: () =>
         relayRequest("/api/worker/runs/claim", {
           method: "POST",
-          body: JSON.stringify({ capabilities: vehicleCapabilities(), chat: true }),
+          body: JSON.stringify({
+            capabilities: vehicleCapabilities(),
+            chat: true,
+          }),
         }),
       run: processClaimedRun,
     });

@@ -8,6 +8,7 @@ create table public.conversations (
   unique(id, user_id)
 );
 alter table public.conversations enable row level security;
+grant select, insert, update, delete on public.conversations to authenticated;
 create policy "users own conversations" on public.conversations
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 alter table public.tasks add column conversation_id uuid;
@@ -78,7 +79,8 @@ $$;
 revoke all on function public.send_chat_message(uuid,uuid,text) from public,anon;
 grant execute on function public.send_chat_message(uuid,uuid,text) to authenticated;
 
--- Include chat metadata in the atomic claim, avoiding a second fallible read.
+-- Preserve agent-only queue claiming, stale-run cleanup, and heartbeat initialization.
+-- Include conversation metadata for upgraded workers without changing legacy RPC output.
 create function public.claim_next_run_with_chat(p_worker_id uuid, p_include_chat boolean default false)
 returns table (
   run_id uuid,
@@ -93,34 +95,46 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   selected_run public.runs%rowtype;
+  uid uuid;
 begin
-  if not exists (select 1 from public.workers where id = p_worker_id and revoked_at is null) then
-    raise exception 'worker unavailable';
-  end if;
+  select user_id into uid from public.workers
+  where id = p_worker_id and revoked_at is null;
+  if uid is null then raise exception 'worker unavailable'; end if;
+
+  perform public.expire_stale_agent_runs_for_user(uid);
 
   select r.* into selected_run
   from public.runs r
-  join public.workers w on w.user_id = r.user_id
   join public.tasks queued_task on queued_task.id = r.task_id
-  where r.status = 'queued' and w.id = p_worker_id
+  where r.user_id = uid
+    and r.status = 'queued'
+    and r.job_kind = 'agent'
     and (p_include_chat or queued_task.conversation_id is null)
-  order by r.queued_at asc
+  order by r.queued_at
   for update of r skip locked
   limit 1;
-
   if selected_run.id is null then return; end if;
-  update public.runs set status = 'working', worker_id = p_worker_id, started_at = now() where id = selected_run.id;
+
+  update public.runs
+  set status = 'working',
+      worker_id = p_worker_id,
+      started_at = now(),
+      agent_heartbeat_at = now()
+  where id = selected_run.id;
   update public.tasks set status = 'working' where id = selected_run.task_id;
   insert into public.events(task_id, run_id, user_id, type, payload)
-  values (selected_run.task_id, selected_run.id, selected_run.user_id, 'run.claimed', jsonb_build_object('workerId', p_worker_id));
+  values (
+    selected_run.task_id, selected_run.id, selected_run.user_id,
+    'run.claimed', jsonb_build_object('workerId', p_worker_id)
+  );
 
   return query
-  select selected_run.id, t.id, t.title, t.instructions, selected_run.deliverable,
-    selected_run.feedback, selected_run.attempt,
+  select selected_run.id, t.id, t.title, t.instructions,
+    selected_run.deliverable, selected_run.feedback, selected_run.attempt,
     coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', ra.attachment_id,
@@ -130,17 +144,19 @@ begin
         'width', ra.width,
         'height', ra.height
       )) from public.run_attachments ra where ra.run_id = selected_run.id
-    ), '[]'::jsonb), t.conversation_id
+    ), '[]'::jsonb),
+    t.conversation_id
   from public.tasks t where t.id = selected_run.task_id;
 end;
 $$;
 
-revoke all on function public.claim_next_run_with_chat(uuid,boolean) from public, anon, authenticated;
+revoke all on function public.claim_next_run_with_chat(uuid,boolean)
+  from public, anon, authenticated;
 grant execute on function public.claim_next_run_with_chat(uuid,boolean) to service_role;
 
--- Keep the legacy RPC signature and exclude conversations during rollout.
+-- Legacy workers retain the original signature and cannot claim chat turns.
 create or replace function public.claim_next_run(p_worker_id uuid)
-returns table (
+returns table(
   run_id uuid,
   task_id uuid,
   title text,
@@ -152,33 +168,55 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   selected_run public.runs%rowtype;
+  uid uuid;
 begin
-  if not exists (select 1 from public.workers where id = p_worker_id and revoked_at is null) then
-    raise exception 'worker unavailable';
-  end if;
+  select user_id into uid
+  from public.workers
+  where id = p_worker_id and revoked_at is null;
+  if uid is null then raise exception 'worker unavailable'; end if;
+
+  perform public.expire_stale_agent_runs_for_user(uid);
 
   select r.* into selected_run
   from public.runs r
-  join public.workers w on w.user_id = r.user_id
-  join public.tasks queued_task on queued_task.id = r.task_id
-  where r.status = 'queued' and w.id = p_worker_id and queued_task.conversation_id is null
-  order by r.queued_at asc
-  for update of r skip locked
+  where r.user_id = uid
+    and r.status = 'queued'
+    and r.job_kind = 'agent'
+    and not exists (select 1 from public.tasks t where t.id = r.task_id and t.conversation_id is not null)
+  order by r.queued_at
+  for update skip locked
   limit 1;
-
   if selected_run.id is null then return; end if;
-  update public.runs set status = 'working', worker_id = p_worker_id, started_at = now() where id = selected_run.id;
+
+  update public.runs
+  set status = 'working',
+      worker_id = p_worker_id,
+      started_at = now(),
+      agent_heartbeat_at = now()
+  where id = selected_run.id;
   update public.tasks set status = 'working' where id = selected_run.task_id;
   insert into public.events(task_id, run_id, user_id, type, payload)
-  values (selected_run.task_id, selected_run.id, selected_run.user_id, 'run.claimed', jsonb_build_object('workerId', p_worker_id));
+  values (
+    selected_run.task_id,
+    selected_run.id,
+    selected_run.user_id,
+    'run.claimed',
+    jsonb_build_object('workerId', p_worker_id)
+  );
 
   return query
-  select selected_run.id, t.id, t.title, t.instructions, selected_run.deliverable,
-    selected_run.feedback, selected_run.attempt,
+  select
+    selected_run.id,
+    t.id,
+    t.title,
+    t.instructions,
+    selected_run.deliverable,
+    selected_run.feedback,
+    selected_run.attempt,
     coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', ra.attachment_id,
@@ -187,11 +225,12 @@ begin
         'byte_size', ra.byte_size,
         'width', ra.width,
         'height', ra.height
-      )) from public.run_attachments ra where ra.run_id = selected_run.id
+      ))
+      from public.run_attachments ra
+      where ra.run_id = selected_run.id
     ), '[]'::jsonb)
-  from public.tasks t where t.id = selected_run.task_id;
+  from public.tasks t
+  where t.id = selected_run.task_id;
 end;
 $$;
 
-revoke all on function public.claim_next_run(uuid) from public, anon, authenticated;
-grant execute on function public.claim_next_run(uuid) to service_role;

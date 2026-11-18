@@ -9,6 +9,8 @@ create table public.conversations (
 );
 alter table public.conversations enable row level security;
 grant select, insert, update, delete on public.conversations to authenticated;
+-- Chat snapshots read owner actions under the caller\'s existing owner RLS policy.
+grant select on public.owner_actions to authenticated;
 create policy "users own conversations" on public.conversations
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 alter table public.tasks add column conversation_id uuid;

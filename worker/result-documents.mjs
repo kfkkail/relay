@@ -10,6 +10,7 @@ const types = new Map([
   [".pdf", "application/pdf"],
   [".csv", "text/csv"],
   [".json", "application/json"],
+  [".ics", "text/calendar"],
 ]);
 
 export async function collectResultDocuments(workspace, declarations) {

@@ -12,7 +12,7 @@ import {
 import { homedir, userInfo } from "node:os";
 import { constants } from "node:fs";
 import { parseEnv } from "node:util";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, join, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -298,6 +298,21 @@ async function validateWorkerEnv() {
         return `${name} is unavailable.`;
       }
     }
+    const additionalDirectories = (
+      env.RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS || ""
+    )
+      .split(delimiter)
+      .map((directory) => directory.trim())
+      .filter(Boolean);
+    for (const directory of additionalDirectories) {
+      if (!isAbsolute(directory))
+        return "RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS must contain only absolute paths in .env.worker.";
+      try {
+        if (!(await stat(directory)).isDirectory()) throw new Error();
+      } catch {
+        return `Additional writable directory is unavailable: ${directory}`;
+      }
+    }
   }
 }
 
@@ -344,6 +359,24 @@ async function prepareManagedInstall() {
     false,
     installationRoot,
     10 * 60_000,
+  );
+  console.log("Installing the Relay worker browser...");
+  run(
+    process.execPath,
+    [
+      join(installationRoot, "node_modules/playwright/cli.js"),
+      "install",
+      "chromium",
+    ],
+    false,
+    installationRoot,
+    10 * 60_000,
+  );
+  run(
+    process.execPath,
+    [join(installationRoot, "worker/browser-smoke.mjs")],
+    false,
+    installationRoot,
   );
   return installationRoot;
 }

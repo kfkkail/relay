@@ -128,6 +128,13 @@ async function configureWorker() {
         validate: validateDirectory,
       },
     );
+    values.RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS = await askOptionalValue(
+      "Additional writable directories (path-delimited; blank for none)",
+      {
+        name: "RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS",
+        existing,
+      },
+    );
     values.RELAY_COMMAND_PATH = await askValue("Command search path", {
       name: "RELAY_COMMAND_PATH",
       existing,
@@ -169,6 +176,15 @@ async function configureWorker() {
       fallback: "5000",
       validate: validateMilliseconds,
     }),
+    RELAY_MAX_IDLE_POLL_INTERVAL_MS: await askValue(
+      "Maximum idle polling interval in milliseconds",
+      {
+        name: "RELAY_MAX_IDLE_POLL_INTERVAL_MS",
+        existing,
+        fallback: "60000",
+        validate: validateMilliseconds,
+      },
+    ),
   });
 
   await saveEnv(target, values);

@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 const execFile = promisify(execFileCallback);
 
 export const DEFAULT_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+const DEPENDENCY_INSTALL_TIMEOUT_MS = 10 * 60_000;
 
 export function createAutoUpdater({
   root,
@@ -63,8 +64,19 @@ export async function updateManagedClone(root, run = runCommand) {
 
   const state = JSON.parse(await readFile(pendingPath, "utf8"));
   if (state.dependenciesChanged) {
-    await run("npm", ["ci", "--omit=dev", "--ignore-scripts"], { cwd: root });
+    await run("npm", ["ci", "--omit=dev", "--ignore-scripts"], {
+      cwd: root,
+      timeout: DEPENDENCY_INSTALL_TIMEOUT_MS,
+    });
+    await run(
+      process.execPath,
+      [`${root}/node_modules/playwright/cli.js`, "install", "chromium"],
+      { cwd: root, timeout: DEPENDENCY_INSTALL_TIMEOUT_MS },
+    );
   }
+  await run(process.execPath, [`${root}/worker/browser-smoke.mjs`], {
+    cwd: root,
+  });
   await run(process.execPath, ["--check", `${root}/worker/index.mjs`], {
     cwd: root,
   });
@@ -88,7 +100,10 @@ async function exists(path) {
 }
 
 async function runCommand(executable, args, options) {
-  return execFile(executable, args, { ...options, timeout: 60_000 });
+  return execFile(executable, args, {
+    ...options,
+    timeout: options.timeout ?? 60_000,
+  });
 }
 
 function safeError(error) {

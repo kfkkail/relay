@@ -1,0 +1,79 @@
+import { applyVehicleOverrides, evaluateVehicle } from "./domain";
+import type { VehicleListing, VehicleProfile, VehicleRecord } from "./types";
+
+export function reviewVehicle(record: VehicleRecord, profile: VehicleProfile) {
+  const nhtsa =
+    record.vin &&
+    record.nhtsa?.vin === record.vin &&
+    record.nhtsa.status === "decoded"
+      ? record.nhtsa
+      : undefined;
+  const listings = record.vehicle_listings
+    .map((listing) => {
+      const gallery = listing.photo_gallery ?? [];
+      const row: VehicleListing = {
+        ...applyVehicleOverrides(
+          {
+            ...listing.data,
+            attributes: {
+              ...listing.data.attributes,
+              battery_pack:
+                listing.data.attributes.battery_pack ||
+                record.enrichment?.attributes?.battery_pack ||
+                nhtsa?.attributes.battery_pack ||
+                null,
+              battery_evidence: listing.data.attributes.battery_pack
+                ? listing.data.attributes.battery_evidence
+                : record.enrichment?.attributes?.battery_pack
+                  ? record.enrichment.attributes.battery_evidence || null
+                  : nhtsa?.attributes.battery_evidence || null,
+              motor:
+                // The VIN decoder names the factory drive unit; inventory
+                // labels can be incorrect even when they are non-empty.
+                // applyVehicleOverrides still gives owner confirmations priority.
+                nhtsa?.attributes.motor ||
+                listing.data.attributes.motor ||
+                record.enrichment?.attributes?.motor ||
+                null,
+            },
+            photos: gallery.length ? gallery : listing.data.photos,
+            gallery_fetched_at:
+              listing.gallery_fetched_at ??
+              listing.data.gallery_fetched_at ??
+              null,
+          },
+          record.overrides,
+          profile,
+        ),
+        vin: record.vin,
+        availability: listing.availability as VehicleListing["availability"],
+      };
+      return { row, evaluation: evaluateVehicle(row, profile) };
+    })
+    .sort((a, b) => {
+      const priority = { eligible: 0, needs_verification: 1, ineligible: 2 };
+      return (
+        priority[a.evaluation.eligibility] -
+          priority[b.evaluation.eligibility] ||
+        b.evaluation.score - a.evaluation.score
+      );
+    });
+  return listings[0]
+    ? { ...record, ...listings[0], sources: listings.map((item) => item.row) }
+    : null;
+}
+
+export function inVehicleQueue(
+  vehicle: NonNullable<ReturnType<typeof reviewVehicle>>,
+  queue: string,
+) {
+  if (queue === "passed") return vehicle.decision === "passed";
+  if (vehicle.decision === "passed") return false;
+  if (queue === "watch" || queue === "shortlist")
+    return vehicle.decision === queue;
+  if (vehicle.decision !== "unreviewed") return false;
+  if (!["unreviewed", "verification"].includes(queue)) return false;
+  return queue === "verification"
+    ? vehicle.evaluation.eligibility === "needs_verification"
+    : vehicle.evaluation.eligibility === "eligible";
+}

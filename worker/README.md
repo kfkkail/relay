@@ -1,7 +1,9 @@
 # Relay laptop worker
 
-The worker makes outbound HTTPS requests to Relay. It never opens a listening
-port, so an offline laptop simply leaves runs in the queue. A running worker
+The worker makes outbound HTTPS requests to Relay. It exposes no remote listening
+port; vehicle-browser checks briefly use an authenticated loopback-only proxy
+to enforce public-network destinations without replacing Chromium's TLS/HTTP.
+An offline laptop simply leaves runs in the queue. A running worker
 claims and processes up to five runs at once; additional runs remain queued
 until an agent slot becomes available.
 
@@ -69,6 +71,20 @@ waiting for input. Git and npm output is shown while installing; dependency
 installation can take several minutes on a Pi and times out after ten minutes
 if it does not finish.
 
+The managed install also downloads Playwright's Chromium build and launches a
+local smoke-test page before starting the service. Automatic updates repeat
+browser provisioning when dependencies change and refuse to restart into a
+browser version that cannot launch. On Linux, a failed launch may require the
+host packages reported by Playwright; install those once and rerun worker setup.
+
+The first vehicle configuration check also downloads Chromium if it is missing,
+covering upgrades performed by an older updater that only installed the npm
+package. Concurrent checks share that download. There is no service reinstall
+required for this case. If the launch reports missing Linux libraries, run
+`npx playwright install-deps chromium` from the managed worker checkout (this may
+ask for `sudo`), then retry **Check battery & motor**. Use the same OS user who
+runs the worker service. Browser login is unnecessary.
+
 On Linux, including Raspberry Pi OS, installation checks that systemd lingering
 is enabled for the current user and enables it when necessary. That one-time
 change may prompt for `sudo`; it is required for the user service to survive the
@@ -97,6 +113,8 @@ Set `RELAY_WORKER_AUTO_UPDATE=off` in `.env.worker` before installing to disable
 updates. Run `npm run worker:service:update` from the managed clone to check
 immediately. Updates are refused if the clone is dirty or diverged; network and
 validation failures leave the current process running and retry later.
+Dependency-changing automatic updates allow npm up to ten minutes on slower
+workers; other update commands retain a one-minute timeout.
 
 `npm run worker` remains available when the required values are already
 exported into the current shell or supplied by another secret manager.
@@ -111,12 +129,31 @@ in Codex once; Relay can then read calendar context and carry out explicitly
 requested event changes without asking for a second confirmation. New events
 default to the writable **Keusch** calendar unless the task names another one.
 
+Timed calendar events and downloadable `.ics` suggestions default to two hours
+when the date and start time are confirmed but no end time or duration is given.
+The worker notes when this default is used so the owner can adjust it. Explicit
+end times and durations are preserved; missing dates or start times and
+conflicting times still require clarification. Date-only deadlines remain all-day.
+
 Relay starts `codex exec` with Codex's built-in `workspace-write` sandbox,
 automatic approval review, and network access. Approval-gated connector writes
 are reviewed against the task instead of being rejected by a non-interactive
-`never` policy. Project files can only be changed inside
-`RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories remain
-available so developer tools work. This is deliberately not
+`never` policy. Project files can only be changed inside the primary workspace
+set by `RELAY_CODEX_WORKSPACE`; normal operating-system temporary directories
+remain available so developer tools work. Tools that keep required state
+elsewhere can be granted narrowly scoped writable directories with the optional,
+path-delimited `RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS` setting (`:` on macOS and
+Linux, `;` on Windows). For example:
+
+```dotenv
+RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS=/home/pi/.config/hey-cli
+```
+
+Relay resolves and validates every configured directory before launching Codex,
+then passes each one as `codex exec --add-dir <DIR>`. These directories are only
+for installed tools that require their external state; project files,
+worktrees, deliverables, and result documents must remain in
+`RELAY_CODEX_WORKSPACE`. This is deliberately not
 `danger-full-access`. User Codex configuration, web search, and custom execution
 rules are ignored so they cannot silently widen the worker's permissions; Google
 Calendar is the sole explicitly enabled user plugin.
@@ -136,7 +173,7 @@ are not logged.
 
 Relay displays a text/Markdown result for each run. Codex-backed workers may
 also declare up to 10 private result documents from inside their configured
-workspace: Markdown, plain text, PDF, CSV, or JSON. Each document is limited to
+workspace: Markdown, plain text, PDF, CSV, JSON, or iCalendar (`.ics`). Each document is limited to
 10 MB and all documents together are limited to 25 MB. Agents include important
 deliverables, validation, and limitations directly in Markdown even when they
 attach documents. The direct OpenAI backend remains Markdown-only.

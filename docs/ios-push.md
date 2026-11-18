@@ -6,6 +6,20 @@ bell → Enable notifications. Use Send test notification to verify delivery.
 Permission is requested only from the button tap. No Apple Developer account
 or native app is needed. Android and desktop standards-based push also work.
 
+## iOS banner attribution
+
+The “from Relay” line beneath the notification title is supplied by iOS to
+identify the installed web app. It is not part of Relay's notification title or
+message. Relay supplies the title and body in `lib/push.ts`, and `public/sw.js`
+passes them to `showNotification` without adding an attribution line.
+
+The Web Notifications API has no supported option to hide this system attribution.
+Changing the task title or result preview will not remove it. Keep the app's name
+intact in the manifest; renaming the app is not a supported way to suppress the
+attribution. The exact banner layout can vary by iOS version.
+
+Reference: [Notification options](https://developer.mozilla.org/en-US/docs/Web/API/ServiceWorkerRegistration/showNotification#parameters).
+
 ## Deployment
 
 1. Deploy the new migration through the existing migration workflow.
@@ -54,8 +68,11 @@ A processed count indicates attempted work, not confirmed device presentation.
 Subscription credentials are stored in server-only tables with RLS and revoked
 client grants. API requests are authenticated and scoped to the current user.
 The sender accepts only known browser push service hosts. Push content contains
-generic text and task identifiers, never task titles, instructions, results, or
-raw errors. Disable removes the subscription and pending deliveries for this
+the task title (up to 100 characters), a plain-text preview of the completed
+result (up to 180 characters), and task identifiers. These may appear on the
+lock screen according to device notification settings. Failed runs show the task
+title and a prompt to review details, never raw errors. Empty titles or results
+use fallback copy. Each preview comes from the run that triggered the notification. Disable removes the subscription and pending deliveries for this
 device, retaining completed outcome records. On mount, Relay reconciles an existing
 browser subscription with the server before displaying it as enabled. A failed
 reconciliation leaves enable/retry available and does not show a false enabled state. Signing out removes this device’s server subscription and pending deliveries,

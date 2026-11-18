@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  CalendarPlus,
   Check,
   ChevronRight,
   CircleDot,
@@ -160,6 +161,16 @@ export function Dashboard({
   const [workerTokenId, setWorkerTokenId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const workerSetupRequested = searchParams.get("settings") === "worker";
+  function closeWorkerSetup() {
+    setWorkerOpen(false);
+    if (workerSetupRequested) {
+      const query = new URLSearchParams(searchParams.toString());
+      query.delete("settings");
+      router.replace(currentPath(pathname, query), { scroll: false });
+    }
+  }
 
   const navigate = useCallback(
     (
@@ -1098,11 +1109,8 @@ export function Dashboard({
         </div>
       )}
 
-      {workerOpen && (
-        <div
-          className="modal-backdrop"
-          onMouseDown={() => setWorkerOpen(false)}
-        >
+      {(workerOpen || workerSetupRequested) && (
+        <div className="modal-backdrop" onMouseDown={closeWorkerSetup}>
           <section
             className="sheet worker-sheet"
             role="dialog"
@@ -1115,10 +1123,7 @@ export function Dashboard({
                 <p className="eyebrow">Outbound only</p>
                 <h2 id="worker-title">Worker setup</h2>
               </div>
-              <button
-                className="icon-button"
-                onClick={() => setWorkerOpen(false)}
-              >
+              <button className="icon-button" onClick={closeWorkerSetup}>
                 <X size={20} />
               </button>
             </div>
@@ -1719,10 +1724,10 @@ function TaskDetail({
         )}
       </div>
 
-      <section className="document-section">
-        <div className="section-label">
-          <span>Task document</span>
-          {task.status === "inbox" && (
+      <details className="document-section" key={task.id}>
+        <summary className="section-label">Task document</summary>
+        {task.status === "inbox" && (
+          <div className="document-edit-controls">
             <button
               className="document-edit-button"
               disabled={busy}
@@ -1731,14 +1736,14 @@ function TaskDetail({
               <Pencil size={14} />
               Edit
             </button>
-          )}
-        </div>
+          </div>
+        )}
         <div className="markdown">
           <ReactMarkdown remarkPlugins={[remarkGfm]}>
             {task.instructions}
           </ReactMarkdown>
         </div>
-      </section>
+      </details>
 
       {task.task_attachments.map((attachment) => (
         <section className="attachment-section" key={attachment.id}>
@@ -1840,7 +1845,7 @@ function TaskDetail({
             <p className="eyebrow">Attempt {active.attempt}</p>
             <h2>
               {active.status === "queued"
-                ? "Waiting for your laptop"
+                ? "Waiting for your worker"
                 : "Worker is on it"}
             </h2>
             <p>
@@ -1891,7 +1896,13 @@ function TaskDetail({
             </span>
           </div>
           <div className="markdown result-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={documentLinkComponents(
+                task.id,
+                latest.result_documents,
+              )}
+            >
               {latest.result_markdown}
             </ReactMarkdown>
           </div>
@@ -1969,7 +1980,13 @@ function TaskDetail({
             </button>
           </div>
           <div className="markdown result-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={documentLinkComponents(
+                task.id,
+                acceptedRun?.result_documents ?? [],
+              )}
+            >
               {task.accepted_result}
             </ReactMarkdown>
           </div>
@@ -1985,6 +2002,60 @@ function TaskDetail({
   );
 }
 
+// Let result Markdown link to attached documents by filename, e.g.
+// [Add to calendar](dentist.ics). The agent only knows the workspace-relative
+// path, so we resolve the basename to the uploaded document's authenticated
+// URL: calendar files download directly (a tap opens the OS calendar app),
+// everything else opens the in-app viewer.
+function documentLinkComponents(
+  taskId: string,
+  documents: import("@/lib/types").ResultDocument[],
+): import("react-markdown").Components {
+  const byFilename = new Map(
+    (documents ?? []).map((document) => [
+      document.display_filename.toLowerCase(),
+      document,
+    ]),
+  );
+  return {
+    a({ href, children }) {
+      const document = href ? byFilename.get(linkFilename(href)) : undefined;
+      if (document) {
+        return document.mime_type === "text/calendar" ? (
+          <a
+            href={`/api/tasks/${taskId}/documents/${document.id}`}
+            download={document.display_filename}
+          >
+            {children}
+          </a>
+        ) : (
+          <a href={`/tasks/${taskId}/documents/${document.id}`}>{children}</a>
+        );
+      }
+      if (href && /^(https?:|mailto:)/i.test(href)) {
+        return (
+          <a href={href} target="_blank" rel="noreferrer">
+            {children}
+          </a>
+        );
+      }
+      // Unresolved relative links would navigate inside the app; render the
+      // link text as plain content instead of a dead link.
+      return <>{children}</>;
+    },
+  };
+}
+
+function linkFilename(href: string) {
+  const path = href.split(/[?#]/)[0];
+  const name = path.split("/").pop() ?? path;
+  try {
+    return decodeURIComponent(name).toLowerCase();
+  } catch {
+    return name.toLowerCase();
+  }
+}
+
 function ResultDocuments({
   taskId,
   documents,
@@ -1996,16 +2067,34 @@ function ResultDocuments({
   return (
     <div className="artifact-list">
       <p className="eyebrow">Documents</p>
-      {documents.map((document) => (
-        <a key={document.id} href={`/tasks/${taskId}/documents/${document.id}`}>
-          <span>
-            {document.mime_type.split("/").at(-1)} ·{" "}
-            {formatBytes(document.byte_size)}
-          </span>
-          <strong>{document.display_filename}</strong>
-          <ChevronRight size={17} />
-        </a>
-      ))}
+      {documents.map((document) => {
+        const isCalendar = document.mime_type === "text/calendar";
+        // Calendar files download directly so a tap hands the .ics to the OS
+        // calendar app instead of opening the in-app text preview.
+        return isCalendar ? (
+          <a
+            key={document.id}
+            href={`/api/tasks/${taskId}/documents/${document.id}`}
+            download={document.display_filename}
+          >
+            <span>calendar · {formatBytes(document.byte_size)}</span>
+            <strong>{document.display_filename}</strong>
+            <CalendarPlus size={17} />
+          </a>
+        ) : (
+          <a
+            key={document.id}
+            href={`/tasks/${taskId}/documents/${document.id}`}
+          >
+            <span>
+              {document.mime_type.split("/").at(-1)} ·{" "}
+              {formatBytes(document.byte_size)}
+            </span>
+            <strong>{document.display_filename}</strong>
+            <ChevronRight size={17} />
+          </a>
+        );
+      })}
     </div>
   );
 }

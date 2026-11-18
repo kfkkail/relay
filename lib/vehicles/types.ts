@@ -1,0 +1,140 @@
+export type Decision = "unreviewed" | "passed" | "watch" | "shortlist";
+export type Eligibility = "eligible" | "ineligible" | "needs_verification";
+export type VehicleProfile = {
+  make: string;
+  model: string;
+  origin_zip: string;
+  origin_coordinates: [number, number] | null;
+  local_miles: number;
+  cost_ceiling: number;
+  allowed_batteries: string[];
+  preferred_miles: number;
+  high_miles: number;
+  excluded_titles: string[];
+  weights: {
+    price: number;
+    mileage: number;
+    distance: number;
+    history: number;
+    configuration: number;
+    seller: number;
+  };
+};
+export type VehicleListing = {
+  source: "auto.dev" | "manual";
+  source_listing_id: string;
+  vin: string | null;
+  year: number | null;
+  make: string;
+  model: string;
+  trim: string;
+  attributes: {
+    battery_pack: string | null;
+    motor: string | null;
+    battery_evidence: string | null;
+  };
+  exterior_color?: string | null;
+  interior_color?: string | null;
+  raw_series: string;
+  price: number | null;
+  mileage: number | null;
+  seller: string;
+  seller_id: string;
+  url: string | null;
+  city: string;
+  state: string;
+  zip: string | null;
+  coordinates: [number, number] | null;
+  condition: string;
+  shipping: number | null;
+  mandatory_fees: number | null;
+  delivery: "unknown" | "confirmed" | "pickup";
+  title_status: string;
+  history_available: boolean;
+  history_flags: string[];
+  photos: { url: string; category: "exterior" | "interior" | "unknown" }[];
+  photo_count: number;
+  gallery_fetched_at: string | null;
+  source_created_at: string | null;
+  source_updated_at: string | null;
+  availability: "available" | "unavailable";
+};
+export type VehicleRecord = {
+  id: string;
+  vin: string | null;
+  decision: Decision;
+  decision_revision: number;
+  overrides: VehicleOverrides;
+  nhtsa?: {
+    vin: string;
+    status: "decoded";
+    decoder_version?: number;
+    checked_at: string;
+    source_url: string;
+    identity: { year: string; make: string; model: string; trim: string };
+    attributes: Partial<VehicleListing["attributes"]> & {
+      motor_evidence?: string | null;
+    };
+    battery_kwh: number | null;
+    battery_kwh_to: number | null;
+    battery_type: string | null;
+    battery_info: string | null;
+  };
+  enrichment?: {
+    status?:
+      | "queued"
+      | "resolved"
+      | "partial"
+      | "unresolved"
+      | "failed"
+      | "blocked";
+    failure?: {
+      code: string;
+      host: string;
+      http_status?: number;
+      network_code?: string;
+    };
+    checked_at?: string;
+    source_url?: string;
+    attributes?: Partial<VehicleListing["attributes"]> & {
+      motor_evidence?: string;
+    };
+  };
+  first_seen_at: string;
+  last_seen_at: string;
+  vehicle_listings: {
+    id: string;
+    data: VehicleListing;
+    photo_gallery?: VehicleListing["photos"];
+    gallery_fetched_at?: string | null;
+    last_seen_at: string;
+    availability: string;
+  }[];
+};
+export type ListingVerification = Pick<
+  VehicleListing,
+  "source" | "source_listing_id" | "seller" | "seller_id" | "url"
+> &
+  Partial<
+    Pick<VehicleListing, "price" | "shipping" | "mandatory_fees" | "delivery">
+  > & {
+    interior_photo?: string;
+  };
+export type VehicleOverrides = Partial<
+  Pick<
+    VehicleListing,
+    "attributes" | "title_status" | "history_available" | "history_flags"
+  >
+> & {
+  listing_verifications?: Record<string, ListingVerification>;
+};
+export type Evaluation = {
+  eligibility: Eligibility;
+  reasons: string[];
+  warnings: string[];
+  score: number;
+  breakdown: Record<string, number>;
+  effective_cost: number | null;
+  distance_miles: number | null;
+  delivery_group: string;
+};

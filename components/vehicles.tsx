@@ -1,0 +1,2153 @@
+"use client";
+
+import Link from "next/link";
+import { useVehiclePhotoZoom } from "./use-vehicle-photo-zoom";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
+import {
+  CarFront,
+  Pencil,
+  Play,
+  RefreshCw,
+  X,
+  Plus,
+  ArrowUpRight,
+  Eye,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+  Gauge,
+  SlidersHorizontal,
+  Activity,
+} from "lucide-react";
+import { RelayHeader } from "@/components/relay-header";
+import { defaultVehicleProfile } from "@/lib/vehicles/domain";
+import { inVehicleQueue, reviewVehicle } from "@/lib/vehicles/review";
+import type {
+  Decision,
+  VehicleListing,
+  VehicleProfile,
+  VehicleRecord,
+} from "@/lib/vehicles/types";
+
+type Profile = {
+  id: string;
+  version: number;
+  config: VehicleProfile;
+  schedule_id: string;
+  task_schedules: {
+    enabled: boolean;
+    next_due_at: string;
+    timezone: string;
+    start_minute?: number;
+  };
+};
+type HealthRun = {
+  run_id: string;
+  status: string;
+  finished_at: string;
+  health: { counts: Record<string, number>; warnings: string[] };
+  summary: Record<string, number>;
+};
+type Reviewed = NonNullable<ReturnType<typeof reviewVehicle>>;
+type GalleryVehicle = VehicleListing & { vehicleId: string };
+type PhotoCandidate = {
+  vin: string | null;
+  row: Pick<
+    VehicleListing,
+    "source" | "photo_count" | "photos" | "gallery_fetched_at"
+  >;
+};
+const queues = {
+  unreviewed: "Unreviewed",
+  verification: "Needs Verification",
+  watch: "Interested",
+  shortlist: "Shortlist",
+  passed: "Passed",
+  coverage: "Coverage Health",
+  settings: "Settings",
+};
+const money = (n: number | null) =>
+  n === null
+    ? "Unknown"
+    : new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: 0,
+      }).format(n);
+export function canEnrichVehicle(vehicle: Reviewed) {
+  return (
+    Boolean(vehicle.vin) &&
+    vehicle.sources.some(
+      (row) =>
+        row.source === "auto.dev" &&
+        row.url &&
+        row.availability === "available" &&
+        row.make.toLowerCase() === "rivian" &&
+        row.model.toLowerCase() === "r1t",
+    )
+  );
+}
+export function shouldQueueVehicleEnrichment(
+  vehicle: Reviewed,
+  decision: Decision,
+  preview: boolean,
+) {
+  return (
+    !preview &&
+    canEnrichVehicle(vehicle) &&
+    (decision === "watch" || decision === "shortlist") &&
+    decision !== vehicle.decision &&
+    vehicle.enrichment?.status !== "queued" &&
+    (!vehicle.row.attributes.battery_pack || !vehicle.row.attributes.motor)
+  );
+}
+export function shouldQueueVehiclePhotos(
+  vehicle: PhotoCandidate,
+  decision: Decision,
+  preview: boolean,
+) {
+  return (
+    shouldPrefetchVehiclePhotos(vehicle, preview) &&
+    (decision === "watch" || decision === "shortlist")
+  );
+}
+export function shouldPrefetchVehiclePhotos(
+  vehicle: PhotoCandidate,
+  preview: boolean,
+) {
+  return (
+    !preview &&
+    Boolean(vehicle.vin) &&
+    vehicle.row.source === "auto.dev" &&
+    !vehicle.row.gallery_fetched_at &&
+    vehicle.row.photo_count > vehicle.row.photos.length
+  );
+}
+export type VehicleRequest = (
+  path: string,
+  init?: RequestInit,
+) => Promise<Response>;
+async function vehicleAction(request: VehicleRequest, body: object) {
+  const response = await request("/api/vehicles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Vehicle update failed.");
+  return result.result;
+}
+
+export function Vehicles({
+  userEmail,
+  request = fetch,
+  preview = false,
+}: {
+  userEmail: string;
+  request?: VehicleRequest;
+  preview?: boolean;
+}) {
+  const action = (body: object) => vehicleAction(request, body);
+  const [profiles, setProfiles] = useState<Profile[]>([]),
+    [records, setRecords] = useState<VehicleRecord[]>([]),
+    [runs, setRuns] = useState<HealthRun[]>([]);
+  const [pending, setPending] = useState<
+    { id: string; status: string; queued_at: string }[]
+  >([]);
+  const [queue, setQueue] = useState("unreviewed"),
+    [sort, setSort] = useState("score"),
+    [shown, setShown] = useState(25);
+  const [busy, setBusy] = useState(false),
+    [loaded, setLoaded] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState("");
+  const [editing, setEditing] = useState<Reviewed | null>(null),
+    [importing, setImporting] = useState(false),
+    [gallery, setGallery] = useState<GalleryVehicle | null>(null),
+    [galleryIndex, setGalleryIndex] = useState(0);
+  const [undo, setUndo] = useState<{
+    id: string;
+    decision: Decision;
+    revision: number;
+  } | null>(null);
+  const requestedPhotoIds = useRef(new Set<string>());
+  const profile = profiles[0];
+  const closeGallery = useCallback(() => {
+    setGallery(null);
+    setGalleryIndex(0);
+  }, []);
+  const moveGallery = useCallback(
+    (direction: -1 | 1) => {
+      const count = gallery?.photos.length ?? 0;
+      if (count > 1)
+        setGalleryIndex((current) => (current + direction + count) % count);
+    },
+    [gallery],
+  );
+  const galleryFocus = useVehicleModal(
+    Boolean(gallery),
+    closeGallery,
+    moveGallery,
+  );
+  const config = profile?.config ?? defaultVehicleProfile;
+  const refresh = useCallback(async () => {
+    const all: VehicleRecord[] = [];
+    let page = 0;
+    while (page < 10) {
+      const response = await request(`/api/vehicles?page=${page}`, {
+        cache: "no-store",
+      });
+      const body = await response.json();
+      if (!response.ok)
+        throw new Error(body.error || "Could not load vehicles.");
+      if (page === 0) {
+        setProfiles(body.profiles);
+        setRuns(body.runs);
+        setPending(body.pending ?? []);
+      }
+      all.push(...body.vehicles);
+      page++;
+      if (all.length >= body.total || !body.vehicles.length) break;
+      if (page === 10)
+        setNotice(
+          "Showing the first 5,000 stored vehicles. Older records remain stored.",
+        );
+    }
+    setRecords(all);
+    setLoaded(true);
+  }, [request]);
+  useEffect(() => {
+    if (!pending.length) return;
+    const timer = setTimeout(() => {
+      void refresh().catch((e) => setError(e.message));
+    }, 15000);
+    return () => clearTimeout(timer);
+  }, [pending, refresh]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const saved = sessionStorage.getItem("relay-vehicle-review");
+      if (saved) {
+        try {
+          const state = JSON.parse(saved);
+          if (state.queue in queues) setQueue(state.queue);
+          if (Number.isInteger(state.shown))
+            setShown(Math.max(25, state.shown));
+        } catch {
+          /* Ignore stale session state. */
+        }
+      }
+      void refresh().catch((e) => setError(e.message));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [refresh]);
+  useEffect(() => {
+    if (loaded)
+      sessionStorage.setItem(
+        "relay-vehicle-review",
+        JSON.stringify({ queue, shown }),
+      );
+  }, [queue, shown, loaded]);
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), 10000);
+    return () => clearTimeout(timer);
+  }, [undo]);
+  const vehicles = useMemo(
+    () =>
+      records.flatMap((v) => {
+        const row = reviewVehicle(v, config);
+        return row ? [row] : [];
+      }),
+    [records, config],
+  );
+  const filtered = useMemo(
+    () =>
+      vehicles
+        .filter((v) => inVehicleQueue(v, queue))
+        .sort((a, b) => {
+          if (sort === "price")
+            return (
+              (a.evaluation.effective_cost ?? a.row.price ?? Infinity) -
+              (b.evaluation.effective_cost ?? b.row.price ?? Infinity)
+            );
+          if (sort === "mileage")
+            return (a.row.mileage ?? Infinity) - (b.row.mileage ?? Infinity);
+          if (sort === "distance")
+            return (
+              (a.evaluation.distance_miles ?? Infinity) -
+              (b.evaluation.distance_miles ?? Infinity)
+            );
+          if (sort === "newest")
+            return b.first_seen_at.localeCompare(a.first_seen_at);
+          return (
+            b.evaluation.score - a.evaluation.score ||
+            b.first_seen_at.localeCompare(a.first_seen_at)
+          );
+        }),
+    [vehicles, queue, sort],
+  );
+  const prefetchPhotos = useEffectEvent(
+    async (ids: string[], profileId: string) => {
+      try {
+        await action({ action: "photos_batch", ids, profileId });
+        await refresh();
+      } catch {
+        ids.forEach((id) => requestedPhotoIds.current.delete(id));
+      }
+    },
+  );
+  useEffect(() => {
+    if (!loaded || !profile || preview) return;
+    const start = Math.max(0, shown - 25);
+    const ids = filtered
+      .slice(start, shown)
+      .filter(
+        (vehicle) =>
+          shouldPrefetchVehiclePhotos(vehicle, preview) &&
+          !requestedPhotoIds.current.has(vehicle.id),
+      )
+      .map((vehicle) => vehicle.id);
+    if (!ids.length) return;
+    ids.forEach((id) => requestedPhotoIds.current.add(id));
+    void prefetchPhotos(ids, profile.id);
+  }, [filtered, loaded, preview, profile, shown]);
+  async function perform(work: () => Promise<void>) {
+    setBusy(true);
+    setError("");
+    try {
+      await work();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Vehicle action failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function decide(v: VehicleRecord, decision: Decision) {
+    await perform(async () => {
+      const reviewed = reviewVehicle(v, config);
+      const queuePhotos =
+        profile &&
+        reviewed &&
+        shouldQueueVehiclePhotos(reviewed, decision, preview);
+      const queueEnrichment =
+        profile &&
+        reviewed &&
+        shouldQueueVehicleEnrichment(reviewed, decision, preview);
+      const revision = await action({
+        action: "decision",
+        id: v.id,
+        decision,
+        revision: v.decision_revision,
+      });
+      setRecords((rows) =>
+        rows.map((row) =>
+          row.id === v.id
+            ? { ...row, decision, decision_revision: revision }
+            : row,
+        ),
+      );
+      setUndo({ id: v.id, decision: v.decision, revision });
+      const queued: string[] = [];
+      const failures: string[] = [];
+      if (queueEnrichment) {
+        try {
+          await action({
+            action: "enrichment",
+            id: v.id,
+            profileId: profile.id,
+          });
+          queued.push("Battery & motor check");
+        } catch {
+          failures.push(
+            "the battery & motor check could not be queued. Use Check battery & motor to retry",
+          );
+        }
+      }
+      if (queuePhotos) {
+        try {
+          await action({
+            action: "photos",
+            id: v.id,
+            profileId: profile.id,
+          });
+          queued.push("Full photo gallery");
+        } catch {
+          failures.push(
+            "the photo gallery could not be queued. Open View photos to retry",
+          );
+        }
+      }
+      if (queued.length) setNotice(`${queued.join(" and ")} queued.`);
+      if (failures.length)
+        setError(`Decision saved, but ${failures.join("; ")}.`);
+      if (queueEnrichment || queuePhotos) await refresh().catch(() => {});
+    });
+  }
+  function chooseQueue(next: string) {
+    setQueue(next);
+    setShown(25);
+    setNotice("");
+  }
+  return (
+    <main className="app-shell vehicles-page">
+      <RelayHeader userEmail={userEmail} preview={preview} />
+      <section className="vehicles-content">
+        {preview && (
+          <p className="vehicle-preview-notice" role="note">
+            Interactive sample · No live listings, API requests or worker jobs.
+            Changes reset on reload.
+          </p>
+        )}
+        <div className="vehicles-heading">
+          <div>
+            <p className="eyebrow">Your relay</p>
+            <h1>Vehicles</h1>
+            <p>
+              {config.make} {config.model} · Nationwide · From{" "}
+              {config.origin_zip}
+            </p>
+          </div>
+          <div className="vehicle-actions">
+            <button
+              className="icon-button"
+              disabled={busy}
+              onClick={() => void perform(refresh)}
+              aria-label="Refresh vehicles"
+            >
+              <RefreshCw size={18} />
+            </button>
+            {profile && (
+              <button
+                className="secondary-button compact"
+                disabled={busy}
+                onClick={() =>
+                  void perform(async () => {
+                    if (preview) {
+                      setNotice(
+                        "This interactive sample does not run live searches or contact your workers.",
+                      );
+                      return;
+                    }
+                    await action({
+                      action: "run",
+                      scheduleId: profile.schedule_id,
+                      requestId: crypto.randomUUID(),
+                    });
+                    setNotice(
+                      "Search queued. Your connected vehicle worker will collect it.",
+                    );
+                    await refresh();
+                  })
+                }
+              >
+                <Play size={16} /> Run Now
+              </button>
+            )}
+          </div>
+        </div>
+        {pending.length > 0 && (
+          <p className="vehicle-note" role="status">
+            {pending.length} vehicle job{pending.length === 1 ? "" : "s"}{" "}
+            {pending.some((job) => job.status === "working")
+              ? "collecting"
+              : "queued for a compatible worker"}
+            . Results refresh automatically.
+          </p>
+        )}
+        <div className="vehicle-navigation">
+          <nav
+            className="filter-strip vehicle-queues"
+            aria-label="Vehicle queues"
+          >
+            {Object.entries(queues)
+              .filter(([key]) => !["coverage", "settings"].includes(key))
+              .map(([key, label]) => (
+                <button
+                  key={key}
+                  className={queue === key ? "active" : ""}
+                  aria-current={queue === key ? "page" : undefined}
+                  onClick={(event) => {
+                    chooseQueue(key);
+                    event.currentTarget.scrollIntoView({
+                      block: "nearest",
+                      inline: "nearest",
+                    });
+                  }}
+                >
+                  {label}
+                  {!["coverage", "settings"].includes(key) && (
+                    <span>
+                      {vehicles.filter((v) => inVehicleQueue(v, key)).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+          </nav>
+          <label className="vehicle-mobile-queue">
+            Review queue
+            <select
+              value={queue === "settings" || queue === "coverage" ? "" : queue}
+              onChange={(event) => chooseQueue(event.target.value)}
+            >
+              <option value="" disabled>
+                Choose a queue
+              </option>
+              {Object.entries(queues)
+                .filter(([key]) => !["coverage", "settings"].includes(key))
+                .map(([key, label]) => (
+                  <option value={key} key={key}>
+                    {label} (
+                    {
+                      vehicles.filter((vehicle) => inVehicleQueue(vehicle, key))
+                        .length
+                    }
+                    )
+                  </option>
+                ))}
+            </select>
+          </label>
+          <nav className="vehicle-utilities" aria-label="Search tools">
+            <button
+              className="vehicle-text-button"
+              aria-current={queue === "coverage" ? "page" : undefined}
+              onClick={() => chooseQueue("coverage")}
+            >
+              <Activity size={15} aria-hidden />
+              Coverage Health
+            </button>
+            <button
+              className="vehicle-text-button"
+              aria-current={queue === "settings" ? "page" : undefined}
+              onClick={() => chooseQueue("settings")}
+            >
+              <SlidersHorizontal size={15} aria-hidden />
+              Search settings
+            </button>
+          </nav>
+        </div>
+        {error && (
+          <p className="vehicle-alert" role="alert">
+            {error}
+          </p>
+        )}
+        {notice && (
+          <p role="status" className="vehicle-note">
+            {notice}
+          </p>
+        )}
+        {!loaded && !error && <p role="status">Loading your vehicles…</p>}
+        {loaded && !profile && (
+          <section className="vehicle-empty">
+            <h2>Make this search yours</h2>
+            <p>
+              Start with the editable Rivian R1T profile: Large, Large+, or Max
+              battery, nationwide, up to $70,000 effective cost. Daily
+              collection starts disabled.
+            </p>
+            <button
+              className="primary-button"
+              disabled={busy}
+              onClick={() =>
+                void perform(async () => {
+                  await action({ action: "profile" });
+                  await refresh();
+                })
+              }
+            >
+              Create vehicle search
+            </button>
+          </section>
+        )}
+        {profile && queue === "settings" && (
+          <VehicleSettings
+            key={profile.version}
+            profile={profile}
+            busy={busy}
+            save={(value) =>
+              perform(async () => {
+                await action({
+                  action: "profile",
+                  id: profile.id,
+                  config: value,
+                });
+                await refresh();
+                setNotice(
+                  "Profile saved. Your review queues now use the updated requirements.",
+                );
+              })
+            }
+            schedule={() =>
+              perform(async () => {
+                await action({
+                  action: "schedule",
+                  id: profile.schedule_id,
+                  enabled: !profile.task_schedules.enabled,
+                });
+                await refresh();
+              })
+            }
+          />
+        )}
+        {queue === "coverage" && (
+          <section className="vehicle-health">
+            <h2>Coverage Health</h2>
+            {!preview && (
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() =>
+                  void perform(async () => {
+                    let cursor: string | null = null;
+                    let checked = 0,
+                      cached = 0,
+                      failed = 0,
+                      missing = 0;
+                    do {
+                      const response = await request("/api/vehicles/nhtsa", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ cursor }),
+                      });
+                      const result = await response.json();
+                      if (!response.ok)
+                        throw new Error(
+                          result.error || "NHTSA decoding failed.",
+                        );
+                      checked += result.checked;
+                      cached += result.cached;
+                      failed += result.failed;
+                      missing += result.missing_vin;
+                      cursor = result.nextCursor;
+                      setNotice(
+                        `NHTSA: ${checked} decoded, ${cached} cached, ${failed} failed, ${missing} without VIN. ${cursor ? "Continuing…" : "Complete."}`,
+                      );
+                    } while (cursor);
+                    await refresh();
+                  })
+                }
+              >
+                {busy ? "Working…" : "Decode all VINs with NHTSA"}
+              </button>
+            )}
+            <p>
+              Auto.dev supplies the initial inventory. Dealer names and
+              destination links identify observed coverage; they do not
+              establish complete coverage of those marketplaces.
+            </p>
+            {!runs.length && (
+              <p>
+                No completed scans yet. Run a manual search to establish a
+                baseline.
+              </p>
+            )}
+            {runs.map((run) => (
+              <article className="vehicle-card" key={run.run_id}>
+                <h3>{run.status.toUpperCase()} · Auto.dev</h3>
+                <p>{new Date(run.finished_at).toLocaleString()}</p>
+                <dl>
+                  {Object.entries(run.health.counts).map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{key}</dt>
+                      <dd>{value ?? "Unknown"}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {run.health.warnings?.length > 0 && (
+                  <p className="vehicle-alert">
+                    {run.health.warnings.join(", ")}
+                  </p>
+                )}
+                <small>Run {run.run_id}</small>
+              </article>
+            ))}
+          </section>
+        )}
+        {profile && !["settings", "coverage"].includes(queue) && (
+          <>
+            <div className="vehicle-toolbar">
+              <p className="vehicle-result-count">
+                {filtered.length} vehicle{filtered.length === 1 ? "" : "s"}
+                <span className="vehicle-count-shown">
+                  {" "}
+                  · showing {Math.min(shown, filtered.length)}
+                </span>
+              </p>
+              <label>
+                Sort{" "}
+                <select value={sort} onChange={(e) => setSort(e.target.value)}>
+                  <option value="score">Best match</option>
+                  <option value="newest">Newest discovered</option>
+                  <option value="price">Lowest effective cost</option>
+                  <option value="mileage">Lowest mileage</option>
+                  <option value="distance">Nearest</option>
+                </select>
+              </label>
+              <button
+                className="secondary-button compact"
+                aria-label="Add listing"
+                onClick={() => setImporting(true)}
+              >
+                <Plus size={16} aria-hidden />
+                <span className="vehicle-add-label">Add listing</span>
+              </button>
+            </div>
+            {!filtered.length && (
+              <section className="vehicle-empty">
+                <h2>
+                  {queue === "unreviewed"
+                    ? "Your queue is clear"
+                    : "Nothing here yet"}
+                </h2>
+                <p>
+                  {queue === "unreviewed"
+                    ? "Run a search or check Needs Verification for vehicles whose required battery is still unknown."
+                    : "Vehicles will appear here as you review them."}
+                </p>
+              </section>
+            )}
+            <div className="vehicle-grid">
+              {filtered.slice(0, shown).map((v) => (
+                <VehicleCard
+                  key={v.id}
+                  vehicle={v}
+                  busy={busy}
+                  decide={(decision) => void decide(v, decision)}
+                  verify={() => setEditing(v)}
+                  enrich={
+                    !preview && profile && canEnrichVehicle(v)
+                      ? () => {
+                          void perform(async () => {
+                            await action({
+                              action: "enrichment",
+                              id: v.id,
+                              profileId: profile.id,
+                            });
+                            setNotice(
+                              "Battery & motor check queued. Results will appear here when the worker finishes.",
+                            );
+                            await refresh();
+                          });
+                        }
+                      : undefined
+                  }
+                  gallery={() => {
+                    setGalleryIndex(0);
+                    setGallery({ ...v.row, vehicleId: v.id });
+                  }}
+                />
+              ))}
+            </div>
+            {shown < filtered.length && (
+              <button
+                className="secondary-button vehicle-load-more"
+                onClick={() => setShown(shown + 25)}
+              >
+                Review next 25
+              </button>
+            )}
+          </>
+        )}
+      </section>
+      {undo && (
+        <div className="vehicle-undo" role="status">
+          <Check size={17} aria-hidden />
+          <span>Decision saved</span>{" "}
+          <button
+            disabled={busy}
+            onClick={() =>
+              void perform(async () => {
+                const revision = await action({
+                  action: "decision",
+                  id: undo.id,
+                  decision: undo.decision,
+                  revision: undo.revision,
+                });
+                setRecords((rows) =>
+                  rows.map((v) =>
+                    v.id === undo.id
+                      ? {
+                          ...v,
+                          decision: undo.decision,
+                          decision_revision: revision,
+                        }
+                      : v,
+                  ),
+                );
+                setUndo(null);
+              })
+            }
+          >
+            Undo
+          </button>
+        </div>
+      )}
+      {(editing || importing) && (
+        <VehicleEditor
+          vehicle={editing}
+          config={config}
+          busy={busy}
+          close={() => {
+            setEditing(null);
+            setImporting(false);
+          }}
+          save={(listing) =>
+            perform(async () => {
+              if (editing) {
+                await action({ action: "verify", id: editing.id, listing });
+                if (!editing.vin && listing.vin)
+                  await action({
+                    action: "vin",
+                    id: editing.id,
+                    vin: listing.vin,
+                  });
+              } else await action({ action: "manual", listing });
+              await refresh();
+              setEditing(null);
+              setImporting(false);
+            })
+          }
+        />
+      )}
+      {gallery && (
+        <div
+          ref={galleryFocus}
+          className="vehicle-modal vehicle-gallery-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Vehicle photos"
+        >
+          <VehicleGalleryViewer
+            gallery={gallery}
+            index={galleryIndex}
+            busy={busy}
+            preview={preview}
+            canLoad={Boolean(profile && gallery.vin && !preview)}
+            close={closeGallery}
+            previous={() => moveGallery(-1)}
+            next={() => moveGallery(1)}
+            loadPhotos={() =>
+              void perform(async () => {
+                if (!profile) return;
+                await action({
+                  action: "photos",
+                  id: gallery.vehicleId,
+                  profileId: profile.id,
+                });
+                await refresh();
+                setNotice(
+                  "Photo gallery queued. Refresh when your worker finishes, then reopen the gallery.",
+                );
+                closeGallery();
+              })
+            }
+            selectInterior={(photoUrl) =>
+              void perform(async () => {
+                const updated = {
+                  ...gallery,
+                  photos: gallery.photos.map((item) => ({
+                    ...item,
+                    category:
+                      item.url === photoUrl
+                        ? ("interior" as const)
+                        : item.category === "interior"
+                          ? ("unknown" as const)
+                          : item.category,
+                  })),
+                };
+                await action({
+                  action: "interior_photo",
+                  id: gallery.vehicleId,
+                  listing: gallery,
+                  photoUrl,
+                });
+                await refresh();
+                setGallery(updated);
+              })
+            }
+          />
+        </div>
+      )}
+    </main>
+  );
+}
+
+export function gallerySwipeDirection(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+): -1 | 0 | 1 {
+  const horizontalDistance = endX - startX;
+  const verticalDistance = endY - startY;
+  if (
+    Math.abs(horizontalDistance) < 48 ||
+    Math.abs(horizontalDistance) <= Math.abs(verticalDistance) * 1.2
+  )
+    return 0;
+  return horizontalDistance < 0 ? 1 : -1;
+}
+
+export function VehicleGalleryViewer({
+  gallery,
+  index,
+  busy,
+  preview,
+  canLoad,
+  close,
+  previous,
+  next,
+  loadPhotos,
+  selectInterior,
+}: {
+  gallery: GalleryVehicle;
+  index: number;
+  busy: boolean;
+  preview: boolean;
+  canLoad: boolean;
+  close: () => void;
+  previous: () => void;
+  next: () => void;
+  loadPhotos: () => void;
+  selectInterior: (url: string) => void;
+}) {
+  const stageRef = useRef<HTMLDivElement>(null);
+  const preloadedPhotos = useRef(new Map<string, HTMLImageElement>());
+  const swipeStart = useRef<{
+    pointerId: number;
+    x: number;
+    y: number;
+    width: number;
+  } | null>(null);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [settling, setSettling] = useState<-1 | 0 | 1 | null>(null);
+  const count = gallery.photos.length;
+  const currentIndex = count ? Math.min(Math.max(index, 0), count - 1) : 0;
+  const current = gallery.photos[currentIndex];
+  const zoomGesture = useVehiclePhotoZoom(stageRef, current?.url, () => {
+    swipeStart.current = null;
+    setDragOffset(0);
+    setSettling(null);
+  });
+  const gallerySlides = gallery.photos.map((photo, photoIndex) => ({
+    key: `photo-${photoIndex}`,
+    logicalIndex: photoIndex,
+    photo,
+    photoIndex,
+  }));
+  const slides =
+    count > 1
+      ? [
+          {
+            key: "clone-last",
+            logicalIndex: -1,
+            photo: gallery.photos[count - 1],
+            photoIndex: count - 1,
+          },
+          ...gallerySlides,
+          {
+            key: "clone-first",
+            logicalIndex: count,
+            photo: gallery.photos[0],
+            photoIndex: 0,
+          },
+        ]
+      : gallerySlides.length
+        ? gallerySlides
+        : [
+            {
+              key: "placeholder",
+              logicalIndex: 0,
+              photo: undefined,
+              photoIndex: null,
+            },
+          ];
+
+  useEffect(() => {
+    if (typeof Image === "undefined" || count < 2) return;
+    const activeUrls = new Set(gallery.photos.map((photo) => photo.url));
+    for (const url of preloadedPhotos.current.keys()) {
+      if (!activeUrls.has(url)) preloadedPhotos.current.delete(url);
+    }
+
+    // Favor the direction people usually browse while keeping recent photos
+    // decoded for a quick back-swipe. Retaining the Image objects prevents
+    // slower source hosts from dropping in-flight preloads.
+    const distances = [0, 1, -1, 2, -2, 3, 4, 5, 6];
+    for (const distance of distances.slice(
+      0,
+      Math.min(count, distances.length),
+    )) {
+      const url =
+        gallery.photos[(currentIndex + distance + count) % count]?.url;
+      if (!url) continue;
+      if (preloadedPhotos.current.has(url)) continue;
+      const image = new Image();
+      image.referrerPolicy = "no-referrer";
+      image.decoding = "async";
+      image.fetchPriority = distance === 0 ? "high" : "low";
+      preloadedPhotos.current.set(url, image);
+      image.src = url;
+      void image.decode().catch(() => {
+        // The rendered image still handles unavailable or expired source URLs.
+      });
+    }
+  }, [count, currentIndex, gallery.photos]);
+
+  const finishSwipe = (direction: -1 | 0 | 1) => {
+    const reduceMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (reduceMotion) {
+      if (direction === -1) previous();
+      if (direction === 1) next();
+      setDragOffset(0);
+      setSettling(null);
+      return;
+    }
+    setSettling(direction);
+    const width =
+      stageRef.current?.clientWidth ?? swipeStart.current?.width ?? 0;
+    setDragOffset(direction === 0 ? 0 : direction === 1 ? -width : width);
+  };
+
+  return (
+    <section className="vehicle-gallery-viewer">
+      <header className="vehicle-gallery-header">
+        <div>
+          <strong>Listing photos</strong>
+          <span aria-live="polite">
+            {count ? `${currentIndex + 1} of ${count}` : "No photos yet"}
+          </span>
+        </div>
+        <button
+          autoFocus
+          className="icon-button"
+          onClick={close}
+          aria-label="Close gallery"
+        >
+          <X />
+        </button>
+      </header>
+      <div
+        ref={stageRef}
+        className="vehicle-gallery-stage"
+        onPointerDown={(event) => {
+          if (event.pointerType === "mouse" || count < 2 || zoomGesture.current)
+            return;
+          setSettling(null);
+          setDragOffset(0);
+          swipeStart.current = {
+            pointerId: event.pointerId,
+            x: event.clientX,
+            y: event.clientY,
+            width: event.currentTarget.clientWidth,
+          };
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          if (zoomGesture.current) return;
+          const start = swipeStart.current;
+          if (
+            !start ||
+            start.pointerId !== event.pointerId ||
+            settling !== null
+          )
+            return;
+          setDragOffset(event.clientX - start.x);
+        }}
+        onPointerUp={(event) => {
+          if (zoomGesture.current) return;
+          const start = swipeStart.current;
+          if (!start || start.pointerId !== event.pointerId) return;
+          const direction = gallerySwipeDirection(
+            start.x,
+            start.y,
+            event.clientX,
+            event.clientY,
+          );
+          swipeStart.current = null;
+          finishSwipe(direction);
+        }}
+        onPointerCancel={() => {
+          if (zoomGesture.current) return;
+          swipeStart.current = null;
+          finishSwipe(0);
+        }}
+      >
+        <div
+          className={`vehicle-gallery-track${settling !== null ? " is-settling" : ""}`}
+        >
+          {slides.map(({ key, logicalIndex, photo, photoIndex }) => {
+            const forwardDistance =
+              photoIndex === null
+                ? count
+                : (photoIndex - currentIndex + count) % count;
+            const nearby =
+              count > 0 &&
+              (forwardDistance <= 6 || forwardDistance >= count - 2);
+            const active = key === `photo-${currentIndex}` || count === 0;
+            return (
+              <div
+                className="vehicle-gallery-slide"
+                key={key}
+                style={{
+                  left: `${(logicalIndex - currentIndex) * 100}%`,
+                  transform: `translate3d(${dragOffset}px, 0, 0)`,
+                  visibility:
+                    active || dragOffset !== 0 || settling !== null
+                      ? "visible"
+                      : "hidden",
+                }}
+                aria-hidden={!active}
+                onTransitionEnd={
+                  active
+                    ? (event) => {
+                        if (
+                          event.propertyName !== "transform" ||
+                          settling === null
+                        )
+                          return;
+                        if (settling === -1) previous();
+                        if (settling === 1) next();
+                        setSettling(null);
+                        setDragOffset(0);
+                      }
+                    : undefined
+                }
+              >
+                <VehicleImage
+                  url={photo?.url}
+                  alt={
+                    active && current
+                      ? `Listing photo ${currentIndex + 1} of ${count}`
+                      : "Adjacent listing photo"
+                  }
+                  loading={nearby ? "eager" : "lazy"}
+                  fetchPriority={active ? "high" : "low"}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <footer className="vehicle-gallery-footer">
+        <div>
+          {gallery.url && (
+            <a href={gallery.url} target="_blank" rel="noreferrer">
+              Open original listing <ArrowUpRight size={14} aria-hidden />
+            </a>
+          )}
+          <span>
+            {preview
+              ? "Illustrative sample photography"
+              : gallery.gallery_fetched_at
+                ? "Full gallery loaded"
+                : "Fuller gallery loading in the background"}
+            {count > 1 ? " · Swipe or use arrow keys" : ""}
+          </span>
+        </div>
+        <div className="vehicle-gallery-actions">
+          {count > 1 && (
+            <div
+              className="vehicle-gallery-navigation"
+              role="group"
+              aria-label="Photo navigation"
+            >
+              <button onClick={previous} aria-label="Previous photo">
+                <ChevronLeft aria-hidden />
+              </button>
+              <button onClick={next} aria-label="Next photo">
+                <ChevronRight aria-hidden />
+              </button>
+            </div>
+          )}
+          {(canLoad || preview) && (
+            <button
+              className="secondary-button compact"
+              disabled={busy || preview}
+              onClick={loadPhotos}
+              title={
+                preview
+                  ? "Live gallery loading is disabled in the sample."
+                  : undefined
+              }
+            >
+              {gallery.gallery_fetched_at ? "Reload gallery" : "Load gallery"}
+            </button>
+          )}
+          {current && (
+            <button
+              className="primary-button compact"
+              disabled={busy || current.category === "interior"}
+              aria-pressed={current.category === "interior"}
+              onClick={() => selectInterior(current.url)}
+            >
+              <Check size={16} aria-hidden />
+              {current.category === "interior"
+                ? "Interior selected"
+                : "Set as interior"}
+            </button>
+          )}
+        </div>
+      </footer>
+    </section>
+  );
+}
+
+function VehicleImage({
+  url,
+  alt,
+  loading = "lazy",
+  fetchPriority = "auto",
+}: {
+  url?: string;
+  alt: string;
+  loading?: "eager" | "lazy";
+  fetchPriority?: "high" | "low" | "auto";
+}) {
+  const [failed, setFailed] = useState(false);
+  // Source-hosted listing photos have varying hosts and expiry. Preserve the
+  // original URL without proxying through Relay, and fall back when it expires.
+  return url && !failed ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      draggable={false}
+      src={url}
+      alt={alt}
+      loading={loading}
+      fetchPriority={fetchPriority}
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+    />
+  ) : (
+    <div className="vehicle-photo-placeholder">
+      <CarFront size={32} />
+      <span>{alt} unavailable</span>
+    </div>
+  );
+}
+
+export function VehicleCard({
+  vehicle: v,
+  busy,
+  decide,
+  verify,
+  gallery,
+  enrich,
+}: {
+  vehicle: Reviewed;
+  busy: boolean;
+  decide: (decision: Decision) => void;
+  verify: () => void;
+  gallery: () => void;
+  enrich?: () => void;
+}) {
+  const row = v.row,
+    ev = v.evaluation;
+  return (
+    <article className="vehicle-card">
+      <button
+        className="vehicle-photo-pair"
+        onClick={gallery}
+        aria-label="View listing photos"
+      >
+        <span className="vehicle-exterior">
+          <VehicleImage url={row.photos[0]?.url} alt="Exterior" />
+        </span>
+        <span className="vehicle-interior">
+          <VehicleImage
+            url={row.photos.find((photo) => photo.category === "interior")?.url}
+            alt="Interior"
+          />
+          <span>Interior</span>
+        </span>
+        <span className="vehicle-photo-label">
+          <Eye size={14} aria-hidden />
+          View photos
+        </span>
+      </button>
+      <div className="vehicle-card-body">
+        <div className="vehicle-card-title">
+          <div className="vehicle-card-heading">
+            <h2>
+              {row.year} {row.make} {row.model}
+            </h2>
+            <span
+              className="vehicle-score"
+              title="Match score; see details for the breakdown"
+            >
+              {ev.score}/100 match
+            </span>
+          </div>
+          <button
+            type="button"
+            className="vehicle-edit-button"
+            disabled={busy}
+            onClick={verify}
+            aria-label={`Edit and verify ${row.year} ${row.make} ${row.model}`}
+            title="Edit price & verify details"
+          >
+            <Pencil size={18} aria-hidden />
+          </button>
+        </div>
+        <p className="vehicle-configuration">
+          {[
+            row.trim,
+            row.attributes.battery_pack
+              ? `${row.attributes.battery_pack} battery`
+              : "Battery unverified",
+            row.attributes.motor ? `${row.attributes.motor} motor` : null,
+            !row.attributes.motor ? "Motor unverified (optional)" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+        {v.enrichment?.status && (
+          <p className="vehicle-muted" role="status">
+            {
+              {
+                queued: "Battery & motor check queued",
+                resolved: "Battery & motor found on the seller page",
+                partial:
+                  "Some configuration evidence found; verify remaining details manually",
+                unresolved:
+                  "No unambiguous configuration evidence found; verify manually or retry",
+                failed:
+                  "Seller page could not be checked; verify manually or retry",
+                blocked:
+                  v.enrichment.failure?.code === "rate_limited"
+                    ? "Seller rate limited the check. Wait before retrying, or verify manually."
+                    : "Seller blocked the configuration check. Open the listing and verify battery & motor manually.",
+              }[v.enrichment.status]
+            }
+          </p>
+        )}
+        {["blocked", "failed"].includes(v.enrichment?.status || "") &&
+          v.enrichment?.failure && (
+            <p className="vehicle-muted">
+              {v.enrichment.failure.host}
+              {v.enrichment.failure.http_status
+                ? ` · HTTP ${v.enrichment.failure.http_status}`
+                : ""}
+              {v.enrichment.failure.code === "timeout"
+                ? " · Request timed out"
+                : ""}
+              {v.enrichment.failure.code === "response_too_large"
+                ? " · Page exceeded the size limit"
+                : ""}
+              {v.enrichment.failure.code === "request_limit"
+                ? " · Page exceeded the request limit"
+                : ""}
+              {v.enrichment.failure.code === "unsafe_destination"
+                ? " · Destination failed network checks"
+                : ""}
+              {v.enrichment.failure.network_code
+                ? ` · ${v.enrichment.failure.network_code}`
+                : ""}
+            </p>
+          )}
+        <div className="vehicle-price">
+          <div>
+            <span>Asking price</span>
+            <strong>{money(row.price)}</strong>
+          </div>
+          <div className="vehicle-total">
+            <span>With shipping &amp; fees</span>
+            <strong>
+              {ev.effective_cost === null
+                ? "Not yet verified"
+                : money(ev.effective_cost)}
+            </strong>
+          </div>
+        </div>
+        <div className="vehicle-facts">
+          <span>
+            <Gauge size={15} aria-hidden />
+            {row.mileage === null
+              ? "Mileage unknown"
+              : `${row.mileage.toLocaleString()} miles`}
+          </span>
+          <span>
+            <MapPin size={15} aria-hidden />
+            {[row.city, row.state].filter(Boolean).join(", ") ||
+              "Location unknown"}
+          </span>
+        </div>
+        <dl aria-label="Listing colors">
+          <div>
+            <dt>Exterior color</dt>
+            <dd>{row.exterior_color?.trim() || "Unknown"}</dd>
+          </div>
+          <div>
+            <dt>Interior color</dt>
+            <dd>{row.interior_color?.trim() || "Unknown"}</dd>
+          </div>
+        </dl>
+        <div className="vehicle-seller">
+          <span>
+            {row.seller?.trim() ? (
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  [row.seller, row.city, row.state]
+                    .map((value) => value?.trim())
+                    .filter(Boolean)
+                    .join(", "),
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Find ${row.seller.trim()} on Google Maps`}
+              >
+                {row.seller}
+                <ArrowUpRight size={14} aria-hidden />
+              </a>
+            ) : (
+              "Seller unverified"
+            )}
+            <small>
+              {ev.delivery_group}
+              {ev.distance_miles === null
+                ? ""
+                : ` · ${ev.distance_miles.toLocaleString()} mi away`}
+            </small>
+          </span>
+          {row.url && (
+            <a
+              href={row.url}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Open original listing"
+            >
+              Listing
+              <ArrowUpRight size={14} aria-hidden />
+            </a>
+          )}
+        </div>
+        {ev.eligibility !== "eligible" && (
+          <div className="vehicle-note">
+            <strong>
+              {v.decision === "watch" || v.decision === "shortlist"
+                ? "No longer matches / needs verification"
+                : "Needs attention"}
+            </strong>
+            <p>{ev.reasons.join(" · ")}</p>
+          </div>
+        )}
+        <details className="vehicle-details">
+          <summary>
+            Details &amp; sources
+            <ChevronDown size={15} aria-hidden />
+          </summary>
+          <dl>
+            <div>
+              <dt>Shipping</dt>
+              <dd>
+                {row.delivery === "pickup"
+                  ? "Pickup selected"
+                  : money(row.shipping)}
+              </dd>
+            </div>
+            <div>
+              <dt>Mandatory fees</dt>
+              <dd>{money(row.mandatory_fees)}</dd>
+            </div>
+            <div>
+              <dt>Condition</dt>
+              <dd>{row.condition || "Unknown"}</dd>
+            </div>
+            <div>
+              <dt>VIN</dt>
+              <dd>{v.vin ?? "Unverified"}</dd>
+            </div>
+            <div>
+              <dt>Last seen</dt>
+              <dd>{new Date(v.last_seen_at).toLocaleDateString()}</dd>
+            </div>
+          </dl>
+          <p className="vehicle-muted">
+            Acquisition cost excludes tax, registration and pickup travel.
+          </p>
+          {ev.warnings.length > 0 && (
+            <p className="vehicle-note">{ev.warnings.join(" · ")}</p>
+          )}
+          <h3>Match score</h3>
+          <dl>
+            {Object.entries(ev.breakdown).map(([key, value]) => (
+              <div key={key}>
+                <dt>{key}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {v.sources.map((source) =>
+            source.url ? (
+              <a
+                key={`${source.source}:${source.source_listing_id}`}
+                className="vehicle-source"
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {source.seller || source.source} ·{" "}
+                {new URL(source.url).hostname}
+              </a>
+            ) : (
+              <p key={source.source_listing_id}>Original link unavailable</p>
+            ),
+          )}
+          <p>
+            Battery evidence:{" "}
+            {row.attributes.battery_evidence || "Not established"}
+          </p>
+          {v.nhtsa?.vin === v.vin && v.nhtsa?.status === "decoded" && (
+            <p>
+              <a href={v.nhtsa.source_url} target="_blank" rel="noreferrer">
+                NHTSA VIN decode
+              </a>
+              {v.nhtsa.attributes.motor_evidence
+                ? ` · ${v.nhtsa.attributes.motor_evidence}`
+                : " · Motor not reported"}
+              {v.nhtsa.battery_kwh !== null
+                ? ` · Battery capacity: ${v.nhtsa.battery_kwh}${v.nhtsa.battery_kwh_to !== null ? `–${v.nhtsa.battery_kwh_to}` : ""} kWh${v.nhtsa.attributes.battery_pack ? ` · Mapped pack: ${v.nhtsa.attributes.battery_pack}` : " (pack not established)"}`
+                : ""}
+              {` · Checked ${new Date(v.nhtsa.checked_at).toLocaleString()}`}
+            </p>
+          )}
+          {v.enrichment?.attributes?.motor_evidence && (
+            <p>Motor evidence: {v.enrichment.attributes.motor_evidence}</p>
+          )}
+          {v.enrichment?.checked_at && (
+            <p className="vehicle-muted">
+              Configuration checked{" "}
+              {new Date(v.enrichment.checked_at).toLocaleString()}
+            </p>
+          )}
+          <div className="vehicle-detail-actions">
+            {enrich &&
+              (v.decision === "watch" || v.decision === "shortlist") && (
+                <button
+                  className="secondary-button compact"
+                  disabled={busy || v.enrichment?.status === "queued"}
+                  onClick={enrich}
+                >
+                  <RefreshCw size={16} aria-hidden />
+                  {v.enrichment?.status === "queued"
+                    ? "Check queued"
+                    : "Check battery & motor"}
+                </button>
+              )}
+            {v.decision !== "unreviewed" && v.decision !== "passed" && (
+              <button
+                className="vehicle-text-button"
+                disabled={busy}
+                onClick={() => decide("unreviewed")}
+              >
+                Restore to Unreviewed
+              </button>
+            )}
+          </div>
+        </details>
+        <div className="vehicle-actions vehicle-review-actions">
+          {v.decision === "passed" ? (
+            <button
+              className="secondary-button"
+              disabled={busy}
+              onClick={() => decide("unreviewed")}
+            >
+              Restore to Unreviewed
+            </button>
+          ) : (
+            <>
+              <button
+                className="secondary-button"
+                disabled={busy}
+                onClick={() => decide("passed")}
+              >
+                <X size={16} aria-hidden />
+                Pass
+              </button>
+              <button
+                className="secondary-button"
+                aria-pressed={v.decision === "watch"}
+                disabled={busy}
+                onClick={() => decide("watch")}
+              >
+                <Eye size={16} aria-hidden />
+                Interested
+              </button>
+              <button
+                className="primary-button"
+                disabled={busy}
+                aria-pressed={v.decision === "shortlist"}
+                onClick={() => decide("shortlist")}
+              >
+                <Check size={16} aria-hidden />
+                Shortlist
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function VehicleSettings({
+  profile,
+  busy,
+  save,
+  schedule,
+}: {
+  profile: Profile;
+  busy: boolean;
+  save: (config: VehicleProfile) => Promise<void>;
+  schedule: () => Promise<void>;
+}) {
+  const [draft, setDraft] = useState(profile.config);
+  const numbers = {
+    cost_ceiling: "Effective-cost ceiling ($)",
+    local_miles: "Local radius (mi)",
+    preferred_miles: "Preferred mileage",
+    high_miles: "High-mileage threshold",
+  } as const;
+  return (
+    <section className="vehicle-settings">
+      <form
+        className="vehicle-card vehicle-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save(draft);
+        }}
+      >
+        <h2>Search profile</h2>
+        <label>
+          Make
+          <input
+            required
+            value={draft.make}
+            onChange={(e) => setDraft({ ...draft, make: e.target.value })}
+          />
+        </label>
+        <label>
+          Model
+          <input
+            required
+            value={draft.model}
+            onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+          />
+        </label>
+        <label>
+          Origin ZIP
+          <input
+            required
+            pattern="[0-9]{5}"
+            value={draft.origin_zip}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                origin_zip: e.target.value,
+                origin_coordinates: null,
+              })
+            }
+          />
+        </label>
+        <p>
+          Set coordinates for a new origin ZIP to rank distance. Collection
+          remains nationwide.
+        </p>
+        <label>
+          Longitude
+          <input
+            type="number"
+            min="-180"
+            max="180"
+            step="any"
+            value={draft.origin_coordinates?.[0] ?? ""}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                origin_coordinates: e.target.value
+                  ? [Number(e.target.value), draft.origin_coordinates?.[1] ?? 0]
+                  : null,
+              })
+            }
+          />
+        </label>
+        <label>
+          Latitude
+          <input
+            type="number"
+            min="-90"
+            max="90"
+            step="any"
+            value={draft.origin_coordinates?.[1] ?? ""}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                origin_coordinates: e.target.value
+                  ? [draft.origin_coordinates?.[0] ?? 0, Number(e.target.value)]
+                  : null,
+              })
+            }
+          />
+        </label>
+        {Object.entries(numbers).map(([key, label]) => (
+          <label key={key}>
+            {label}
+            <input
+              type="number"
+              min="0"
+              required
+              value={draft[key as keyof typeof numbers]}
+              onChange={(e) =>
+                setDraft({ ...draft, [key]: Number(e.target.value) })
+              }
+            />
+          </label>
+        ))}
+        <label>
+          Allowed batteries (comma-separated; blank allows any)
+          <input
+            value={draft.allowed_batteries.join(", ")}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                allowed_batteries: e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </label>
+        <label>
+          Excluded title statuses
+          <input
+            value={draft.excluded_titles.join(", ")}
+            onChange={(e) =>
+              setDraft({
+                ...draft,
+                excluded_titles: e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+        </label>
+        <fieldset>
+          <legend>Score weights (total 100)</legend>
+          {Object.entries(draft.weights).map(([key, value]) => (
+            <label key={key}>
+              {key}
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={value}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    weights: {
+                      ...draft.weights,
+                      [key]: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            </label>
+          ))}
+        </fieldset>
+        <button className="primary-button" disabled={busy}>
+          Save profile
+        </button>
+      </form>
+      <section className="vehicle-card">
+        <h2>Daily collection</h2>
+        <p>
+          {String(
+            Math.floor((profile.task_schedules.start_minute ?? 420) / 60),
+          ).padStart(2, "0")}
+          :
+          {String((profile.task_schedules.start_minute ?? 420) % 60).padStart(
+            2,
+            "0",
+          )}{" "}
+          {profile.task_schedules.timezone} ·{" "}
+          {profile.task_schedules.enabled ? "Enabled" : "Disabled"}
+        </p>
+        <p>
+          Run and review a successful manual baseline before enabling this
+          schedule.
+        </p>
+        <button
+          className="secondary-button compact"
+          disabled={busy}
+          onClick={() => void schedule()}
+        >
+          {profile.task_schedules.enabled
+            ? "Disable daily search"
+            : "Enable daily search"}
+        </button>
+        <p>
+          <Link href="/schedules">Edit search timing in Schedules</Link>
+        </p>
+      </section>
+    </section>
+  );
+}
+
+export function VehicleEditor({
+  vehicle,
+  config,
+  busy,
+  close,
+  save,
+}: {
+  vehicle: Reviewed | null;
+  config: VehicleProfile;
+  busy: boolean;
+  close: () => void;
+  save: (listing: Partial<VehicleListing>) => Promise<void>;
+}) {
+  const modalFocus = useVehicleModal(true, close);
+  const [row, setRow] = useState<Partial<VehicleListing>>(
+    vehicle?.row ?? {
+      source: "manual",
+      make: config.make,
+      model: config.model,
+      title_status: "unknown",
+      attributes: { battery_pack: null, motor: null, battery_evidence: null },
+      availability: "available",
+      delivery: "unknown",
+    },
+  );
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    void save(row);
+  };
+  return (
+    <div
+      ref={modalFocus}
+      className="vehicle-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={vehicle ? "Edit vehicle" : "Add listing"}
+    >
+      <section>
+        <button
+          className="icon-button"
+          autoFocus
+          onClick={close}
+          aria-label="Close vehicle editor"
+        >
+          <X />
+        </button>
+        <form className="vehicle-form" onSubmit={submit}>
+          <h2>{vehicle ? "Edit vehicle details" : "Add a listing"}</h2>
+          <p>
+            Confirm details from the seller. Zero is a confirmed amount; leave
+            unknown costs blank.
+          </p>
+          {!vehicle && (
+            <>
+              <label>
+                Listing URL
+                <input
+                  type="url"
+                  required
+                  value={row.url ?? ""}
+                  onChange={(e) => setRow({ ...row, url: e.target.value })}
+                />
+              </label>
+              <label>
+                Make
+                <input
+                  required
+                  value={row.make ?? ""}
+                  onChange={(e) => setRow({ ...row, make: e.target.value })}
+                />
+              </label>
+              <label>
+                Model
+                <input
+                  required
+                  value={row.model ?? ""}
+                  onChange={(e) => setRow({ ...row, model: e.target.value })}
+                />
+              </label>
+              <label>
+                Year
+                <input
+                  type="number"
+                  min="1980"
+                  max="2100"
+                  value={row.year ?? ""}
+                  onChange={(e) =>
+                    setRow({ ...row, year: Number(e.target.value) })
+                  }
+                />
+              </label>
+              <label>
+                Price
+                <input
+                  type="number"
+                  min="1"
+                  value={row.price ?? ""}
+                  onChange={(e) =>
+                    setRow({
+                      ...row,
+                      price: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Mileage
+                <input
+                  type="number"
+                  min="0"
+                  value={row.mileage ?? ""}
+                  onChange={(e) =>
+                    setRow({
+                      ...row,
+                      mileage: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Seller
+                <input
+                  value={row.seller ?? ""}
+                  onChange={(e) => setRow({ ...row, seller: e.target.value })}
+                />
+              </label>
+            </>
+          )}
+          {vehicle && (
+            <label>
+              Asking price (leave blank to use the listing price)
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={row.price ?? ""}
+                onChange={(e) =>
+                  setRow({
+                    ...row,
+                    price: e.target.value ? Number(e.target.value) : null,
+                  })
+                }
+              />
+            </label>
+          )}
+          <label>
+            VIN
+            <input
+              readOnly={Boolean(vehicle?.vin)}
+              maxLength={17}
+              value={row.vin ?? ""}
+              onChange={(e) =>
+                setRow({ ...row, vin: e.target.value.toUpperCase() || null })
+              }
+            />
+          </label>
+          <label>
+            Confirmed battery pack (required)
+            <select
+              value={row.attributes?.battery_pack ?? ""}
+              onChange={(e) => {
+                const battery = e.target.value || null;
+                setRow({
+                  ...row,
+                  attributes: {
+                    battery_pack: battery,
+                    motor: row.attributes?.motor ?? null,
+                    battery_evidence: battery
+                      ? "Owner verified from seller information"
+                      : null,
+                  },
+                });
+              }}
+            >
+              <option value="">Unknown</option>
+              <option value="standard">Standard</option>
+              <option value="standard+">Standard+</option>
+              <option value="large">Large</option>
+              <option value="large+">Large+</option>
+              <option value="max">Max</option>
+            </select>
+          </label>
+          <label>
+            Confirmed motor configuration (optional)
+            <select
+              value={row.attributes?.motor ?? ""}
+              onChange={(e) =>
+                setRow({
+                  ...row,
+                  attributes: {
+                    battery_pack: row.attributes?.battery_pack ?? null,
+                    motor: e.target.value || null,
+                    battery_evidence: row.attributes?.battery_evidence ?? null,
+                  },
+                })
+              }
+            >
+              <option value="">Unknown</option>
+              <option value="dual">Dual</option>
+              <option value="performance dual">
+                Performance Dual / Dual + Power Upgrade
+              </option>
+              <option value="quad">Quad</option>
+              <option value="tri">Tri</option>
+            </select>
+          </label>
+          <label>
+            Delivery (optional until Interested or Shortlist)
+            <select
+              value={row.delivery}
+              onChange={(e) =>
+                setRow({
+                  ...row,
+                  delivery: e.target.value as VehicleListing["delivery"],
+                })
+              }
+            >
+              <option value="unknown">Unknown</option>
+              <option value="confirmed">Confirmed delivery</option>
+              <option value="pickup">Pickup required</option>
+            </select>
+          </label>
+          <label>
+            Confirmed shipping ($, optional)
+            <input
+              type="number"
+              min="0"
+              value={row.shipping ?? ""}
+              onChange={(e) =>
+                setRow({
+                  ...row,
+                  shipping: e.target.value ? Number(e.target.value) : null,
+                })
+              }
+            />
+          </label>
+          <label>
+            Confirmed mandatory fees ($, optional)
+            <input
+              type="number"
+              min="0"
+              value={row.mandatory_fees ?? ""}
+              onChange={(e) =>
+                setRow({
+                  ...row,
+                  mandatory_fees: e.target.value
+                    ? Number(e.target.value)
+                    : null,
+                })
+              }
+            />
+          </label>
+          <label>
+            Title status
+            <input
+              value={row.title_status ?? "unknown"}
+              onChange={(e) => setRow({ ...row, title_status: e.target.value })}
+            />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={row.history_available ?? false}
+              onChange={(e) =>
+                setRow({ ...row, history_available: e.target.checked })
+              }
+            />{" "}
+            History reviewed
+          </label>
+          <label>
+            History flags (comma-separated)
+            <input
+              value={row.history_flags?.join(", ") ?? ""}
+              onChange={(e) =>
+                setRow({
+                  ...row,
+                  history_flags: e.target.value
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                })
+              }
+            />
+          </label>
+          <button className="primary-button" disabled={busy}>
+            Save verification
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function useVehicleModal(
+  open: boolean,
+  close: () => void,
+  navigate?: (direction: -1 | 1) => void,
+) {
+  const container = useRef<HTMLDivElement>(null);
+  const onClose = useEffectEvent(close);
+  const onNavigate = useEffectEvent((direction: -1 | 1) => {
+    if (!navigate) return false;
+    navigate(direction);
+    return true;
+  });
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () =>
+      Array.from(
+        container.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex='0']",
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null);
+    focusable()[0]?.focus();
+    function keys(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+      if (event.key === "ArrowLeft" && onNavigate(-1)) event.preventDefault();
+      if (event.key === "ArrowRight" && onNavigate(1)) event.preventDefault();
+      if (event.key !== "Tab") return;
+      const elements = focusable(),
+        first = elements[0],
+        last = elements.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+    document.addEventListener("keydown", keys);
+    return () => {
+      document.removeEventListener("keydown", keys);
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, [open]);
+  return container;
+}

@@ -417,6 +417,8 @@ a {
 
 .brand-lockup {
   display: flex;
+  color: inherit;
+  text-decoration: none;
   align-items: center;
   gap: 10px;
   font-size: 19px;
@@ -868,6 +870,17 @@ button:disabled {
   font-weight: 740;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.document-section > summary {
+  display: list-item;
+  cursor: pointer;
+}
+.document-section > summary:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+.document-edit-controls {
+  padding: 0 20px 10px;
 }
 .document-edit-button {
   display: inline-flex;
@@ -1847,6 +1860,7 @@ textarea {
   }
   .detail-panel {
     position: static;
+    z-index: auto;
     min-width: 0;
     max-height: calc(100dvh - 72px);
     transform: none;
@@ -1865,6 +1879,10 @@ textarea {
   .detail-heading .primary-button {
     width: auto;
     flex: 0 0 auto;
+  }
+  .document-edit-controls {
+    padding-right: 42px;
+    padding-left: 42px;
   }
   .section-label {
     padding-right: 42px;
@@ -1995,6 +2013,9 @@ textarea {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 12px 40px #0002;
+}
+.settings-panel a {
+  text-decoration: none;
 }
 .settings-heading {
   display: flex;
@@ -2139,6 +2160,8 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 8px;
   font: inherit;
+  /* Prevent iOS Safari from zooming when a schedule field receives focus. */
+  font-size: 16px;
 }
 .schedule-times {
   display: flex;

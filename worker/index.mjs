@@ -1,3 +1,4 @@
+import { CHAT_CONTRACT } from "./chat-contract.mjs";
 import { createTaskRunner } from "./task-runner.mjs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -32,7 +33,11 @@ while (!stopping) {
   try {
     await fillAvailableSlots({
       activeRuns,
-      claim: () => relayRequest("/api/worker/runs/claim", { method: "POST" }),
+      claim: () =>
+        relayRequest("/api/worker/runs/claim", {
+          method: "POST",
+          body: JSON.stringify({ chat: true }),
+        }),
       run: processClaimedRun,
     });
   } catch (error) {
@@ -114,7 +119,7 @@ async function processClaimedRun(claimed) {
         text: input + attachmentNote,
         attachments: localAttachments,
       },
-      definition.contract,
+      task.conversation ? CHAT_CONTRACT : definition.contract,
     );
 
     const documents =

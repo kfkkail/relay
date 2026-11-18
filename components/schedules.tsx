@@ -123,6 +123,7 @@ export function Schedules({ userEmail }: { userEmail: string }) {
           <Link href="/schedules" aria-current="page">
             Schedules
           </Link>
+          <Link href="/chat">Chat</Link>
         </nav>
         <div className="topbar-actions">
           <SettingsMenu userEmail={userEmail} />

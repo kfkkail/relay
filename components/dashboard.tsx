@@ -563,6 +563,9 @@ export function Dashboard({
           >
             Schedules
           </button>
+          <a className="area-tab" href="/chat">
+            Chat
+          </a>
         </nav>
         <div className="topbar-actions">
           <SettingsMenu

@@ -1,0 +1,102 @@
+.shell {
+  max-width: 1100px;
+  margin: auto;
+  padding: 24px;
+}
+.shell header,
+.shell nav {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.shell header {
+  justify-content: space-between;
+}
+.shell h1 {
+  margin-top: 32px;
+}
+.note {
+  color: var(--muted, #666);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 32px;
+  margin-top: 24px;
+}
+.layout aside {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.layout button {
+  padding: 12px;
+  text-align: left;
+  border: 1px solid #aaa6;
+  border-radius: 10px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.layout button[aria-pressed="true"] {
+  outline: 2px solid currentColor;
+}
+.layout button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.messages {
+  overflow-wrap: anywhere;
+}
+.messages article {
+  margin-bottom: 24px;
+}
+.user {
+  background: #8881;
+  border-radius: 12px;
+  padding: 16px;
+}
+.user p {
+  white-space: pre-wrap;
+}
+.reply {
+  padding: 16px;
+  line-height: 1.6;
+}
+.reply pre {
+  overflow-x: auto;
+}
+.layout form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.layout textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #8888;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 16px;
+}
+.layout form button {
+  align-self: flex-end;
+}
+@media (max-width: 650px) {
+  .shell {
+    padding: 16px;
+  }
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .layout aside {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .shell nav {
+    gap: 12px;
+  }
+}

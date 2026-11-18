@@ -14,6 +14,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("tasks")
       .select(TASK_SELECT)
+      .is("conversation_id", null)
       .order("updated_at", { ascending: false })
       .order("attempt", { referencedTable: "runs", ascending: false });
     if (error) throw error;

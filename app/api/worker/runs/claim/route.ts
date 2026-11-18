@@ -25,8 +25,9 @@ export async function POST(request: Request) {
           headers: { "Cache-Control": "no-store" },
         });
     }
-    const { data, error } = await supabase.rpc("claim_next_run", {
+    const { data, error } = await supabase.rpc("claim_next_run_with_chat", {
       p_worker_id: worker.id,
+      p_include_chat: body?.chat === true,
     });
     if (error) throw error;
     const claimed = data?.[0];
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
         },
         task: {
           id: claimed.task_id,
+          conversation: Boolean(claimed.conversation_id),
           title: claimed.title,
           instructions: claimed.instructions,
           deliverable: claimed.deliverable,

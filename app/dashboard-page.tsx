@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Dashboard } from "@/components/dashboard";
 import { SetupPanel } from "@/components/setup-panel";
 import { SignIn } from "@/components/sign-in";
@@ -41,6 +41,7 @@ export async function DashboardPage({
       supabase
         .from("tasks")
         .select(TASK_SELECT)
+        .is("conversation_id", null)
         .order("updated_at", { ascending: false })
         .order("attempt", { referencedTable: "runs", ascending: false }),
       supabase
@@ -61,7 +62,15 @@ export async function DashboardPage({
 
   const initialTasks = (tasks ?? []) as Task[];
   const initialOwnerActions = (ownerActions ?? []) as unknown as OwnerAction[];
-  if (taskId && !initialTasks.some((task) => task.id === taskId)) notFound();
+  if (taskId && !initialTasks.some((task) => task.id === taskId)) {
+    const { data: turn } = await supabase
+      .from("tasks")
+      .select("conversation_id")
+      .eq("id", taskId)
+      .maybeSingle();
+    if (turn?.conversation_id) redirect(`/chat?id=${turn.conversation_id}`);
+    notFound();
+  }
   if (actionId && !initialOwnerActions.some((action) => action.id === actionId))
     notFound();
   const initialTaskActionId =

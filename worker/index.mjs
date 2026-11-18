@@ -1,3 +1,4 @@
+import { CHAT_CONTRACT } from "./chat-contract.mjs";
 import { createTaskRunner } from "./task-runner.mjs";
 import { runVehicleJob, vehicleCapabilities } from "./vehicles/handler.mjs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -46,7 +47,10 @@ while (!stopping) {
       claim: () =>
         relayRequest("/api/worker/runs/claim", {
           method: "POST",
-          body: JSON.stringify({ capabilities: vehicleCapabilities() }),
+          body: JSON.stringify({
+            capabilities: vehicleCapabilities(),
+            chat: true,
+          }),
         }),
       run: processClaimedRun,
     });
@@ -156,7 +160,7 @@ async function processClaimedRun(claimed) {
         text: input + attachmentNote,
         attachments: localAttachments,
       },
-      definition.contract,
+      task.conversation ? CHAT_CONTRACT : definition.contract,
     );
 
     const documents =

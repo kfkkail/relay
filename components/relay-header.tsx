@@ -36,6 +36,7 @@ export function RelayHeader({
         >
           Schedules
         </Link>
+        <Link href="/chat">Chat</Link>
       </nav>
       <div className="topbar-actions">
         {preview ? (

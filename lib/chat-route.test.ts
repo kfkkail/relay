@@ -12,7 +12,7 @@ import { POST, GET } from "../app/api/chat/route";
 import { ApiError } from "./http";
 const conversationId = "00000000-0000-4000-8000-000000000001";
 const messageId = "00000000-0000-4000-8000-000000000002";
-const request = (body: object) =>
+const request = (body: unknown) =>
   new Request("https://relay.example/api/chat", {
     method: "POST",
     body: JSON.stringify(body),
@@ -35,6 +35,8 @@ it("authenticates reads and writes", async () => {
 });
 it("rejects invalid IDs and empty or oversized messages before queueing", async () => {
   for (const body of [
+    null,
+    [],
     { conversationId: "bad", messageId, message: "Hi" },
     { conversationId, messageId, message: " " },
     { conversationId, messageId, message: "x".repeat(4001) },

@@ -42,6 +42,8 @@ export async function POST(request: Request) {
   try {
     const { supabase } = await requireUser();
     const body = await request.json();
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      throw new ApiError("A message object is required.");
     if (
       !uuid.test(body.conversationId ?? "") ||
       !uuid.test(body.messageId ?? "")

@@ -55,14 +55,14 @@ begin
   ) recent;
   select jsonb_build_object(
     'capturedAt',now(),
-    'recentTasks', (select coalesce(jsonb_agg(row), '[]'::jsonb) from (
+    'recentTasks', (select coalesce(jsonb_agg(context_task), '[]'::jsonb) from (
       select id,title,status,left(accepted_result,1000) as accepted_result from public.tasks
       where user_id=auth.uid() and conversation_id is null order by updated_at desc limit 10
-    ) row),
-    'openActions', (select coalesce(jsonb_agg(row), '[]'::jsonb) from (
+    ) context_task),
+    'openActions', (select coalesce(jsonb_agg(context_action), '[]'::jsonb) from (
       select id,title,status,due_at from public.owner_actions
       where user_id=auth.uid() and status <> 'done' order by due_at nulls last,updated_at desc limit 20
-    ) row)
+    ) context_action)
   ) into context;
   insert into public.tasks(id,user_id,title,instructions,deliverable,conversation_id,chat_message)
     values(p_message_id,auth.uid(),left(trim(p_message),80),

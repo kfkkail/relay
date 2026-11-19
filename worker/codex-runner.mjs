@@ -122,6 +122,7 @@ export function codexEnvironment(source) {
     "AUTODEV_API_KEY",
     "RELAY_COMMAND_PATH",
     "RELAY_WORKER_TOKEN",
+    "SUPABASE_JWT_SECRET",
     "SUPABASE_SECRET_KEY",
   ]) {
     delete environment[name];

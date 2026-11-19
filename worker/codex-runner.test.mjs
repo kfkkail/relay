@@ -83,6 +83,7 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify(process.arg
       RELAY_WORKER_TOKEN: "relay-secret",
       OPENAI_API_KEY: "api-secret",
       AUTODEV_API_KEY: "vehicle-secret",
+      SUPABASE_JWT_SECRET: "signing-secret",
       SUPABASE_SECRET_KEY: "database-secret",
     });
 
@@ -97,6 +98,7 @@ process.stdout.write(JSON.stringify({ resultMarkdown: JSON.stringify(process.arg
     expect(env.RELAY_COMMAND_PATH).toBeUndefined();
     expect(env.OPENAI_API_KEY).toBeUndefined();
     expect(env.AUTODEV_API_KEY).toBeUndefined();
+    expect(env.SUPABASE_JWT_SECRET).toBeUndefined();
     expect(env.SUPABASE_SECRET_KEY).toBeUndefined();
   });
 

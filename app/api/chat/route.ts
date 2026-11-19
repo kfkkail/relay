@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
+import { workerConnectionInterrupted } from "@/lib/run-connection";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const dynamic = "force-dynamic";
@@ -20,14 +21,20 @@ export async function GET(request: Request) {
       const { data, error } = await supabase
         .from("tasks")
         .select(
-          "id,chat_message,created_at,runs:runs!runs_task_id_fkey(id,status,result_markdown,error,attempt,result_documents(id,display_filename,mime_type,byte_size,description))",
+          "id,chat_message,created_at,runs:runs!runs_task_id_fkey(id,status,result_markdown,error,attempt,started_at,agent_heartbeat_at,result_documents(id,display_filename,mime_type,byte_size,description))",
         )
         .eq("conversation_id", id)
         .order("created_at", { ascending: false })
         .limit(100)
         .order("attempt", { referencedTable: "runs", ascending: false });
       if (error) throw error;
-      turns = (data ?? []).reverse();
+      turns = (data ?? []).reverse().map((turn) => ({
+        ...turn,
+        runs: turn.runs.map((run) => ({
+          ...run,
+          connection_interrupted: workerConnectionInterrupted(run),
+        })),
+      }));
     }
     return NextResponse.json(
       { conversations, turns },

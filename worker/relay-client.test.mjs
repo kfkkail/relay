@@ -21,6 +21,67 @@ async function clientFor(handler) {
 }
 
 describe("Relay worker HTTP client", () => {
+  it("keeps a disconnected JSON response eligible for retry", async () => {
+    let requests = 0;
+    const client = await clientFor((_request, response) => {
+      if (++requests > 1) return response.end('{"heartbeat":true}');
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.flushHeaders();
+      response.write('{"heartbeat":');
+      setTimeout(() => response.destroy(), 10);
+    });
+    const error = await client.request("/heartbeat").catch((error) => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).not.toBe("INVALID_RELAY_RESPONSE");
+    await expect(client.request("/heartbeat")).resolves.toEqual({
+      heartbeat: true,
+    });
+  });
+
+  it.each([401, 403, 404, 429, 503])(
+    "preserves HTTP %s for heartbeat recovery decisions",
+    async (status) => {
+      const client = await clientFor((_request, response) => {
+        response
+          .writeHead(status, { "Retry-After": "10" })
+          .end('{"error":"temporarily unavailable"}');
+      });
+      await expect(client.request("/heartbeat")).rejects.toMatchObject({
+        status,
+        retryAfterMs: 10_000,
+      });
+    },
+  );
+
+  it("rejects a successful HTML response instead of silently accepting it", async () => {
+    const client = await clientFor((_request, response) => {
+      response.writeHead(200, { "Content-Type": "text/html" });
+      response.end("<html>Private deployment sign in</html>");
+    });
+    await expect(client.request("/heartbeat")).rejects.toThrow(
+      "invalid JSON response (HTTP 200)",
+    );
+  });
+
+  it("does not follow a redirect to a login page", async () => {
+    const paths = [];
+    const client = await clientFor((request, response) => {
+      paths.push(request.url);
+      response.writeHead(302, { Location: "/login" }).end();
+    });
+    await expect(client.request("/heartbeat")).rejects.toThrow();
+    expect(paths).toEqual(["/heartbeat"]);
+  });
+
+  it("keeps a non-JSON HTTP failure's status without exposing its body", async () => {
+    const client = await clientFor((_request, response) => {
+      response.writeHead(502).end("private upstream diagnostics");
+    });
+    await expect(client.request("/heartbeat")).rejects.toThrow(
+      "Relay returned HTTP 502.",
+    );
+  });
+
   it("times out stalled response headers and can send the next request", async () => {
     let requests = 0;
     const client = await clientFor((_request, response) => {

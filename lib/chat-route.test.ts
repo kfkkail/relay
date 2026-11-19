@@ -95,3 +95,44 @@ it("disambiguates run relationships and bounds chat reads", async () => {
   expect(query.eq).toHaveBeenCalledWith("conversation_id", conversationId);
   expect(query.limit).toHaveBeenCalledWith(100);
 });
+
+it("exposes a stale connection warning and clears it after renewal", async () => {
+  const query = {
+    select: vi.fn(() => query),
+    order: vi.fn(() => query),
+    eq: vi.fn(() => query),
+    limit: vi.fn(() => query),
+    then: (resolve: (value: unknown) => void) =>
+      resolve({
+        data: [
+          {
+            id: "turn",
+            runs: [
+              {
+                status: "working",
+                agent_heartbeat_at: new Date(
+                  Date.now() - 180_000,
+                ).toISOString(),
+              },
+              {
+                status: "working",
+                agent_heartbeat_at: new Date().toISOString(),
+              },
+            ],
+          },
+        ],
+        error: null,
+      }),
+  };
+  mocks.from.mockReturnValue(query);
+  const response = await GET(
+    new Request(`https://relay.example/api/chat?id=${conversationId}`),
+  );
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(
+    body.turns[0].runs.map(
+      (run: { connection_interrupted: boolean }) => run.connection_interrupted,
+    ),
+  ).toEqual([true, false]);
+});

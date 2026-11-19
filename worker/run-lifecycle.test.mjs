@@ -22,6 +22,79 @@ afterEach(async () => {
 });
 
 describe("worker run heartbeat lifetime", () => {
+  it.each(["html", "missing-ack"])(
+    "reports an initial %s heartbeat failure before invoking Codex",
+    async (reply) => {
+      directory = await mkdtemp(join(tmpdir(), "relay-heartbeat-preflight-"));
+      const marker = join(directory, "codex-started");
+      const executable = join(directory, "codex-fixture");
+      await writeFile(
+        executable,
+        `#!${process.execPath}\nimport fs from 'node:fs';\nfs.writeFileSync(${JSON.stringify(marker)}, 'started');\n`,
+      );
+      await chmod(executable, 0o700);
+      let claimed = false;
+      let failure;
+      server = createServer(async (request, response) => {
+        const chunks = [];
+        for await (const chunk of request) chunks.push(chunk);
+        if (request.url.endsWith("/wakeup"))
+          return response.writeHead(204).end();
+        if (request.url.endsWith("/claim")) {
+          if (claimed) return response.writeHead(204).end();
+          claimed = true;
+          return response.end(
+            JSON.stringify({
+              run: { id: "bad-heartbeat", attempt: 1 },
+              task: {
+                title: "Fixture",
+                instructions: "Fixture",
+                deliverable: "investigation",
+                conversation: true,
+              },
+            }),
+          );
+        }
+        if (request.url.endsWith("/heartbeat"))
+          return response.end(reply === "html" ? "<html>Sign in</html>" : "{}");
+        if (request.url.endsWith("/fail")) {
+          failure = JSON.parse(Buffer.concat(chunks).toString());
+          child.kill("SIGTERM");
+        }
+        response.end('{"ok":true}');
+      });
+      await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      child = spawn(process.execPath, ["worker/index.mjs"], {
+        cwd: new URL("..", import.meta.url),
+        env: {
+          ...process.env,
+          RELAY_URL: `http://127.0.0.1:${server.address().port}`,
+          RELAY_WORKER_TOKEN: "relay_test",
+          RELAY_WORKER_BACKEND: "codex",
+          RELAY_CODEX_PATH: executable,
+          RELAY_CODEX_WORKSPACE: directory,
+          RELAY_CODEX_ADDITIONAL_WRITABLE_DIRS: "",
+          RELAY_POLL_INTERVAL_MS: "10",
+          RELAY_RUN_HEARTBEAT_INTERVAL_MS: "1000",
+          RELAY_WORKER_AUTO_UPDATE: "off",
+          RELAY_CODEX_AUTO_UPDATE: "off",
+          RELAY_VEHICLE_SEARCH: "0",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let output = "";
+      child.stdout.on("data", (chunk) => (output += chunk));
+      child.stderr.on("data", (chunk) => (output += chunk));
+      const [code] = await once(child, "close");
+      expect(code, output).toBe(0);
+      expect(failure.error).toContain(
+        reply === "html" ? "invalid JSON response" : "did not acknowledge",
+      );
+      await expect(readFile(marker)).rejects.toMatchObject({ code: "ENOENT" });
+    },
+    10_000,
+  );
+
   it("updates Codex using the configured executable after an idle claim", async () => {
     directory = await mkdtemp(join(tmpdir(), "relay-update-lifecycle-"));
     const marker = join(directory, "codex-updated");
@@ -67,6 +140,8 @@ else console.log(JSON.stringify({resultMarkdown:fs.existsSync(marker)?'updated':
           }),
         );
       }
+      if (request.url.endsWith("/heartbeat"))
+        return response.end('{"heartbeat":true}');
       if (request.url.endsWith("/complete") || request.url.endsWith("/fail")) {
         result = JSON.parse(Buffer.concat(chunks).toString());
         child.kill("SIGTERM");

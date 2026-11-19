@@ -281,6 +281,57 @@ if (process.argv.includes("--version")) {
 });
 
 describe("worker backend selection", () => {
+  it("forwards run cancellation to Codex and rejects already-cancelled work", async () => {
+    const controller = new AbortController();
+    const calls = [];
+    const runner = createTaskRunner(
+      { RELAY_WORKER_BACKEND: "codex" },
+      {
+        runCodex: async (_input, options) => {
+          calls.push(options);
+          return { resultMarkdown: "done", documents: [] };
+        },
+      },
+    );
+    await runner.run("task", "contract", { signal: controller.signal });
+    expect(calls[0].signal).toBe(controller.signal);
+    controller.abort(new Error("lease lost"));
+    expect(() =>
+      runner.run("task", "contract", { signal: controller.signal }),
+    ).toThrow("lease lost");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("forwards run cancellation to the OpenAI request", async () => {
+    const controller = new AbortController();
+    let received;
+    class FakeOpenAI {
+      responses = {
+        create: (_body, options) => {
+          received = options.signal;
+          return new Promise((_, reject) =>
+            options.signal.addEventListener(
+              "abort",
+              () => reject(options.signal.reason),
+              { once: true },
+            ),
+          );
+        },
+      };
+    }
+    const runner = createTaskRunner(
+      { RELAY_WORKER_BACKEND: "openai", OPENAI_API_KEY: "test" },
+      { OpenAI: FakeOpenAI },
+    );
+    const pending = runner.run("task", "contract", {
+      signal: controller.signal,
+    });
+    const failure = expect(pending).rejects.toThrow("lease lost");
+    controller.abort(new Error("lease lost"));
+    await failure;
+    expect(received).toBe(controller.signal);
+  });
+
   it.each([undefined, ""])(
     "uses the CLI default when RELAY_CODEX_MODEL is %s",
     async (model) => {

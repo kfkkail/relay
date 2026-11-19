@@ -21,8 +21,11 @@ export async function requireWorker(request: Request) {
     .is("revoked_at", null)
     .maybeSingle();
 
-  if (error || !worker)
-    throw new ApiError("Worker token is invalid or revoked.", 401);
+  if (error) {
+    console.error("Worker authentication database error", error);
+    throw new ApiError("Worker authentication temporarily unavailable.", 503);
+  }
+  if (!worker) throw new ApiError("Worker token is invalid or revoked.", 401);
 
   await supabase
     .from("workers")

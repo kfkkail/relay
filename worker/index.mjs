@@ -8,7 +8,8 @@ import { collectResultDocuments } from "./result-documents.mjs";
 import deliverables from "../lib/deliverables.json" with { type: "json" };
 import {
   DEFAULT_MAX_CONCURRENT_RUNS,
-  fillAvailableSlots,
+  pollForWork,
+  pollingIntervals,
   nextIdlePollInterval,
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
@@ -24,10 +25,8 @@ const { request: relayRequest, download: relayDownload } = createRelayClient({
   relayUrl,
   workerToken,
 });
-const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
-const maxIdlePollInterval = Number(
-  process.env.RELAY_MAX_IDLE_POLL_INTERVAL_MS || 60000,
-);
+const { baseInterval: pollInterval, maxInterval: maxIdlePollInterval } =
+  pollingIntervals(process.env);
 const runHeartbeatInterval = Number(
   process.env.RELAY_RUN_HEARTBEAT_INTERVAL_MS || 30000,
 );
@@ -47,32 +46,9 @@ console.log(
 const activeRuns = new Set();
 let idlePollInterval = pollInterval;
 while (!stopping) {
-  if (!activeRuns.size) {
-    const update = await checkForUpdate();
-    if (update.status === "updated") {
-      console.log(`Worker updated to ${update.revision}; restarting`);
-      process.exit(0);
-    }
-    if (["dirty", "diverged", "error"].includes(update.status)) {
-      console.error(
-        `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
-      );
-    }
-    if (stopping) break;
-    const codexUpdate = await checkForCodexUpdate({
-      activeRuns: activeRuns.size,
-    });
-    if (["updated", "current"].includes(codexUpdate.status))
-      console.log(
-        `Codex update check: ${codexUpdate.status} (${codexUpdate.version})`,
-      );
-    else if (["error", "unsupported"].includes(codexUpdate.status))
-      console.error(`Codex update skipped: ${codexUpdate.error}`);
-  }
-  if (stopping) break;
   let claimedRuns = 0;
   try {
-    claimedRuns = await fillAvailableSlots({
+    claimedRuns = await pollForWork({
       activeRuns,
       claim: () =>
         relayRequest("/api/worker/runs/claim", {
@@ -83,6 +59,7 @@ while (!stopping) {
           }),
         }),
       run: processClaimedRun,
+      maintain: maintainWorker,
     });
   } catch (error) {
     console.error(`Claim failed: ${safeError(error)}`);
@@ -104,6 +81,30 @@ while (!stopping) {
 
 await Promise.allSettled([...activeRuns]);
 console.log("Relay worker stopped");
+
+async function maintainWorker() {
+  if (stopping) return;
+  const update = await checkForUpdate();
+  if (update.status === "updated") {
+    console.log(`Worker updated to ${update.revision}; restarting`);
+    process.exit(0);
+  }
+  if (["dirty", "diverged", "error"].includes(update.status)) {
+    console.error(
+      `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
+    );
+  }
+  if (stopping) return;
+  const codexUpdate = await checkForCodexUpdate({
+    activeRuns: activeRuns.size,
+  });
+  if (["updated", "current"].includes(codexUpdate.status))
+    console.log(
+      `Codex update check: ${codexUpdate.status} (${codexUpdate.version})`,
+    );
+  else if (["error", "unsupported"].includes(codexUpdate.status))
+    console.error(`Codex update skipped: ${codexUpdate.error}`);
+}
 
 async function processClaimedRun(claimed) {
   const { run, task, attachments = [] } = claimed;

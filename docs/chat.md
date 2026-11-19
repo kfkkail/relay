@@ -25,3 +25,41 @@ Apply the migration before deploying the application, then update the worker. Th
 This is on-demand conversational groundwork, not an always-running autonomous monitor. Existing schedules remain the way to request recurring checks. A future opt-in monitoring layer should persist interests, tie scheduled observations to conversations, deduplicate opportunities, enforce notification budgets and quiet hours, and use connector-level read-only capabilities. There is no streaming, conversation search, or automatic long-term memory in this version.
 
 Validation includes API tests for authentication, input limits, query relationship selection and active-turn conflicts, plus pgTAP coverage for persistence, ownership, idempotency and history. The SQL suite should run on a fresh local Supabase database before deployment.
+
+## Response latency
+
+There are three separate waits: queue pickup, generation/tools, and displaying
+completion. The worker now checks for work every five seconds by default even
+while idle (previously it backed off to sixty seconds), and claims queued work
+before checking for updates. Chat refreshes every second while a turn is queued
+or working, returning to five seconds afterward. With an available worker slot,
+these default polling delays total up to roughly six seconds instead of sixty-five,
+excluding network requests, maintenance, and generation time. This is a bound on
+configured polling sleeps, not a measured end-to-end latency guarantee.
+
+Existing workers with an explicit sixty-second idle cap need their configuration
+updated as described in `worker/README.md`. Shorter polling increases idle claim
+traffic to twelve requests per minute; pending chat refresh traffic rises to sixty
+requests per minute per open tab. No model or tool permissions change.
+
+Further improvements, in order to investigate:
+
+- Measure queue age at claim, model startup/first output, tool execution, and result
+  delivery separately before choosing the next optimization. Do not log prompts
+  or private replies.
+- Add authenticated queue wakeups and completion notifications to reduce polling
+  delay without continually increasing request volume.
+- Stream partial replies so users see progress during generation. The current
+  worker buffers a complete structured result; this needs a separate progress
+  protocol that does not expose raw tool diagnostics or partial document JSON.
+- Reuse isolated conversation sessions to avoid launching a fresh CLI process and
+  replaying history each turn, with explicit ownership and expiry boundaries.
+- Evaluate a chat-specific model/reasoning setting and smaller context snapshots
+  against representative questions and action requests before trading quality for
+  speed. Chat can perform real work, so it still needs tools and authorization.
+- Consider reserved chat capacity if all five worker slots are often occupied;
+  shorter polling cannot help a saturated worker.
+
+Maintenance still blocks new claims while it runs. Moving installs to a separate
+staging location and switching versions only between runs would address that
+remaining delay safely.

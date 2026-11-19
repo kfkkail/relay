@@ -66,6 +66,10 @@ export function Chat({
     message: string;
   } | null>(null);
 
+  const active = turns.some((turn) =>
+    ["queued", "working"].includes(turn.runs[0]?.status),
+  );
+
   useEffect(() => {
     // iOS's on-screen keyboard shrinks the visual viewport, not 100dvh.
     const viewport = window.visualViewport;
@@ -111,12 +115,12 @@ export function Chat({
       }
     }
     void refresh();
-    const timer = setInterval(() => void refresh(), 5000);
+    const timer = setInterval(() => void refresh(), active ? 1000 : 5000);
     return () => {
       controller.abort();
       clearInterval(timer);
     };
-  }, [id, revision]);
+  }, [id, revision, active]);
 
   useEffect(() => {
     if (followLatest.current && messages.current) {
@@ -129,10 +133,6 @@ export function Chat({
     textarea.current.style.height = "auto";
     textarea.current.style.height = `${Math.min(textarea.current.scrollHeight, 160)}px`;
   }, [message]);
-
-  const active = turns.some((turn) =>
-    ["queued", "working"].includes(turn.runs[0]?.status),
-  );
 
   async function send() {
     if (!loaded || busy || active || !message.trim()) return;

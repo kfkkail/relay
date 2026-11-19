@@ -60,6 +60,20 @@ The OpenAI Responses API remains available by choosing it during setup or by
 setting `RELAY_WORKER_BACKEND=openai`; that backend still requires
 `OPENAI_API_KEY`.
 
+Queue checks default to every five seconds, including while idle, so a new chat
+message does not wait for the previous one-minute idle backoff. This increases
+idle claim requests from about one to twelve per minute per worker. Set
+`RELAY_POLL_INTERVAL_MS` to adjust the base interval (minimum 1000 ms); optionally
+set `RELAY_MAX_IDLE_POLL_INTERVAL_MS` to a larger value to trade responsiveness
+for fewer idle requests. The maximum defaults to the base interval.
+
+Existing installations may already have `RELAY_MAX_IDLE_POLL_INTERVAL_MS=60000`
+saved in `.env.worker`; explicit values are preserved. Change it to `5000` with
+the default base interval and restart the worker to use the shorter wait.
+Queued work is claimed before idle update checks. Messages arriving during an
+update can still wait until maintenance finishes; active runs are never updated
+underneath.
+
 Start the poller in the foreground with:
 
 ```bash

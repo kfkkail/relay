@@ -169,23 +169,28 @@ async function configureWorker() {
     });
   }
 
-  Object.assign(values, {
-    RELAY_POLL_INTERVAL_MS: await askValue("Polling interval in milliseconds", {
+  values.RELAY_POLL_INTERVAL_MS = await askValue(
+    "Polling interval in milliseconds",
+    {
       name: "RELAY_POLL_INTERVAL_MS",
       existing,
       fallback: "5000",
       validate: validateMilliseconds,
-    }),
-    RELAY_MAX_IDLE_POLL_INTERVAL_MS: await askValue(
-      "Maximum idle polling interval in milliseconds",
-      {
-        name: "RELAY_MAX_IDLE_POLL_INTERVAL_MS",
-        existing,
-        fallback: "60000",
-        validate: validateMilliseconds,
-      },
-    ),
-  });
+    },
+  );
+  values.RELAY_MAX_IDLE_POLL_INTERVAL_MS = await askValue(
+    "Maximum idle polling interval in milliseconds",
+    {
+      name: "RELAY_MAX_IDLE_POLL_INTERVAL_MS",
+      existing,
+      fallback: values.RELAY_POLL_INTERVAL_MS,
+      validate: (value) =>
+        validateMilliseconds(value) ||
+        (Number(value) < Number(values.RELAY_POLL_INTERVAL_MS)
+          ? "Enter a maximum at least as large as the polling interval."
+          : null),
+    },
+  );
 
   await saveEnv(target, values);
   return backend;

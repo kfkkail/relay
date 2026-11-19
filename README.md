@@ -173,5 +173,6 @@ and other Supabase auth flows.
 
 **Chat** provides saved conversations backed by the existing worker, with recent
 Relay context and access to connections available on that worker. It supports
-on-demand advice and check-ins; continuous monitoring is not enabled. See
+on-demand advice, requested actions, and result documents with the same worker
+permissions as tasks; continuous monitoring is not enabled. See
 [chat behavior, permissions, and rollout](docs/chat.md) before enabling it.

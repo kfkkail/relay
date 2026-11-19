@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -14,6 +13,11 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { RelayHeader } from "@/components/relay-header";
+import {
+  documentLinkComponents,
+  ResultDocuments,
+} from "@/components/result-documents";
+import type { ResultDocument } from "@/lib/types";
 import styles from "./chat.module.css";
 
 type Conversation = { id: string; title: string };
@@ -24,6 +28,7 @@ type Turn = {
     status: string;
     result_markdown: string | null;
     error: string | null;
+    result_documents?: ResultDocument[];
   }[];
 };
 
@@ -356,7 +361,13 @@ export function Chat({
                     </div>
                     {run?.result_markdown ? (
                       <div className={`markdown ${styles.markdown}`}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={documentLinkComponents(
+                            turn.id,
+                            run.result_documents ?? [],
+                          )}
+                        >
                           {run.result_markdown}
                         </ReactMarkdown>
                       </div>
@@ -380,6 +391,10 @@ export function Chat({
                               : "Waiting for your worker. Replies will resume when it is online."}
                       </p>
                     )}
+                    <ResultDocuments
+                      taskId={turn.id}
+                      documents={run?.result_documents ?? []}
+                    />
                   </div>
                 </article>
               );
@@ -458,9 +473,10 @@ export function Chat({
               <p>
                 Replies use your local worker, recent Relay tasks and open
                 actions. Available connections depend on that worker; the API
-                backend only sees supplied context. Chat offers observation and
-                advice, and does not continuously monitor your connections. Use{" "}
-                <Link href="/tasks">Tasks</Link> to request actions.
+                backend only sees supplied context. Chat can carry out the same
+                work as tasks, including requested actions and documents, using
+                your worker’s permissions. It does not continuously monitor your
+                connections.
               </p>
             </details>
           </div>

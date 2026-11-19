@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       const { data, error } = await supabase
         .from("tasks")
         .select(
-          "id,chat_message,created_at,runs:runs!runs_task_id_fkey(id,status,result_markdown,error,attempt)",
+          "id,chat_message,created_at,runs:runs!runs_task_id_fkey(id,status,result_markdown,error,attempt,result_documents(id,display_filename,mime_type,byte_size,description))",
         )
         .eq("conversation_id", id)
         .order("created_at", { ascending: false })

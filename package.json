@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker": "node worker/index.mjs",
+    "worker:doctor": "node --env-file-if-exists=.env.worker scripts/worker-doctor.mjs",
     "vehicles:probe": "node scripts/vehicles-probe.mjs",
     "vehicles:nhtsa": "node scripts/vehicles-nhtsa.mjs",
     "vehicles:check": "node scripts/vehicle-check.mjs",

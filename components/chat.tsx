@@ -383,7 +383,7 @@ export function Chat({
                           <Clock3 size={18} aria-hidden="true" />
                         ) : null}
                         {run?.status === "failed"
-                          ? `Reply failed: ${run.error || "Worker error"}. You can send your message again.`
+                          ? `Reply failed: ${(run.error || "Worker error").trim().replace(/[.!?]+$/, "")}. You can send your message again.`
                           : run?.status === "cancelled"
                             ? "Reply cancelled. You can send another message."
                             : run?.status === "working"

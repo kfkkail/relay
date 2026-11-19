@@ -216,6 +216,43 @@ process.exit(1);
       }),
     ).rejects.toThrow("Codex CLI usage limit reached");
   });
+
+  it("retains the terminal failure after more than 50,000 characters of progress output", async () => {
+    const workspace = await makeDirectory("relay-workspace-test-");
+    const fixture = await makeExecutable(`#!/usr/bin/env node
+process.stderr.write("progress\\n".repeat(10000), () => {
+  process.stderr.write("Error: The model is not supported by this account\\n", () => process.exit(1));
+});
+`);
+    await expect(
+      runWithCodex("task", {
+        command: fixture,
+        env: process.env,
+        workspace,
+        completionContract: "Return a report.",
+        timeoutMs: 5000,
+      }),
+    ).rejects.toThrow("cannot use the configured model");
+  });
+
+  it("still reports the run failure if diagnostic reporting throws", async () => {
+    const workspace = await makeDirectory("relay-workspace-test-");
+    const fixture = await makeExecutable(`#!/usr/bin/env node
+process.stderr.write("Error: model_not_found", () => process.exit(1));
+`);
+    await expect(
+      runWithCodex("task", {
+        command: fixture,
+        env: process.env,
+        workspace,
+        completionContract: "Return a report.",
+        timeoutMs: 5000,
+        onDiagnostic: () => {
+          throw new Error("diagnostic consumer failed");
+        },
+      }),
+    ).rejects.toThrow("cannot use the configured model");
+  });
 });
 
 describe("worker backend selection", () => {

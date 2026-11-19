@@ -37,6 +37,7 @@ export async function runWithCodex(input, options = {}) {
       cwd: workspace,
       env: environment,
       timeoutMs,
+      onDiagnostic: options.onDiagnostic,
     },
   );
   return parseCodexResult(output);
@@ -156,18 +157,31 @@ async function execute(command, args, input, options) {
       }
     });
     child.stderr.on("data", (chunk) => {
-      if (stderr.length < 50_000) stderr += chunk;
+      // Startup/progress output can be large. The terminal error is at the end.
+      stderr = (stderr + chunk).slice(-50_000);
     });
     child.on("error", (error) => {
       const message =
         error.code === "ENOENT"
           ? "Codex CLI is unavailable at RELAY_CODEX_PATH."
-          : "Codex CLI could not be started.";
+          : error.code === "EACCES"
+            ? "Codex CLI is not executable by the worker service user. Check RELAY_CODEX_PATH and its permissions."
+            : "Codex CLI could not be started.";
       finish(new Error(message));
     });
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       if (settled) return;
-      if (code !== 0) return finish(new Error(codexFailure(stderr, code)));
+      if (code !== 0) {
+        // Only the explicit local diagnostic probe consumes raw stderr. Task
+        // failures and worker logs receive allowlisted messages below.
+        try {
+          options.onDiagnostic?.({ stderr, code, signal });
+        } catch {
+          // A diagnostic consumer must not hide the original failure or crash
+          // the worker while it is reporting an unsuccessful run.
+        }
+        return finish(new Error(codexFailure(stderr, code, signal)));
+      }
       const result = stdout.trim();
       if (!result)
         return finish(new Error("Codex CLI returned an empty result."));
@@ -186,13 +200,49 @@ async function execute(command, args, input, options) {
   });
 }
 
-function codexFailure(stderr, code) {
+export function codexFailure(stderr, code, signal) {
   const normalized = stderr.toLowerCase();
+  if (signal)
+    return `Codex CLI was terminated by ${signal}. Check worker memory and service restarts before retrying.`;
   if (
-    normalized.includes("not logged in") ||
-    normalized.includes("login required")
+    /not logged in|login required|unauthorized|401 unauthorized|refresh token|refresh_token|token[_ ]expired|authentication (?:failed|error)|please (?:log|sign) in/.test(
+      normalized,
+    )
   ) {
-    return "Codex CLI is not authenticated. Run `codex login` as the worker user.";
+    return "Codex CLI authentication failed or expired. Run `codex login` as the worker service user.";
+  }
+  if (
+    /model_not_found|\bmodel\b[^\n]{0,200}(?:not found|does not exist|not supported|unsupported|not available|unavailable|do not have access)|do not have access to[^\n]{0,100}\bmodel\b/.test(
+      normalized,
+    )
+  ) {
+    return "Codex CLI cannot use the configured model. Check RELAY_CODEX_MODEL (default: gpt-6.2-sol), the installed Codex version, and the worker account's model access.";
+  }
+  if (
+    /unexpected argument|unrecognized (?:option|argument)|unknown (?:option|argument)/.test(
+      normalized,
+    )
+  ) {
+    return "The installed Codex CLI does not support Relay's launch options. Update Codex for the worker service user and verify RELAY_CODEX_PATH.";
+  }
+  if (
+    /read-only file system|permission denied|os error (?:13|30)\b/.test(
+      normalized,
+    )
+  ) {
+    return "Codex CLI cannot write its local state or workspace. Check CODEX_HOME, HOME, workspace permissions, and the worker service user.";
+  }
+  if (
+    /no space left on device|disk (?:is )?full|os error 28\b/.test(normalized)
+  ) {
+    return "Codex CLI ran out of local disk space. Free space on the worker before retrying.";
+  }
+  if (
+    /error (?:loading|parsing) (?:config|configuration)|failed to (?:load|parse) (?:config|configuration)|invalid (?:config|configuration)|toml parse error|unsupported (?:value|parameter)|invalid value[^\n]*reasoning/.test(
+      normalized,
+    )
+  ) {
+    return "Codex CLI rejected its configuration. Run npm run worker:doctor from the managed worker checkout to inspect the startup error.";
   }
   if (
     normalized.includes("usage limit") ||
@@ -201,7 +251,21 @@ function codexFailure(stderr, code) {
   ) {
     return "Codex CLI usage limit reached. Check the signed-in ChatGPT workspace and try again later.";
   }
-  return `Codex CLI exited with status ${code}. Run it interactively to inspect its diagnostics.`;
+  if (
+    /context(?: window| length|_length).*exceed|maximum context length|prompt (?:is )?too long/.test(
+      normalized,
+    )
+  ) {
+    return "Codex CLI exceeded the model's context limit. Start a new conversation or shorten the task context.";
+  }
+  if (
+    /stream disconnected|connection (?:refused|reset|closed)|error sending request|failed to (?:connect|lookup)|network (?:error|unreachable)|certificate verify failed|tls handshake|503 service unavailable|502 bad gateway/.test(
+      normalized,
+    )
+  ) {
+    return "Codex CLI could not maintain its connection to the model service. Check the worker network and retry after connectivity recovers.";
+  }
+  return `Codex CLI exited with status ${code}. Run npm run worker:doctor from the managed worker checkout for a safe startup diagnostic.`;
 }
 
 function parseTimeout(value) {

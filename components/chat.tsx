@@ -204,8 +204,7 @@ export function Chat({
           <div className={styles.indexContent}>
             <div className={styles.heading}>
               <div>
-                <p className="eyebrow">Conversations</p>
-                <h1 id="chat-title">Chat</h1>
+                <h1 id="chat-title">Chats</h1>
                 <p>Think out loud. Pick up where you left off.</p>
               </div>
               <button
@@ -278,10 +277,10 @@ export function Chat({
           className="back-button"
           disabled={busy}
           onClick={() => router.push("/chat")}
-          aria-label="Back to conversations"
+          aria-label="Back to Chats"
         >
           <ChevronLeft size={20} aria-hidden="true" />
-          Chat
+          Chats
         </button>
         <div className={styles.conversationTitle}>
           <p>Relay</p>

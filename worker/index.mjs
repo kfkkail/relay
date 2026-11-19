@@ -15,6 +15,7 @@ import { createAutoUpdater } from "./auto-update.mjs";
 import { createCodexAutoUpdater } from "./codex-update.mjs";
 import { startRunHeartbeat } from "./run-heartbeat.mjs";
 import { createRelayClient } from "./relay-client.mjs";
+import { createWakeSignal, listenForWakeups } from "./wakeup.mjs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,8 +38,24 @@ const checkForUpdate = createAutoUpdater({ root });
 const checkForCodexUpdate = createCodexAutoUpdater();
 
 let stopping = false;
-process.on("SIGINT", () => (stopping = true));
-process.on("SIGTERM", () => (stopping = true));
+const wake = createWakeSignal();
+const wakeConnection = new AbortController();
+function stop() {
+  stopping = true;
+  wakeConnection.abort();
+  wake.notify();
+}
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
+
+const wakeListener = listenForWakeups({
+  request: relayRequest,
+  notify: wake.notify,
+  signal: wakeConnection.signal,
+}).catch(() => {
+  if (!stopping)
+    console.warn("Worker wake-up listener stopped. Polling remains available.");
+});
 
 console.log(
   `Relay worker started with ${taskRunner.backend}; polling ${new URL(relayUrl).origin}; running up to ${DEFAULT_MAX_CONCURRENT_RUNS} agents`,
@@ -47,29 +64,7 @@ console.log(
 const activeRuns = new Set();
 let idlePollInterval = pollInterval;
 while (!stopping) {
-  if (!activeRuns.size) {
-    const update = await checkForUpdate();
-    if (update.status === "updated") {
-      console.log(`Worker updated to ${update.revision}; restarting`);
-      process.exit(0);
-    }
-    if (["dirty", "diverged", "error"].includes(update.status)) {
-      console.error(
-        `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
-      );
-    }
-    if (stopping) break;
-    const codexUpdate = await checkForCodexUpdate({
-      activeRuns: activeRuns.size,
-    });
-    if (["updated", "current"].includes(codexUpdate.status))
-      console.log(
-        `Codex update check: ${codexUpdate.status} (${codexUpdate.version})`,
-      );
-    else if (["error", "unsupported"].includes(codexUpdate.status))
-      console.error(`Codex update skipped: ${codexUpdate.error}`);
-  }
-  if (stopping) break;
+  wake.clear();
   let claimedRuns = 0;
   try {
     claimedRuns = await fillAvailableSlots({
@@ -83,15 +78,41 @@ while (!stopping) {
           }),
         }),
       run: processClaimedRun,
+      onSettled: wake.notify,
     });
   } catch (error) {
     console.error(`Claim failed: ${safeError(error)}`);
   }
 
+  if (!activeRuns.size && !wake.pending && !stopping) {
+    const update = await checkForUpdate();
+    if (update.status === "updated") {
+      console.log(`Worker updated to ${update.revision}; restarting`);
+      process.exit(0);
+    }
+    if (["dirty", "diverged", "error"].includes(update.status)) {
+      console.error(
+        `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
+      );
+    }
+    if (stopping) break;
+    if (wake.pending) continue;
+    const codexUpdate = await checkForCodexUpdate({
+      activeRuns: activeRuns.size,
+    });
+    if (["updated", "current"].includes(codexUpdate.status))
+      console.log(
+        `Codex update check: ${codexUpdate.status} (${codexUpdate.version})`,
+      );
+    else if (["error", "unsupported"].includes(codexUpdate.status))
+      console.error(`Codex update skipped: ${codexUpdate.error}`);
+  }
+  if (stopping) break;
+
   if (claimedRuns > 0) idlePollInterval = pollInterval;
 
   if (!activeRuns.size) {
-    await sleep(idlePollInterval);
+    await wake.wait(idlePollInterval);
     idlePollInterval = nextIdlePollInterval(idlePollInterval, {
       baseInterval: pollInterval,
       maxInterval: maxIdlePollInterval,
@@ -99,10 +120,10 @@ while (!stopping) {
     continue;
   }
 
-  await Promise.race([...activeRuns, sleep(pollInterval)]);
+  await wake.wait(pollInterval);
 }
 
-await Promise.allSettled([...activeRuns]);
+await Promise.allSettled([wakeListener, ...activeRuns]);
 console.log("Relay worker stopped");
 
 async function processClaimedRun(claimed) {
@@ -242,8 +263,4 @@ function required(name) {
 
 function safeError(error) {
   return error instanceof Error ? error.message : "Unknown error";
-}
-
-function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }

@@ -4,6 +4,7 @@ export async function fillAvailableSlots({
   activeRuns,
   claim,
   run,
+  onSettled,
   maxConcurrency = DEFAULT_MAX_CONCURRENT_RUNS,
 }) {
   let claimedRuns = 0;
@@ -15,7 +16,10 @@ export async function fillAvailableSlots({
     let activeRun;
     activeRun = Promise.resolve()
       .then(() => run(claimed))
-      .finally(() => activeRuns.delete(activeRun));
+      .finally(() => {
+        activeRuns.delete(activeRun);
+        onSettled?.();
+      });
     activeRuns.add(activeRun);
   }
   return claimedRuns;

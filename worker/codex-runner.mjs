@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
 import { delimiter, isAbsolute } from "node:path";
 import { parseCodexResult } from "./result-documents.mjs";
+import { readRuntimeVersion, versionedFailure } from "./runtime-version.mjs";
 
 const MAX_RESULT_LENGTH = 200_000;
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
@@ -14,6 +15,25 @@ Do not disable or evade the Codex sandbox. Do not modify files outside the prima
 Relay supports private result documents created inside the configured workspace. Your entire final response must be one JSON object with this shape: {"resultMarkdown":"important conclusions and deliverables in Markdown","documents":[{"path":"relative/path.md","description":"optional description"}]}. Declare at most 10 Markdown, plain text, PDF, CSV, JSON, or iCalendar (.ics) files, using paths relative to the workspace. Documents supplement the Markdown rather than replace it. For requested calendar suggestions, create real .ics files inside the workspace and declare their relative paths in documents; Relay uploads these files and provides authenticated download controls. So the owner can add an event without searching the document list, also link to each attached .ics inline in resultMarkdown using its filename as the link target, for example [Add to calendar](dentist.ics); Relay rewrites filename links to that document's authenticated download URL. Do not claim that this result channel cannot provide .ics attachments. Use one VEVENT per file with a stable UID, DTSTAMP, SUMMARY, DTSTART, DTEND, DESCRIPTION, and LOCATION when provided. Include the source email URL and useful logistics in DESCRIPTION. Use the stated IANA event timezone, otherwise America/Indiana/Indianapolis, accounting for daylight saving time; encode timed events in UTC or use TZID with a matching VTIMEZONE. Only generate timed events with confirmed dates and start times; when the end time is missing, apply the two-hour default unless an explicit duration is provided. Flag missing dates, missing start times, or conflicting times instead of inventing them. For explicitly date-only deadlines, use all-day DATE values with the next day as the exclusive end. Do not infer recurrence from a broad date range. Follow RFC 5545 escaping, CRLF line endings, and line folding. Calendar files are suggestions to review and save, not registrations or permission to create events, send invitations, or subscribe to calendars. Do not add alarms unless requested. Do not put local absolute paths in resultMarkdown. To reference any attached document inline, link to its declared filename (its workspace-relative path), and Relay resolves it to the document's authenticated URL. Normal http/https links are supported, including links to websites, commits, and pull requests. Summarize validation and limitations inline, and never claim an action you could not perform.`;
 
 export async function runWithCodex(input, options = {}) {
+  try {
+    return await executeCodexTask(input, options);
+  } catch (error) {
+    const versions = await readRuntimeVersion({
+      command: options.command || "codex",
+      env: codexEnvironment(options.env || process.env),
+    });
+    throw new Error(
+      versionedFailure(
+        error instanceof Error ? error.message : "Unknown Codex CLI failure.",
+        versions,
+        options.model,
+      ),
+      { cause: error },
+    );
+  }
+}
+
+async function executeCodexTask(input, options) {
   const command = options.command || "codex";
   const timeoutMs = parseTimeout(options.timeoutMs);
   const workspace = await resolveDirectory(
@@ -216,7 +236,7 @@ export function codexFailure(stderr, code, signal) {
       normalized,
     )
   ) {
-    return "Codex CLI cannot use the configured model. Check RELAY_CODEX_MODEL (default: gpt-6.2-sol), the installed Codex version, and the worker account's model access.";
+    return "Codex CLI cannot use the selected model. Check RELAY_CODEX_MODEL (unset uses the Codex CLI default), the installed Codex version, and the worker account's model access.";
   }
   if (
     /unexpected argument|unrecognized (?:option|argument)|unknown (?:option|argument)/.test(

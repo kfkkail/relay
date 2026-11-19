@@ -14,7 +14,10 @@ export async function diagnoseWorker(env = process.env, dependencies = {}) {
       error: "worker:doctor requires RELAY_WORKER_BACKEND=codex.",
     };
 
-  const report = { ok: false, model: env.RELAY_CODEX_MODEL || "gpt-6.2-sol" };
+  const report = {
+    ok: false,
+    model: env.RELAY_CODEX_MODEL || "Codex CLI default",
+  };
   const run = dependencies.exec || exec;
   try {
     const result = await run(env.RELAY_CODEX_PATH || "codex", ["--version"], {

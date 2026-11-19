@@ -22,7 +22,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
         const payload = normalizeInput(input);
         return runCodex(payload.text, {
           command: env.RELAY_CODEX_PATH || "codex",
-          model: env.RELAY_CODEX_MODEL || "gpt-6.2-sol",
+          model: env.RELAY_CODEX_MODEL || undefined,
           timeoutMs: env.RELAY_CODEX_TIMEOUT_MS || undefined,
           workspace: env.RELAY_CODEX_WORKSPACE,
           additionalDirectories:

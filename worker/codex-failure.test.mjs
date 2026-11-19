@@ -10,12 +10,12 @@ describe("Codex failure categories", () => {
     ["ERROR: 401 Unauthorized", "authentication failed or expired"],
     [
       "Error: The 'gpt-6.2-sol' model is not supported when using Codex with a ChatGPT account.",
-      "cannot use the configured model",
+      "cannot use the selected model",
     ],
-    ["Error: model_not_found", "cannot use the configured model"],
+    ["Error: model_not_found", "cannot use the selected model"],
     [
       "Error: You do not have access to the model",
-      "cannot use the configured model",
+      "cannot use the selected model",
     ],
     [
       "error: unexpected argument '--ignore-rules' found",

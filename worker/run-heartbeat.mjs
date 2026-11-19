@@ -10,12 +10,21 @@ export function startRunHeartbeat({
       "Run heartbeat interval must be at least 1000 milliseconds.",
     );
 
-  let inFlight = Promise.resolve();
+  let inFlight;
+  let stopped = false;
   const timer = schedule(() => {
-    inFlight = inFlight.then(heartbeat, heartbeat).catch(onError);
+    // Skip ticks during a request instead of accumulating stale renewals.
+    if (stopped || inFlight) return;
+    inFlight = Promise.resolve()
+      .then(heartbeat)
+      .catch(onError)
+      .finally(() => {
+        inFlight = undefined;
+      });
   }, intervalMs);
 
   return async function stopRunHeartbeat() {
+    stopped = true;
     cancel(timer);
     await inFlight;
   };

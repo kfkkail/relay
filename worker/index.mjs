@@ -13,11 +13,16 @@ import {
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
 import { startRunHeartbeat } from "./run-heartbeat.mjs";
+import { createRelayClient } from "./relay-client.mjs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const relayUrl = required("RELAY_URL").replace(/\/$/, "");
 const workerToken = required("RELAY_WORKER_TOKEN");
+const { request: relayRequest, download: relayDownload } = createRelayClient({
+  relayUrl,
+  workerToken,
+});
 const pollInterval = Number(process.env.RELAY_POLL_INTERVAL_MS || 5000);
 const maxIdlePollInterval = Number(
   process.env.RELAY_MAX_IDLE_POLL_INTERVAL_MS || 60000,
@@ -89,7 +94,6 @@ async function processClaimedRun(claimed) {
   const { run, task, attachments = [] } = claimed;
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
-  let heartbeatStopped = false;
   const stopHeartbeat =
     run.job_kind === "vehicle_search"
       ? async () => {}
@@ -186,8 +190,6 @@ async function processClaimedRun(claimed) {
       );
       documentIds.push(uploaded.document.id);
     }
-    await stopHeartbeat();
-    heartbeatStopped = true;
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
       body: JSON.stringify({
@@ -198,10 +200,6 @@ async function processClaimedRun(claimed) {
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {
-    if (!heartbeatStopped) {
-      await stopHeartbeat();
-      heartbeatStopped = true;
-    }
     const message = safeError(error);
     console.error(`Run ${run.id} failed: ${message}`);
     try {
@@ -215,7 +213,7 @@ async function processClaimedRun(claimed) {
       );
     }
   } finally {
-    if (!heartbeatStopped) await stopHeartbeat();
+    await stopHeartbeat();
     if (attachmentDirectory)
       await rm(attachmentDirectory, { recursive: true, force: true });
   }
@@ -225,37 +223,6 @@ function required(name) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
   return value;
-}
-
-async function relayRequest(path, init) {
-  const isForm = init?.body instanceof FormData;
-  const response = await fetch(`${relayUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${workerToken}`,
-      ...(isForm ? {} : { "Content-Type": "application/json" }),
-      ...init?.headers,
-    },
-  });
-  if (response.status === 204) return null;
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new Error(body.error || `Relay returned HTTP ${response.status}.`);
-  return body;
-}
-
-async function relayDownload(path) {
-  const response = await fetch(`${relayUrl}${path}`, {
-    headers: { Authorization: `Bearer ${workerToken}` },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(
-      body.error ||
-        `Relay could not download an attachment (HTTP ${response.status}).`,
-    );
-  }
-  return Buffer.from(await response.arrayBuffer());
 }
 
 function safeError(error) {

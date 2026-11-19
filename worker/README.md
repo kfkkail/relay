@@ -126,10 +126,27 @@ validation failures leave the current process running and retry later.
 Dependency-changing automatic updates allow npm up to ten minutes on slower
 workers; other update commands retain a one-minute timeout.
 
-This updater handles Relay and its npm/browser dependencies. The separately
-installed Codex CLI is not automatically upgraded by Relay. Releases that support
-self-update provide `codex update`; use the executable recorded in
-`RELAY_CODEX_PATH` as the worker service user so you update the copy Relay uses.
+While idle, Relay also updates the Codex CLI on worker startup and every 24 hours
+afterward. It runs maintenance before claiming new work, waits for active tasks
+to finish, and verifies the configured executable's version after updating.
+Global npm installations are detected through `RELAY_CODEX_PATH` and upgraded
+with `@openai/codex@latest` at their owning prefix, including older CLIs without
+`codex update`. Other installations use native `codex update`.
+
+Codex updates inherit `RELAY_WORKER_AUTO_UPDATE=on` from the managed service.
+Set `RELAY_CODEX_AUTO_UPDATE=off` in the managed checkout's `.env.worker` and
+restart the service to disable only Codex updates. A foreground worker can opt
+in with `RELAY_CODEX_AUTO_UPDATE=on`. Existing model overrides and logins are
+preserved. A blank `RELAY_CODEX_MODEL` continues to use the installed CLI default.
+
+Updates run as the worker service user with closed stdin and a ten-minute
+deadline. Failure, unsupported installation methods, or insufficient permissions
+produce a bounded log message and leave the worker polling. Relay does not use
+sudo or upgrade project-local npm installations. The next daily check retries
+failed updates; restarting the worker also triggers a fresh check. Installer
+output, task contents, and credentials are not logged. Post-update validation
+checks executable startup/version; use `worker:doctor` to verify account/model
+access if replies still fail.
 
 `npm run worker` remains available when the required values are already
 exported into the current shell or supplied by another secret manager.

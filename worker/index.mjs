@@ -12,6 +12,7 @@ import {
   nextIdlePollInterval,
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
+import { createCodexAutoUpdater } from "./codex-update.mjs";
 import { startRunHeartbeat } from "./run-heartbeat.mjs";
 import { createRelayClient } from "./relay-client.mjs";
 import { dirname, resolve } from "node:path";
@@ -33,6 +34,7 @@ const runHeartbeatInterval = Number(
 const taskRunner = createTaskRunner();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkForUpdate = createAutoUpdater({ root });
+const checkForCodexUpdate = createCodexAutoUpdater();
 
 let stopping = false;
 process.on("SIGINT", () => (stopping = true));
@@ -45,6 +47,29 @@ console.log(
 const activeRuns = new Set();
 let idlePollInterval = pollInterval;
 while (!stopping) {
+  if (!activeRuns.size) {
+    const update = await checkForUpdate();
+    if (update.status === "updated") {
+      console.log(`Worker updated to ${update.revision}; restarting`);
+      process.exit(0);
+    }
+    if (["dirty", "diverged", "error"].includes(update.status)) {
+      console.error(
+        `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
+      );
+    }
+    if (stopping) break;
+    const codexUpdate = await checkForCodexUpdate({
+      activeRuns: activeRuns.size,
+    });
+    if (["updated", "current"].includes(codexUpdate.status))
+      console.log(
+        `Codex update check: ${codexUpdate.status} (${codexUpdate.version})`,
+      );
+    else if (["error", "unsupported"].includes(codexUpdate.status))
+      console.error(`Codex update skipped: ${codexUpdate.error}`);
+  }
+  if (stopping) break;
   let claimedRuns = 0;
   try {
     claimedRuns = await fillAvailableSlots({
@@ -66,16 +91,6 @@ while (!stopping) {
   if (claimedRuns > 0) idlePollInterval = pollInterval;
 
   if (!activeRuns.size) {
-    const update = await checkForUpdate();
-    if (update.status === "updated") {
-      console.log(`Worker updated to ${update.revision}; restarting`);
-      process.exit(0);
-    }
-    if (["dirty", "diverged", "error"].includes(update.status)) {
-      console.error(
-        `Worker update skipped (${update.status})${update.error ? `: ${update.error}` : ""}`,
-      );
-    }
     await sleep(idlePollInterval);
     idlePollInterval = nextIdlePollInterval(idlePollInterval, {
       baseInterval: pollInterval,

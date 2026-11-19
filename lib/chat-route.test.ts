@@ -87,6 +87,11 @@ it("disambiguates run relationships and bounds chat reads", async () => {
   expect(query.select).toHaveBeenCalledWith(
     expect.stringContaining("runs:runs!runs_task_id_fkey("),
   );
+  expect(query.select).toHaveBeenCalledWith(
+    expect.stringContaining(
+      "result_documents(id,display_filename,mime_type,byte_size,description)",
+    ),
+  );
   expect(query.eq).toHaveBeenCalledWith("conversation_id", conversationId);
   expect(query.limit).toHaveBeenCalledWith(100);
 });

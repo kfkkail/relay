@@ -14,7 +14,9 @@ Open **Chat** to ask general questions, prepare for the week, or request a check
 
 Conversation and turn data use owner RLS. A composite foreign key prevents linking a task to another owner's conversation. The message RPC runs as the authenticated caller and builds its context from that owner's rows. The worker receives text snapshots, not database credentials.
 
-The conversational completion contract permits observation and advice and prohibits external writes, even when requested in chat. **This is an agent instruction, not a technical read-only credential boundary:** the existing Codex runtime retains its installed tools and account capabilities. Use explicitly scoped read-only connector credentials before treating this as a security boundary. Actions should be requested through ordinary tasks.
+Chat uses the same worker permissions and capabilities as tasks. The owner can request project edits, validation, generated documents, and external actions directly in a conversation without creating a separate task. The shared worker policy still requires explicit requests for external changes, preserves the workspace sandbox, and protects credentials. Questions and advice do not authorize unrelated actions, and retrieved context or prior assistant suggestions cannot grant authorization. The direct OpenAI backend still has no tools and must report that limitation.
+
+Generated documents use the existing private task/run upload and owner-authenticated download routes. Chat renders the same document list and inline filename links as tasks, including direct calendar downloads. Updating the worker is required to replace the previous observation-only chat contract.
 
 Apply the migration before deploying the application, then update the worker. The new chat-aware claim RPC defaults to excluding chat; the legacy RPC keeps its signature and excludes chat too. Only updated workers advertise chat support, so old workers continue ordinary tasks and leave conversations queued instead of running the wrong completion policy. The migration adds the chat-aware RPC and updates the legacy claim filter without changing its signature.
 

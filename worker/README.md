@@ -176,6 +176,29 @@ Only the run ID, status, and bounded error category are written to stdout; task
 instructions, results, credentials, model responses, and raw Codex diagnostics
 are not logged.
 
+### Immediate Codex failures
+
+If a reply immediately fails, run this from the managed worker checkout as the
+same OS user that runs the worker service:
+
+```bash
+npm run worker:doctor
+```
+
+The command loads that checkout's `.env.worker`, checks the configured Codex
+version, and sends a fixed diagnostic prompt through the same workspace,
+environment, login and model settings as normal tasks and chat. It makes one
+model request with a 30-second deadline, asks for no tool use or external actions,
+and does not replay the failed message. The report includes the selected model,
+CLI version, and a redacted terminal error from this probe. It does not change
+configuration, refresh logins, or fall back to another model.
+
+Normal run errors now distinguish model access, expired authentication,
+unsupported CLI flags, unwritable state, full disks, configuration errors,
+context limits, lost connections, and process termination. Unknown errors point
+to this command. Earlier failures keep their original stored error; retry after
+the worker updates to get a new category.
+
 ## Long-running tasks and heartbeats
 
 Agent runs renew their heartbeat every 30 seconds, including while Codex runs,

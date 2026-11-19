@@ -13,7 +13,11 @@ import {
 } from "./run-scheduler.mjs";
 import { createAutoUpdater } from "./auto-update.mjs";
 import { createCodexAutoUpdater } from "./codex-update.mjs";
-import { startRunHeartbeat } from "./run-heartbeat.mjs";
+import {
+  renewRunHeartbeat,
+  startRunHeartbeat,
+  validateHeartbeatInterval,
+} from "./run-heartbeat.mjs";
 import { createRelayClient } from "./relay-client.mjs";
 import { createWakeSignal, listenForWakeups } from "./wakeup.mjs";
 import { dirname, resolve } from "node:path";
@@ -32,6 +36,7 @@ const maxIdlePollInterval = Number(
 const runHeartbeatInterval = Number(
   process.env.RELAY_RUN_HEARTBEAT_INTERVAL_MS || 30000,
 );
+validateHeartbeatInterval(runHeartbeatInterval);
 const taskRunner = createTaskRunner();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkForUpdate = createAutoUpdater({ root });
@@ -130,21 +135,22 @@ async function processClaimedRun(claimed) {
   const { run, task, attachments = [] } = claimed;
   console.log(`Claimed run ${run.id} (attempt ${run.attempt})`);
   let attachmentDirectory;
-  const stopHeartbeat =
-    run.job_kind === "vehicle_search"
-      ? async () => {}
-      : startRunHeartbeat({
-          intervalMs: runHeartbeatInterval,
-          heartbeat: () =>
-            relayRequest(`/api/worker/runs/${run.id}/heartbeat`, {
-              method: "POST",
-            }),
-          onError: (error) =>
-            console.error(
-              `Heartbeat failed for ${run.id}: ${safeError(error)}`,
-            ),
-        });
+  let heartbeat;
+  let signal;
   try {
+    if (run.job_kind !== "vehicle_search") {
+      // Verify the renewal path before starting work that may mutate external systems.
+      heartbeat = startRunHeartbeat({
+        intervalMs: runHeartbeatInterval,
+        heartbeat: (signal) => renewRunHeartbeat(relayRequest, run.id, signal),
+        onError: (error) =>
+          console.error(`Heartbeat failed for ${run.id}: ${safeError(error)}`),
+        onRecovered: () => console.log(`Heartbeat recovered for ${run.id}`),
+      });
+      signal = heartbeat.signal;
+      await heartbeat.ready;
+      signal.throwIfAborted();
+    }
     if (run.job_kind === "vehicle_search") {
       const result = await runVehicleJob(claimed, relayRequest);
       if (result?.enrichment_failed) return;
@@ -164,12 +170,13 @@ async function processClaimedRun(claimed) {
         const path = join(attachmentDirectory, `${attachment.id}${extension}`);
         const data = await relayDownload(
           `/api/worker/runs/${run.id}/attachments/${attachment.id}`,
+          { signal },
         );
         if (data.byteLength !== attachment.byte_size)
           throw new Error(
             `Attachment ${attachment.file_name} did not match its recorded size.`,
           );
-        await writeFile(path, data, { flag: "wx" });
+        await writeFile(path, data, { flag: "wx", signal });
         localAttachments.push({
           path,
           mimeType: attachment.mime_type,
@@ -201,7 +208,10 @@ async function processClaimedRun(claimed) {
         attachments: localAttachments,
       },
       task.conversation ? CHAT_CONTRACT : definition.contract,
+      { signal },
     );
+
+    signal?.throwIfAborted();
 
     const documents =
       taskRunner.backend === "codex"
@@ -212,20 +222,28 @@ async function processClaimedRun(claimed) {
         : [];
     const documentIds = [];
     for (const document of documents) {
+      signal?.throwIfAborted();
       const form = new FormData();
       form.set(
         "file",
-        new File([await readFile(document.path)], document.fileName, {
-          type: document.mimeType,
-        }),
+        new File(
+          [await readFile(document.path, { signal })],
+          document.fileName,
+          {
+            type: document.mimeType,
+          },
+        ),
       );
       if (document.description) form.set("description", document.description);
       const uploaded = await relayRequest(
         `/api/worker/runs/${run.id}/documents`,
-        { method: "POST", body: form },
+        { method: "POST", body: form, signal },
       );
       documentIds.push(uploaded.document.id);
     }
+    signal?.throwIfAborted();
+    // Allow this bounded terminal request to settle: a concurrent heartbeat can
+    // return 404 after completion has already committed successfully.
     await relayRequest(`/api/worker/runs/${run.id}/complete`, {
       method: "POST",
       body: JSON.stringify({
@@ -236,7 +254,7 @@ async function processClaimedRun(claimed) {
     });
     console.log(`Completed run ${run.id}`);
   } catch (error) {
-    const message = safeError(error);
+    const message = safeError(signal?.aborted ? signal.reason : error);
     console.error(`Run ${run.id} failed: ${message}`);
     try {
       await relayRequest(`/api/worker/runs/${run.id}/fail`, {
@@ -249,7 +267,7 @@ async function processClaimedRun(claimed) {
       );
     }
   } finally {
-    await stopHeartbeat();
+    await heartbeat?.stop();
     if (attachmentDirectory)
       await rm(attachmentDirectory, { recursive: true, force: true });
   }

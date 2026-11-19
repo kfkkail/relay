@@ -1,5 +1,24 @@
 export const RELAY_REQUEST_TIMEOUT_MS = 30_000;
 
+export class RelayHttpError extends Error {
+  constructor(message, status, retryAfterMs) {
+    super(message);
+    this.name = "RelayHttpError";
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+function retryAfter(response) {
+  const value = response.headers.get("Retry-After");
+  if (!value) return undefined;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds)
+    ? seconds * 1000
+    : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) ? Math.max(0, delay) : undefined;
+}
+
 export function createRelayClient({
   relayUrl,
   workerToken,
@@ -21,6 +40,7 @@ export function createRelayClient({
         ...init,
         headers,
         signal,
+        redirect: "error",
       });
       // Keep the deadline active while reading the body as well as headers.
       return await consume(response, signal);
@@ -40,6 +60,16 @@ export function createRelayClient({
       return await response.json();
     } catch (error) {
       if (signal.aborted) throw error;
+      // A broken response stream is a connection failure, not a permanent
+      // protocol mismatch. Keep it eligible for heartbeat recovery.
+      if (response.ok && !(error instanceof SyntaxError)) throw error;
+      if (response.ok)
+        throw Object.assign(
+          new Error(
+            `Relay returned an invalid JSON response (HTTP ${response.status}). Check RELAY_URL and deployment access.`,
+          ),
+          { code: "INVALID_RELAY_RESPONSE" },
+        );
       return {};
     }
   }
@@ -50,19 +80,23 @@ export function createRelayClient({
         if (response.status === 204) return null;
         const body = await jsonBody(response, signal);
         if (!response.ok)
-          throw new Error(
-            body.error || `Relay returned HTTP ${response.status}.`,
+          throw new RelayHttpError(
+            body?.error || `Relay returned HTTP ${response.status}.`,
+            response.status,
+            retryAfter(response),
           );
         return body;
       });
     },
-    download(path) {
-      return send(path, {}, async (response, signal) => {
+    download(path, init = {}) {
+      return send(path, init, async (response, signal) => {
         if (!response.ok) {
           const body = await jsonBody(response, signal);
-          throw new Error(
-            body.error ||
+          throw new RelayHttpError(
+            body?.error ||
               `Relay could not download an attachment (HTTP ${response.status}).`,
+            response.status,
+            retryAfter(response),
           );
         }
         return Buffer.from(await response.arrayBuffer());

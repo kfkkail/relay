@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   user: { id: "owner" } as { id: string } | null,
   revoked: false,
   owner: "owner",
+  databaseError: false,
 }));
 
 // Model the database filters so the route and bearer authentication share state.
@@ -28,6 +29,11 @@ const database = vi.hoisted(() => ({
         return query;
       }),
       maybeSingle: vi.fn(async () => {
+        if (state.databaseError)
+          return {
+            data: null,
+            error: { message: "private database diagnostics" },
+          };
         if (
           (filters.user_id && filters.user_id !== state.owner) ||
           (filters.id && filters.id !== "worker") ||
@@ -65,10 +71,27 @@ beforeEach(() => {
   state.user = { id: "owner" };
   state.owner = "owner";
   state.revoked = false;
+  state.databaseError = false;
   vi.clearAllMocks();
 });
 
 describe("worker token revocation", () => {
+  it("treats unavailable credential storage as retryable rather than revoking a valid worker", async () => {
+    state.databaseError = true;
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(requireWorker(workerRequest())).rejects.toMatchObject({
+        status: 503,
+        message: "Worker authentication temporarily unavailable.",
+      });
+    } finally {
+      logged.mockRestore();
+    }
+    state.databaseError = false;
+    await expect(requireWorker(workerRequest())).resolves.toMatchObject({
+      worker: { id: "worker" },
+    });
+  });
   it("accepts an active token and rejects it after its owner revokes it", async () => {
     await expect(requireWorker(workerRequest())).resolves.toMatchObject({
       worker: { id: "worker" },

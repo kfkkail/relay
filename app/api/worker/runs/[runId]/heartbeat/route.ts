@@ -18,7 +18,11 @@ export async function POST(
       .eq("status", "working")
       .select("id")
       .maybeSingle();
-    if (error || !run)
+    if (error) {
+      console.error("Agent heartbeat database error", error);
+      throw new ApiError("Heartbeat renewal temporarily unavailable.", 503);
+    }
+    if (!run)
       throw new ApiError("Active agent run not found for this worker.", 404);
     return NextResponse.json({ heartbeat: true });
   } catch (error) {

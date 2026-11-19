@@ -61,4 +61,28 @@ describe("agent run heartbeat route", () => {
       error: "Active agent run not found for this worker.",
     });
   });
+
+  it("returns a retryable 503 for a database failure instead of claiming the run is inactive", async () => {
+    const db = database({
+      data: null,
+      error: { message: "private database diagnostics" },
+    });
+    mocks.requireWorker.mockResolvedValue({
+      supabase: db,
+      worker: { id: "worker-1" },
+    });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await POST(new Request("https://relay.test"), {
+        params: Promise.resolve({ runId: "run-1" }),
+      });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "Heartbeat renewal temporarily unavailable.",
+      });
+      expect(logged).toHaveBeenCalled();
+    } finally {
+      logged.mockRestore();
+    }
+  });
 });

@@ -236,9 +236,40 @@ the resolved model name; that depends on the installed CLI and its catalog.
 Agent runs renew their heartbeat every 30 seconds, including while Codex runs,
 documents upload, and the completion or failure request finishes. Each Relay
 request has a 30-second deadline covering both response headers and body.
-A stalled heartbeat times out so the next interval can renew the run; slow
-requests do not accumulate queued renewals. These deadlines do not limit the
-total task duration.
+A stalled heartbeat times out so a retry can renew the run; slow requests do not
+accumulate queued renewals. These deadlines do not limit the total task duration.
+
+Before starting an agent, the worker verifies that Relay acknowledges a renewal
+with `heartbeat: true`. Successful responses with invalid JSON and redirected
+API requests fail explicitly instead of being counted as renewals. Use the
+canonical deployed `RELAY_URL` that accepts worker bearer authentication.
+`RELAY_RUN_HEARTBEAT_INTERVAL_MS` must be between 1,000 and 60,000 milliseconds;
+the worker rejects unsafe intervals at startup before claiming any work.
+
+Timeouts, connection failures, and HTTP 408, 425, 429, and 5xx responses retry
+after 2, 5, 10, then 15 seconds. A longer `Retry-After` is honored within the
+heartbeat deadline. Acknowledgment resets the retry backoff and loss deadline.
+During an initial interruption, the worker waits for acknowledgment before
+starting Codex. During a later interruption, it continues the existing task
+while retrying. It never automatically replays the task.
+
+Authentication rejection, a confirmed inactive run, or an invalid acknowledgment
+stops work immediately. After four minutes without an acknowledged renewal, an
+independent watchdog cancels work before the server's five-minute expiry. The
+watchdog also bounds stalled renewal requests and long `Retry-After` delays.
+On macOS and Linux, cancellation kills the Codex process group, including its
+ordinary child processes, and cancels pending attachment/document transfers.
+It also aborts a pending OpenAI backend request. A completion request already in
+flight is allowed its existing 30-second deadline: the server may have committed
+the result before a concurrent heartbeat reports the run inactive.
+
+Chat shows **Worker connection interrupted. Waiting to reconnect…** once the
+server has not received a renewal for two minutes, and clears that message on
+renewal. Database failures during token lookup or heartbeat update return a
+retryable 503 instead of an invalid-token or inactive-run response. A locally
+cancelled run reports its specific failure if Relay is reachable. If the worker
+cannot reach Relay at all, the server eventually records the existing expiry
+message; an offline worker cannot immediately publish its local reason.
 
 Relay marks a run failed when its last heartbeat is over five minutes old. The
 message **Worker heartbeat expired** means renewals stopped reaching Relay;

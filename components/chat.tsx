@@ -28,6 +28,7 @@ type Turn = {
     status: string;
     result_markdown: string | null;
     error: string | null;
+    connection_interrupted?: boolean;
     result_documents?: ResultDocument[];
   }[];
 };
@@ -386,7 +387,9 @@ export function Chat({
                           : run?.status === "cancelled"
                             ? "Reply cancelled. You can send another message."
                             : run?.status === "working"
-                              ? "Reading context and preparing a reply…"
+                              ? run.connection_interrupted
+                                ? "Worker connection interrupted. Waiting to reconnect…"
+                                : "Reading context and preparing a reply…"
                               : "Waiting for your worker. Replies will resume when it is online."}
                       </p>
                     )}

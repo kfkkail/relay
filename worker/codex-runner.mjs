@@ -18,6 +18,7 @@ export async function runWithCodex(input, options = {}) {
   try {
     return await executeCodexTask(input, options);
   } catch (error) {
+    if (options.signal?.aborted) throw options.signal.reason;
     const versions = await readRuntimeVersion({
       command: options.command || "codex",
       env: codexEnvironment(options.env || process.env),
@@ -34,6 +35,7 @@ export async function runWithCodex(input, options = {}) {
 }
 
 async function executeCodexTask(input, options) {
+  options.signal?.throwIfAborted();
   const command = options.command || "codex";
   const timeoutMs = parseTimeout(options.timeoutMs);
   const workspace = await resolveDirectory(
@@ -58,6 +60,7 @@ async function executeCodexTask(input, options) {
       env: environment,
       timeoutMs,
       onDiagnostic: options.onDiagnostic,
+      signal: options.signal,
     },
   );
   return parseCodexResult(output);
@@ -145,18 +148,20 @@ async function resolveDirectory(value, name) {
 }
 
 async function execute(command, args, input, options) {
+  options.signal?.throwIfAborted();
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
       stdio: ["pipe", "pipe", "pipe"],
+      detached: process.platform !== "win32",
     });
     let stdout = "";
     let stderr = "";
     let settled = false;
 
     const timer = setTimeout(() => {
-      child.kill("SIGTERM");
+      killTask();
       finish(
         new Error(
           `Codex CLI timed out after ${options.timeoutMs} milliseconds.`,
@@ -169,7 +174,7 @@ async function execute(command, args, input, options) {
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
       if (stdout.length > MAX_RESULT_LENGTH) {
-        child.kill("SIGTERM");
+        killTask();
         finish(
           new Error(
             "Codex CLI result exceeded Relay's 200,000-character limit.",
@@ -209,12 +214,32 @@ async function execute(command, args, input, options) {
       finish(null, result);
     });
     child.stdin.on("error", () => {});
+    function onAbort() {
+      killTask();
+      finish(options.signal.reason);
+    }
+    options.signal?.addEventListener("abort", onAbort, { once: true });
+    if (options.signal?.aborted) {
+      onAbort();
+      return;
+    }
     child.stdin.end(input);
+
+    function killTask() {
+      if (!child.pid) return;
+      try {
+        if (process.platform === "win32") child.kill("SIGKILL");
+        else process.kill(-child.pid, "SIGKILL");
+      } catch (error) {
+        if (error.code !== "ESRCH") child.kill("SIGKILL");
+      }
+    }
 
     function finish(error, result) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      options.signal?.removeEventListener("abort", onAbort);
       if (error) reject(error);
       else resolve(result);
     }

@@ -18,7 +18,8 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
     const runCodex = dependencies.runCodex || runWithCodex;
     return {
       backend,
-      run(input, completionContract) {
+      run(input, completionContract, { signal } = {}) {
+        signal?.throwIfAborted();
         const payload = normalizeInput(input);
         return runCodex(payload.text, {
           command: env.RELAY_CODEX_PATH || "codex",
@@ -30,6 +31,7 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
           env,
           attachments: payload.attachments,
           completionContract,
+          signal,
         });
       },
     };
@@ -42,22 +44,28 @@ export function createTaskRunner(env = process.env, dependencies = {}) {
     const client = new Client({ apiKey });
     return {
       backend,
-      async run(input, completionContract) {
+      async run(input, completionContract, { signal } = {}) {
+        signal?.throwIfAborted();
         const payload = normalizeInput(input);
         const content = [{ type: "input_text", text: payload.text }];
         for (const attachment of payload.attachments) {
-          const encoded = (await readFile(attachment.path)).toString("base64");
+          const encoded = (
+            await readFile(attachment.path, { signal })
+          ).toString("base64");
           content.push({
             type: "input_image",
             image_url: `data:${attachment.mimeType};base64,${encoded}`,
             detail: "auto",
           });
         }
-        const response = await client.responses.create({
-          model,
-          instructions: `${OPENAI_INSTRUCTIONS}\n\nTrusted completion contract for this run:\n${completionContract}`,
-          input: [{ role: "user", content }],
-        });
+        const response = await client.responses.create(
+          {
+            model,
+            instructions: `${OPENAI_INSTRUCTIONS}\n\nTrusted completion contract for this run:\n${completionContract}`,
+            input: [{ role: "user", content }],
+          },
+          { signal },
+        );
         return { resultMarkdown: response.output_text, documents: [] };
       },
     };

@@ -232,7 +232,7 @@ process.stderr.write("progress\\n".repeat(10000), () => {
         completionContract: "Return a report.",
         timeoutMs: 5000,
       }),
-    ).rejects.toThrow("cannot use the configured model");
+    ).rejects.toThrow("cannot use the selected model");
   });
 
   it("still reports the run failure if diagnostic reporting throws", async () => {
@@ -251,13 +251,36 @@ process.stderr.write("Error: model_not_found", () => process.exit(1));
           throw new Error("diagnostic consumer failed");
         },
       }),
-    ).rejects.toThrow("cannot use the configured model");
+    ).rejects.toThrow("cannot use the selected model");
+  });
+
+  it("returns the actual Codex version, worker revision, and model with a run error", async () => {
+    const workspace = await makeDirectory("relay-workspace-test-");
+    const fixture = await makeExecutable(`#!/usr/bin/env node
+if (process.argv.includes("--version")) {
+  console.log("codex-cli 0.160.0");
+} else {
+  process.stderr.write("Error: model_not_found", () => process.exit(1));
+}
+`);
+    await expect(
+      runWithCodex("task", {
+        command: fixture,
+        env: process.env,
+        workspace,
+        model: "gpt-example",
+        completionContract: "Return a report.",
+        timeoutMs: 5000,
+      }),
+    ).rejects.toThrow(
+      /cannot use the selected model.*\[Codex 0\.160\.0; Relay [a-f0-9]{12}; model gpt-example\]/,
+    );
   });
 });
 
 describe("worker backend selection", () => {
   it.each([undefined, ""])(
-    "pins the Codex model when RELAY_CODEX_MODEL is %s",
+    "uses the CLI default when RELAY_CODEX_MODEL is %s",
     async (model) => {
       const calls = [];
       const runner = createTaskRunner(
@@ -273,7 +296,7 @@ describe("worker backend selection", () => {
       await runner.run("task", "Return a report.");
 
       const args = calls[0];
-      expect(args[args.indexOf("--model") + 1]).toBe("gpt-6.2-sol");
+      expect(args).not.toContain("--model");
     },
   );
 

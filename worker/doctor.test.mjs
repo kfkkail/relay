@@ -72,7 +72,7 @@ describe("worker diagnostic probe", () => {
     expect(report).toMatchObject({
       ok: false,
       version: "unavailable",
-      model: "gpt-6.2-sol",
+      model: "Codex CLI default",
       error: expect.stringContaining("unavailable"),
     });
   });

@@ -43,15 +43,18 @@ gh auth status
 On a headless Raspberry Pi, use `codex login --device-auth`. Guided setup records
 the absolute Codex executable path, your current command search path, and the one
 directory the agent may change. Capturing the path ensures background workers
-can still find Homebrew and user-installed tools. Relay uses `gpt-6.2-sol` for
-Codex tasks when `RELAY_CODEX_MODEL` is unset or empty. Deploying this worker
-version and restarting it applies that default without editing worker configuration.
-A nonempty `RELAY_CODEX_MODEL` overrides Relay's default and is passed to the CLI.
+can still find Homebrew and user-installed tools. When `RELAY_CODEX_MODEL` is
+unset or empty, Relay omits `--model` and uses the installed Codex CLI's default
+model, restoring the behavior from before the forced GPT-6.2 Sol default.
+A nonempty `RELAY_CODEX_MODEL` is passed to the CLI as an explicit override.
+Because Relay uses `--ignore-user-config`, a model in the user's `config.toml`
+does not apply. The built-in default depends on the installed CLI version and
+its model catalog; Relay does not assume a particular model name.
 
-The model identifier is documented in the
-[official OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-6.2-sol).
-Account access still depends on the worker's Codex login; verify a task after
-deployment. Relay does not silently fall back to another model if it is unavailable.
+If a worker has `RELAY_CODEX_MODEL=gpt-6.2-sol` explicitly configured and reports
+a model-access error, clear that setting in the managed checkout's `.env.worker`
+and restart the service to return to the CLI default. Use `worker:doctor` to
+verify the running user's access before selecting another explicit model.
 
 The OpenAI Responses API remains available by choosing it during setup or by
 setting `RELAY_WORKER_BACKEND=openai`; that backend still requires
@@ -122,6 +125,11 @@ immediately. Updates are refused if the clone is dirty or diverged; network and
 validation failures leave the current process running and retry later.
 Dependency-changing automatic updates allow npm up to ten minutes on slower
 workers; other update commands retain a one-minute timeout.
+
+This updater handles Relay and its npm/browser dependencies. The separately
+installed Codex CLI is not automatically upgraded by Relay. Releases that support
+self-update provide `codex update`; use the executable recorded in
+`RELAY_CODEX_PATH` as the worker service user so you update the copy Relay uses.
 
 `npm run worker` remains available when the required values are already
 exported into the current shell or supplied by another secret manager.
@@ -198,6 +206,13 @@ unsupported CLI flags, unwritable state, full disks, configuration errors,
 context limits, lost connections, and process termination. Unknown errors point
 to this command. Earlier failures keep their original stored error; retry after
 the worker updates to get a new category.
+
+Codex run errors include a suffix such as
+`[Codex 0.167.0; Relay a1b2c3d4e5f6; model CLI default]`. This identifies the
+actual executable version, worker source revision, and explicit model or CLI
+default selection. A failed version lookup reports `unavailable` or `unknown`
+while preserving the original error. The CLI default label is not a claim about
+the resolved model name; that depends on the installed CLI and its catalog.
 
 ## Long-running tasks and heartbeats
 

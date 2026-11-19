@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(18);
 insert into auth.users(id) values ('00000000-0000-4000-8000-000000000091'),('00000000-0000-4000-8000-000000000092');
 select ok(not has_function_privilege('anon','public.send_chat_message(uuid,uuid,text)','EXECUTE'),'Anonymous chat is denied');
 select ok(has_table_privilege('authenticated','public.conversations','SELECT'),'Authenticated users can read their own conversations');
@@ -15,6 +15,21 @@ select is((select count(*)::integer from public.runs where task_id='00000000-000
 select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000094','What needs attention?');
 select is((select count(*)::integer from public.runs where task_id='00000000-0000-4000-8000-000000000094'),1,'Network retry is idempotent');
 select throws_ok($$select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000095','Another message')$$,'P0001','Wait for the current reply before sending another message','Pending reply serializes turns');
+reset role;
+select is((select count(*)::integer from realtime.messages
+  where topic='relay-worker-wakeup:00000000-0000-4000-8000-000000000091'
+    and extension='broadcast' and event='queued' and private and payload - 'id' = '{}'::jsonb),
+  1,'A chat run publishes one private payload-free wake-up even if the send is retried');
+select set_config('request.jwt.claims','{}',true);
+select set_config('realtime.topic','relay-worker-wakeup:00000000-0000-4000-8000-000000000091',true);
+set local role anon;
+select is((select count(*)::integer from realtime.messages where event='queued'),0,'The public role alone cannot see wake-ups');
+select set_config('request.jwt.claims','{"role":"anon","relay_worker_wakeup_topic":"relay-worker-wakeup:00000000-0000-4000-8000-000000000092"}',true);
+select is((select count(*)::integer from realtime.messages where event='queued'),0,'A credential for another owner cannot see the wake-up');
+select set_config('request.jwt.claims','{"role":"anon","relay_worker_wakeup_topic":"relay-worker-wakeup:00000000-0000-4000-8000-000000000091"}',true);
+select is((select count(*)::integer from realtime.messages where event='queued'),1,'The matching credential can see the wake-up');
+reset role;
+select set_config('request.jwt.claims','{}',true);
 -- Worker completion is privileged; application users must not update runs directly.
 reset role;
 update public.runs set status='completed',result_markdown='Prepare for tomorrow.' where task_id='00000000-0000-4000-8000-000000000094';

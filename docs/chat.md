@@ -25,3 +25,19 @@ Apply the migration before deploying the application, then update the worker. Th
 This is on-demand conversational groundwork, not an always-running autonomous monitor. Existing schedules remain the way to request recurring checks. A future opt-in monitoring layer should persist interests, tie scheduled observations to conversations, deduplicate opportunities, enforce notification budgets and quiet hours, and use connector-level read-only capabilities. There is no streaming, conversation search, or automatic long-term memory in this version.
 
 Validation includes API tests for authentication, input limits, query relationship selection and active-turn conflicts, plus pgTAP coverage for persistence, ownership, idempotency and history. The SQL suite should run on a fresh local Supabase database before deployment.
+
+### Worker wake-ups
+
+After deploying the chat worker wake-up migration, set `SUPABASE_JWT_SECRET`
+in the web app's server environment to the project's active Supabase legacy JWT
+secret (HS256). This is the JWT signing secret, separate from the Supabase
+API keys. Only the web app needs it. Keep it server-side and redeploy the app
+after setting it. The project must accept HS256 tokens for Realtime.
+
+An upgraded worker uses its Relay token to obtain a short-lived credential for
+its owner's private Realtime channel. Chat queue inserts broadcast an empty
+signal after commit. On receipt or successful subscription/reconnection, a
+worker checks the existing claim endpoint. No worker needs an inbound port.
+The existing idle polling backoff covers missed signals, unavailable Realtime,
+and deployments without the signing secret. Running jobs still occupy their
+worker slots until they finish.

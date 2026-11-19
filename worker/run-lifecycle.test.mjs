@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 
 describe("worker run heartbeat lifetime", () => {
-  it("updates Codex before claiming a task using the configured executable", async () => {
+  it("updates Codex using the configured executable after an idle claim", async () => {
     directory = await mkdtemp(join(tmpdir(), "relay-update-lifecycle-"));
     const marker = join(directory, "codex-updated");
     const executable = join(directory, "codex-fixture.mjs");
@@ -37,14 +37,20 @@ else console.log(JSON.stringify({resultMarkdown:fs.existsSync(marker)?'updated':
 `,
     );
     await chmod(executable, 0o700);
-    let claimed = false,
+    let checkedQueue = false,
+      claimed = false,
       updatedBeforeClaim = false,
       result;
     server = createServer(async (request, response) => {
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
       response.setHeader("Content-Type", "application/json");
+      if (request.url.endsWith("/wakeup")) return response.writeHead(204).end();
       if (request.url.endsWith("/claim")) {
+        if (!checkedQueue) {
+          checkedQueue = true;
+          return response.writeHead(204).end();
+        }
         if (claimed) return response.writeHead(204).end();
         claimed = true;
         updatedBeforeClaim = await readFile(marker, "utf8")
@@ -122,6 +128,8 @@ process.stdin.on("end", () => setTimeout(() => {
         const chunks = [];
         for await (const chunk of request) chunks.push(chunk);
         response.setHeader("Content-Type", "application/json");
+        if (request.url.endsWith("/wakeup"))
+          return response.writeHead(204).end();
         if (request.url.endsWith("/claim")) {
           if (claimed) return response.writeHead(204).end();
           claimed = true;

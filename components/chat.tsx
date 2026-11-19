@@ -1,8 +1,19 @@
 "use client";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import {
+  ChevronLeft,
+  Clock3,
+  LoaderCircle,
+  MessageCircle,
+  Plus,
+  Send,
+  SquarePen,
+} from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { RelayHeader } from "@/components/relay-header";
 import styles from "./chat.module.css";
 
 type Conversation = { id: string; title: string };
@@ -16,7 +27,16 @@ type Turn = {
   }[];
 };
 
-export function Chat({ initialId = null }: { initialId?: string | null }) {
+export function Chat({
+  initialId = null,
+  initialNew = false,
+  userEmail,
+}: {
+  initialId?: string | null;
+  initialNew?: boolean;
+  userEmail: string;
+}) {
+  const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [id, setId] = useState<string | null>(initialId);
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -25,18 +45,47 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [revision, setRevision] = useState(0);
+  const conversationOpen = Boolean(initialId || initialNew);
+  const title =
+    conversations.find((conversation) => conversation.id === id)?.title ??
+    (id ? "Conversation" : "New conversation");
+  const shell = useRef<HTMLElement>(null);
+  const messages = useRef<HTMLDivElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const followLatest = useRef(true);
+  const refreshVersion = useRef(0);
   // Reuse IDs on network failure so retrying cannot enqueue a duplicate turn.
   const pending = useRef<{
     conversationId: string;
     messageId: string;
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    // iOS's on-screen keyboard shrinks the visual viewport, not 100dvh.
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    function resize() {
+      if (!viewport || viewport.scale !== 1) return;
+      shell.current?.style.setProperty("--chat-height", `${viewport.height}px`);
+      shell.current?.style.setProperty("--chat-top", `${viewport.offsetTop}px`);
+    }
+    resize();
+    viewport.addEventListener("resize", resize);
+    viewport.addEventListener("scroll", resize);
+    return () => {
+      viewport.removeEventListener("resize", resize);
+      viewport.removeEventListener("scroll", resize);
+    };
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     let running = false;
     async function refresh() {
       if (running) return;
       running = true;
+      const version = refreshVersion.current;
       try {
         const response = await fetch(`/api/chat${id ? `?id=${id}` : ""}`, {
           signal: controller.signal,
@@ -44,13 +93,13 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
         });
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || "Could not load chat.");
-        if (!controller.signal.aborted) {
+        if (!controller.signal.aborted && version === refreshVersion.current) {
           setConversations(body.conversations);
           setTurns(body.turns);
           setLoaded(true);
         }
       } catch (e) {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted && version === refreshVersion.current)
           setError(e instanceof Error ? e.message : "Could not load chat.");
       } finally {
         running = false;
@@ -63,19 +112,25 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
       clearInterval(timer);
     };
   }, [id, revision]);
+
+  useEffect(() => {
+    if (followLatest.current && messages.current) {
+      messages.current.scrollTop = messages.current.scrollHeight;
+    }
+  }, [turns]);
+
+  useEffect(() => {
+    if (!textarea.current) return;
+    textarea.current.style.height = "auto";
+    textarea.current.style.height = `${Math.min(textarea.current.scrollHeight, 160)}px`;
+  }, [message]);
+
   const active = turns.some((turn) =>
     ["queued", "working"].includes(turn.runs[0]?.status),
   );
-  function select(next: string | null) {
-    setId(next);
-    setTurns([]);
-    setMessage("");
-    setError("");
-    setLoaded(false);
-    pending.current = null;
-  }
+
   async function send() {
-    if (busy || active || !message.trim()) return;
+    if (!loaded || busy || active || !message.trim()) return;
     const payload =
       pending.current?.message === message.trim()
         ? pending.current
@@ -87,6 +142,7 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
     pending.current = payload;
     setBusy(true);
     setError("");
+    refreshVersion.current++;
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -96,6 +152,9 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
       const body = await response.json();
       if (!response.ok)
         throw new Error(body.error || "Could not send message.");
+      // Ignore a poll started before this submission completed.
+      refreshVersion.current++;
+      followLatest.current = true;
       setId(payload.conversationId);
       setMessage("");
       pending.current = null;
@@ -114,75 +173,204 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
             ],
       );
       setRevision((value) => value + 1);
+      if (!id) router.replace(`/chat?id=${payload.conversationId}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not send message.");
     } finally {
       setBusy(false);
     }
   }
+
+  function newConversation() {
+    router.push("/chat?new=1");
+    if (!id) {
+      setMessage("");
+      setError("");
+      pending.current = null;
+      textarea.current?.focus();
+    }
+  }
+
+  if (!conversationOpen) {
+    return (
+      <main className={styles.shell} ref={shell}>
+        <RelayHeader userEmail={userEmail} active="chat" />
+        <section className={styles.index} aria-labelledby="chat-title">
+          <div className={styles.indexContent}>
+            <div className={styles.heading}>
+              <div>
+                <p className="eyebrow">Conversations</p>
+                <h1 id="chat-title">Chat</h1>
+                <p>Think out loud. Pick up where you left off.</p>
+              </div>
+              <button
+                className="new-button"
+                onClick={newConversation}
+                aria-label="New conversation"
+              >
+                <Plus size={18} aria-hidden="true" />
+                <span>New conversation</span>
+              </button>
+            </div>
+            {error && (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            )}
+            {!loaded && !error && (
+              <p className={styles.status} role="status">
+                <LoaderCircle
+                  size={18}
+                  className={styles.spinner}
+                  aria-hidden="true"
+                />
+                Loading conversations…
+              </p>
+            )}
+            {loaded && !conversations.length && (
+              <div className={styles.empty}>
+                <span className="empty-orbit">
+                  <MessageCircle size={28} aria-hidden="true" />
+                </span>
+                <h2>A little room to think.</h2>
+                <p>
+                  Ask a question, work through an idea, or figure out what needs
+                  your attention.
+                </p>
+                <button className="new-button" onClick={newConversation}>
+                  <Plus size={18} aria-hidden="true" />
+                  Start a conversation
+                </button>
+              </div>
+            )}
+            <div className={styles.conversationList} aria-label="Conversations">
+              {conversations.map((conversation) => (
+                <button
+                  className={styles.conversationCard}
+                  key={conversation.id}
+                  onClick={() => router.push(`/chat?id=${conversation.id}`)}
+                >
+                  <MessageCircle size={22} aria-hidden="true" />
+                  <span>{conversation.title}</span>
+                </button>
+              ))}
+            </div>
+            {conversations.length >= 100 && (
+              <p className={styles.note}>
+                Showing the latest 100 conversations.
+              </p>
+            )}
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
-    <main className={styles.shell}>
-      <header>
-        <Link href="/tasks">Relay</Link>
-        <nav aria-label="Main navigation">
-          <Link href="/my-work">My Work</Link>
-          <Link href="/tasks">Tasks</Link>
-          <Link href="/schedules">Schedules</Link>
-          <Link href="/chat" aria-current="page">
-            Chat
-          </Link>
-        </nav>
+    <main className={styles.shell} ref={shell}>
+      <header className={styles.conversationHeader}>
+        <button
+          className="back-button"
+          disabled={busy}
+          onClick={() => router.push("/chat")}
+          aria-label="Back to conversations"
+        >
+          <ChevronLeft size={20} aria-hidden="true" />
+          Chat
+        </button>
+        <div className={styles.conversationTitle}>
+          <p>Relay</p>
+          <h1 title={title}>{title}</h1>
+        </div>
+        <button
+          className="icon-button"
+          disabled={busy}
+          onClick={newConversation}
+          aria-label="New conversation"
+        >
+          <SquarePen size={20} aria-hidden="true" />
+        </button>
       </header>
-      <h1>Chat</h1>
-      <p>Think out loud, connect the dots, or ask what needs your attention.</p>
-      <p className={styles.note}>
-        Replies use your local worker, recent Relay tasks and open actions.
-        Available connections depend on that worker; the API backend only sees
-        supplied context. Chat requests observation and advice only. It does not
-        continuously monitor your connections.
-      </p>
-      <div className={styles.layout}>
-        <aside aria-label="Conversations">
-          <button disabled={busy} onClick={() => select(null)}>
-            New conversation
-          </button>
-          {conversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              disabled={busy}
-              aria-pressed={conversation.id === id}
-              onClick={() => select(conversation.id)}
-            >
-              {conversation.title}
-            </button>
-          ))}
-          <small>Showing the latest 100 conversations.</small>
-        </aside>
-        <section aria-label="Conversation">
-          {!loaded && <p role="status">Loading conversation…</p>}
-          {loaded && !turns.length && (
-            <p>
-              Try “What should I prepare for this week?” or “Look for things I
-              may have missed in HEY and my calendar.”
+      <section className={styles.conversation} aria-label="Conversation">
+        <div
+          className={styles.messages}
+          ref={messages}
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            followLatest.current =
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              80;
+          }}
+        >
+          {!loaded && (
+            <p className={styles.status} role="status">
+              <LoaderCircle
+                size={18}
+                className={styles.spinner}
+                aria-hidden="true"
+              />
+              Loading conversation…
             </p>
           )}
-          <div className={styles.messages} aria-live="polite">
+          {loaded && !turns.length && (
+            <div className={styles.empty}>
+              <span className="empty-orbit">
+                <MessageCircle size={28} aria-hidden="true" />
+              </span>
+              <h2>What’s on your mind?</h2>
+              <p>Make space for a question, an idea, or a fresh perspective.</p>
+              <div className={styles.suggestions}>
+                {[
+                  "What should I prepare for this week?",
+                  "Help me think through a decision.",
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    disabled={busy}
+                    onClick={() => {
+                      setMessage(suggestion);
+                      textarea.current?.focus();
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className={styles.thread} aria-live="polite">
             {turns.map((turn) => {
               const run = turn.runs[0];
               return (
-                <article key={turn.id}>
+                <article key={turn.id} className={styles.turn}>
                   <div className={styles.user}>
-                    <strong>You</strong>
+                    <strong className="sr-only">You</strong>
                     <p>{turn.chat_message}</p>
                   </div>
                   <div className={styles.reply}>
-                    <strong>Relay</strong>
+                    <div className={styles.replyLabel}>
+                      <span className="brand-mark" aria-hidden="true">
+                        R
+                      </span>
+                      <strong>Relay</strong>
+                    </div>
                     {run?.result_markdown ? (
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {run.result_markdown}
-                      </ReactMarkdown>
+                      <div className={`markdown ${styles.markdown}`}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {run.result_markdown}
+                        </ReactMarkdown>
+                      </div>
                     ) : (
-                      <p role="status">
+                      <p className={styles.status} role="status">
+                        {run?.status === "working" ? (
+                          <LoaderCircle
+                            size={18}
+                            className={styles.spinner}
+                            aria-hidden="true"
+                          />
+                        ) : run?.status === "queued" ? (
+                          <Clock3 size={18} aria-hidden="true" />
+                        ) : null}
                         {run?.status === "failed"
                           ? `Reply failed: ${run.error || "Worker error"}. You can send your message again.`
                           : run?.status === "cancelled"
@@ -196,38 +384,88 @@ export function Chat({ initialId = null }: { initialId?: string | null }) {
                 </article>
               );
             })}
+            {turns.length >= 100 && (
+              <p className={styles.note}>
+                Showing the latest 100 messages. Replies use the latest 12
+                turns.
+              </p>
+            )}
           </div>
-          {turns.length >= 100 && (
-            <p className={styles.note}>
-              Showing the latest 100 messages. Replies use the latest 12 turns.
-            </p>
-          )}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void send();
-            }}
-          >
-            <label htmlFor="chat-message">Message</label>
-            <textarea
-              id="chat-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              maxLength={4000}
-              rows={4}
-              disabled={busy}
-              placeholder="Ask about anything…"
-            />
-            <button
-              disabled={!loaded || busy || active || !message.trim()}
-              type="submit"
-            >
-              {busy ? "Sending…" : active ? "Waiting for reply…" : "Send"}
-            </button>
-          </form>
-          {error && <p role="alert">{error}</p>}
-        </section>
-      </div>
+        </div>
+        <form
+          className={styles.composer}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send();
+          }}
+        >
+          <div className={styles.composerContent}>
+            {error && (
+              <p className={styles.error} role="alert">
+                {error}
+              </p>
+            )}
+            <label htmlFor="chat-message" className="sr-only">
+              Message
+            </label>
+            <div className={styles.input}>
+              <textarea
+                ref={textarea}
+                id="chat-message"
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    (event.metaKey || event.ctrlKey) &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault();
+                    void send();
+                  }
+                }}
+                maxLength={4000}
+                rows={1}
+                disabled={busy}
+                placeholder="Message Relay…"
+              />
+              <button
+                className="primary-button compact"
+                disabled={!loaded || busy || active || !message.trim()}
+                type="submit"
+                aria-label={
+                  busy
+                    ? "Sending message"
+                    : active
+                      ? "Waiting for reply"
+                      : "Send message"
+                }
+              >
+                {busy || active ? (
+                  <LoaderCircle
+                    size={18}
+                    className={styles.spinner}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Send size={18} aria-hidden="true" />
+                )}
+                <span>{busy ? "Sending…" : active ? "Waiting…" : "Send"}</span>
+              </button>
+            </div>
+            <details className={styles.replyInfo}>
+              <summary>How replies work</summary>
+              <p>
+                Replies use your local worker, recent Relay tasks and open
+                actions. Available connections depend on that worker; the API
+                backend only sees supplied context. Chat offers observation and
+                advice, and does not continuously monitor your connections. Use{" "}
+                <Link href="/tasks">Tasks</Link> to request actions.
+              </p>
+            </details>
+          </div>
+        </form>
+      </section>
     </main>
   );
 }

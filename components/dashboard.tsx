@@ -578,7 +578,7 @@ export function Dashboard({
             Schedules
           </button>
           <a className="area-tab" href="/chat">
-            Chat
+            Chats
           </a>
         </nav>
         <div className="topbar-actions">

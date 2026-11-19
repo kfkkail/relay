@@ -40,7 +40,7 @@ export function RelayHeader({
           href="/chat"
           aria-current={active === "chat" ? "page" : undefined}
         >
-          Chat
+          Chats
         </Link>
       </nav>
       <div className="topbar-actions">

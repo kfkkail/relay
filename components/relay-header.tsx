@@ -8,7 +8,7 @@ export function RelayHeader({
   preview = false,
 }: {
   userEmail: string;
-  active?: "my-work" | "tasks" | "schedules";
+  active?: "my-work" | "tasks" | "schedules" | "chat";
   preview?: boolean;
 }) {
   return (
@@ -36,7 +36,12 @@ export function RelayHeader({
         >
           Schedules
         </Link>
-        <Link href="/chat">Chat</Link>
+        <Link
+          href="/chat"
+          aria-current={active === "chat" ? "page" : undefined}
+        >
+          Chat
+        </Link>
       </nav>
       <div className="topbar-actions">
         {preview ? (

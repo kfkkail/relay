@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import { setTimeout as delay } from "node:timers/promises";
 
 export function createWakeSignal() {
@@ -45,9 +44,13 @@ export async function listenForWakeups({ request, notify, signal }) {
         if (signal.aborted) break;
         if (config) {
           token = config.token;
-          client ??= createClient(config.url, config.publishableKey, {
-            accessToken: async () => token,
-          });
+          if (!client) {
+            const { createClient } = await import("@supabase/supabase-js");
+            if (signal.aborted) break;
+            client = createClient(config.url, config.publishableKey, {
+              accessToken: async () => token,
+            });
+          }
           await client.realtime.setAuth(token);
           if (signal.aborted) break;
           // A rejected join can leave an errored channel registered in the SDK.

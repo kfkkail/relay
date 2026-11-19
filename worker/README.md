@@ -43,8 +43,15 @@ gh auth status
 On a headless Raspberry Pi, use `codex login --device-auth`. Guided setup records
 the absolute Codex executable path, your current command search path, and the one
 directory the agent may change. Capturing the path ensures background workers
-can still find Homebrew and user-installed tools. An optional `RELAY_CODEX_MODEL`
-overrides the CLI default.
+can still find Homebrew and user-installed tools. Relay uses `gpt-6.2-sol` for
+Codex tasks when `RELAY_CODEX_MODEL` is unset or empty. Deploying this worker
+version and restarting it applies that default without editing worker configuration.
+A nonempty `RELAY_CODEX_MODEL` overrides Relay's default and is passed to the CLI.
+
+The model identifier is documented in the
+[official OpenAI model documentation](https://developers.openai.com/api/docs/models/gpt-6.2-sol).
+Account access still depends on the worker's Codex login; verify a task after
+deployment. Relay does not silently fall back to another model if it is unavailable.
 
 The OpenAI Responses API remains available by choosing it during setup or by
 setting `RELAY_WORKER_BACKEND=openai`; that backend still requires

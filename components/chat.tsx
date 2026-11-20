@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ChevronLeft,
   Clock3,
@@ -56,6 +56,7 @@ export function Chat({
     (id ? "Conversation" : "New conversation");
   const shell = useRef<HTMLElement>(null);
   const messages = useRef<HTMLDivElement>(null);
+  const thread = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const followLatest = useRef(true);
   const refreshVersion = useRef(0);
@@ -66,21 +67,38 @@ export function Chat({
     message: string;
   } | null>(null);
 
-  useEffect(() => {
-    // iOS's on-screen keyboard shrinks the visual viewport, not 100dvh.
+  useLayoutEffect(() => {
+    const element = shell.current;
+    if (!element) return;
+    const { style } = element;
     const viewport = window.visualViewport;
-    if (!viewport) return;
-    function resize() {
-      if (!viewport || viewport.scale !== 1) return;
-      shell.current?.style.setProperty("--chat-height", `${viewport.height}px`);
-      shell.current?.style.setProperty("--chat-top", `${viewport.offsetTop}px`);
+    let frame = 0;
+
+    function syncViewport() {
+      frame = 0;
+      if (viewport && Math.abs(viewport.scale - 1) > 0.01) return;
+      style.setProperty(
+        "--chat-height",
+        `${viewport?.height ?? window.innerHeight}px`,
+      );
+      style.setProperty("--chat-top", `${viewport?.offsetTop ?? 0}px`);
     }
-    resize();
-    viewport.addEventListener("resize", resize);
-    viewport.addEventListener("scroll", resize);
+
+    function scheduleSync() {
+      if (!frame) frame = window.requestAnimationFrame(syncViewport);
+    }
+
+    syncViewport();
+    viewport?.addEventListener("resize", scheduleSync);
+    viewport?.addEventListener("scroll", scheduleSync);
+    window.addEventListener("resize", scheduleSync);
+    window.addEventListener("scroll", scheduleSync);
     return () => {
-      viewport.removeEventListener("resize", resize);
-      viewport.removeEventListener("scroll", resize);
+      window.cancelAnimationFrame(frame);
+      viewport?.removeEventListener("resize", scheduleSync);
+      viewport?.removeEventListener("scroll", scheduleSync);
+      window.removeEventListener("resize", scheduleSync);
+      window.removeEventListener("scroll", scheduleSync);
     };
   }, []);
 
@@ -119,10 +137,17 @@ export function Chat({
   }, [id, revision]);
 
   useEffect(() => {
-    if (followLatest.current && messages.current) {
-      messages.current.scrollTop = messages.current.scrollHeight;
-    }
-  }, [turns]);
+    const scroller = messages.current;
+    const content = thread.current;
+    if (!scroller || !content) return;
+    // Follow layout changes from new replies, the composer and the keyboard.
+    const observer = new ResizeObserver(() => {
+      if (followLatest.current) scroller.scrollTop = scroller.scrollHeight;
+    });
+    observer.observe(scroller);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [conversationOpen]);
 
   useEffect(() => {
     if (!textarea.current) return;
@@ -302,8 +327,8 @@ export function Chat({
           onScroll={(event) => {
             const element = event.currentTarget;
             followLatest.current =
-              element.scrollHeight - element.scrollTop - element.clientHeight <
-              80;
+              element.scrollHeight - element.scrollTop - element.clientHeight <=
+              2;
           }}
         >
           {!loaded && (
@@ -342,7 +367,7 @@ export function Chat({
               </div>
             </div>
           )}
-          <div className={styles.thread} aria-live="polite">
+          <div className={styles.thread} ref={thread} aria-live="polite">
             {turns.map((turn) => {
               const run = turn.runs[0];
               return (

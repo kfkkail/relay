@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(25);
 insert into auth.users(id) values ('00000000-0000-4000-8000-000000000091'),('00000000-0000-4000-8000-000000000092');
 select ok(not has_function_privilege('anon','public.send_chat_message(uuid,uuid,text)','EXECUTE'),'Anonymous chat is denied');
 select ok(has_table_privilege('authenticated','public.conversations','SELECT'),'Authenticated users can read their own conversations');
@@ -41,6 +41,30 @@ select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000092'
 select is((select count(*)::integer from public.conversations),0,'Other owners cannot read conversations');
 select is((select count(*)::integer from public.tasks where conversation_id is not null),0,'Other owners cannot read turns');
 select throws_ok($$select public.send_chat_message('00000000-0000-4000-8000-000000000093','00000000-0000-4000-8000-000000000096','Intrude')$$,'P0001','Conversation not found','Other owners cannot append turns');
+reset role;
+select ok(not has_function_privilege('anon','public.send_chat_message(uuid,uuid,text,jsonb)','EXECUTE'),'Anonymous image messages are denied');
+select set_config('request.jwt.claim.sub','00000000-0000-4000-8000-000000000091',true);
+set local role authenticated;
+select public.send_chat_message(
+  '00000000-0000-4000-8000-000000000097','00000000-0000-4000-8000-000000000098','Describe this image.',
+  '{"objectId":"00000000-0000-4000-8000-000000000099","fileName":"photo.png","mimeType":"image/png","byteSize":123,"width":10,"height":20}'
+);
+select is((select file_name from public.task_attachments where task_id='00000000-0000-4000-8000-000000000098'),
+  'photo.png','Image metadata is stored with the turn');
+select is((select a.byte_size from public.run_attachments a join public.runs r on r.id=a.run_id
+  where r.task_id='00000000-0000-4000-8000-000000000098'),123::bigint,'Queued run already contains the image snapshot');
+select is(public.send_chat_message(
+  '00000000-0000-4000-8000-000000000097','00000000-0000-4000-8000-000000000098','Describe this image.',
+  '{"objectId":"00000000-0000-4000-8000-000000000100","fileName":"photo.png","mimeType":"image/png","byteSize":123,"width":10,"height":20}'
+)->>'storagePath','00000000-0000-4000-8000-000000000091/00000000-0000-4000-8000-000000000098/00000000-0000-4000-8000-000000000099',
+  'Retry keeps the original image object');
+select is((select count(*)::integer from public.runs where task_id='00000000-0000-4000-8000-000000000098'),1,'Image retry does not queue a second run');
+select throws_ok($$select public.send_chat_message(
+  '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000102','Invalid image',
+  '{"objectId":"00000000-0000-4000-8000-000000000103","fileName":"photo.png","mimeType":"image/png","byteSize":0,"width":10,"height":20}'
+)$$,'23514',null,'Invalid attachment rolls back the entire send');
+select is((select count(*)::integer from public.conversations where id='00000000-0000-4000-8000-000000000101'),
+  0,'Failed image send leaves no empty conversation');
 reset role;
 select * from finish();
 rollback;

@@ -1,16 +1,15 @@
 import sharp from "sharp";
 import { ApiError } from "@/lib/http";
 
-export const ATTACHMENT_BUCKET = "task-attachments";
-export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+import {
+  attachmentMimeTypes,
+  MAX_ATTACHMENT_BYTES,
+  type AttachmentMimeType,
+} from "@/lib/attachment-config";
+
+export { ATTACHMENT_BUCKET } from "@/lib/attachment-config";
 export const MAX_ATTACHMENT_DIMENSION = 12_000;
 export const MAX_ATTACHMENT_PIXELS = 40_000_000;
-export const attachmentMimeTypes = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-] as const;
-export type AttachmentMimeType = (typeof attachmentMimeTypes)[number];
 
 export function validateAttachmentRequest(
   fileName: unknown,

@@ -5,6 +5,7 @@ Open **Chat** to ask general questions, prepare for the week, or request a check
 ## Behavior
 
 - Saved conversations, plain Markdown replies, follow-up history, and explicit queued/working/failed states. An offline worker leaves messages queued.
+- Use **+** beside the message box to attach one JPEG, PNG, or WebP up to 10 MB. Preview or remove it before sending. An image sent without a message asks Relay to describe it. The image stays visible in the thread, and Relay sends its pixels to the worker for the attached turn. Follow-up turns receive the prior text and replies.
 - One active reply per conversation. Database locking serializes submissions; stable message IDs prevent duplicate work when a network response is lost. Failed turns allow another message.
 - Each reply receives the latest 12 turns (each prior reply limited to 4,000 characters), 10 recent ordinary tasks with accepted-result excerpts, and 20 open owner actions. History and database snapshots are capped at 60,000 and 16,000 characters respectively; capped JSON may be incomplete and is labeled as truncated context. This is bounded read access, not arbitrary database querying or permanent model memory.
 - The UI lists the latest 100 conversations and 100 turns. Internal chat task rows stay out of task navigation. Existing task result notifications redirect to the conversation.
@@ -25,6 +26,13 @@ Apply the migration before deploying the application, then update the worker. Th
 This is on-demand conversational groundwork, not an always-running autonomous monitor. Existing schedules remain the way to request recurring checks. A future opt-in monitoring layer should persist interests, tie scheduled observations to conversations, deduplicate opportunities, enforce notification budgets and quiet hours, and use connector-level read-only capabilities. There is no streaming, conversation search, or automatic long-term memory in this version.
 
 Validation includes API tests for authentication, input limits, query relationship selection and active-turn conflicts, plus pgTAP coverage for persistence, ownership, idempotency and history. The SQL suite should run on a fresh local Supabase database before deployment.
+
+### Chat image uploads
+
+Apply the chat images migration before deploying the updated app. Relay stages
+uploads in the existing private task attachment bucket and removes the staging
+copy after processing the send. An upload interrupted before the app submits
+the message can leave a staging object in that bucket.
 
 ### Worker wake-ups
 

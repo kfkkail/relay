@@ -9,6 +9,7 @@ import {
   Plus,
   Send,
   SquarePen,
+  X,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -17,13 +18,21 @@ import {
   documentLinkComponents,
   ResultDocuments,
 } from "@/components/result-documents";
+import {
+  ATTACHMENT_BUCKET,
+  attachmentMimeTypes,
+  MAX_ATTACHMENT_BYTES,
+} from "@/lib/attachment-config";
+import { createClient } from "@/lib/supabase/client";
 import type { ResultDocument } from "@/lib/types";
 import styles from "./chat.module.css";
 
 type Conversation = { id: string; title: string };
+type ChatAttachment = { id: string; file_name: string };
 type Turn = {
   id: string;
   chat_message: string;
+  task_attachments?: ChatAttachment[];
   runs: {
     status: string;
     result_markdown: string | null;
@@ -46,6 +55,8 @@ export function Chat({
   const [id, setId] = useState<string | null>(initialId);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [message, setMessage] = useState("");
+  const [image, setImage] = useState<File | null>(null);
+  const [preview, setPreview] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -57,6 +68,7 @@ export function Chat({
   const shell = useRef<HTMLElement>(null);
   const messages = useRef<HTMLDivElement>(null);
   const thread = useRef<HTMLDivElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const followLatest = useRef(true);
   const refreshVersion = useRef(0);
@@ -65,6 +77,7 @@ export function Chat({
     conversationId: string;
     messageId: string;
     message: string;
+    image: File | null;
   } | null>(null);
 
   useLayoutEffect(() => {
@@ -155,38 +168,55 @@ export function Chat({
     textarea.current.style.height = `${Math.min(textarea.current.scrollHeight, 160)}px`;
   }, [message]);
 
+  useEffect(() => {
+    if (preview) return () => URL.revokeObjectURL(preview);
+  }, [preview]);
+
+  function selectImage(file: File) {
+    if (!attachmentMimeTypes.some((mimeType) => mimeType === file.type)) {
+      setError("Images must be JPEG, PNG, or WebP.");
+    } else if (!file.size || file.size > MAX_ATTACHMENT_BYTES) {
+      setError("Choose a non-empty image up to 10 MB.");
+    } else {
+      setImage(file);
+      setPreview(URL.createObjectURL(file));
+      setError("");
+    }
+  }
+
   const active = turns.some((turn) =>
     ["queued", "working"].includes(turn.runs[0]?.status),
   );
 
   async function send() {
-    if (!loaded || busy || active || !message.trim()) return;
+    if (!loaded || busy || active || (!message.trim() && !image)) return;
+    const text = message.trim() || "Describe this image.";
     const payload =
-      pending.current?.message === message.trim()
+      pending.current?.message === text && pending.current.image === image
         ? pending.current
         : {
             conversationId: id ?? crypto.randomUUID(),
             messageId: crypto.randomUUID(),
-            message: message.trim(),
+            message: text,
+            image,
           };
     pending.current = payload;
     setBusy(true);
     setError("");
     refreshVersion.current++;
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+      const { image, ...messageFields } = payload;
+      const body = await postJson("/api/chat", {
+        ...messageFields,
+        ...(image ? { image: await uploadChatImage(image) } : {}),
       });
-      const body = await response.json();
-      if (!response.ok)
-        throw new Error(body.error || "Could not send message.");
       // Ignore a poll started before this submission completed.
       refreshVersion.current++;
       followLatest.current = true;
       setId(payload.conversationId);
       setMessage("");
+      setImage(null);
+      setPreview("");
       pending.current = null;
       setTurns((previous) =>
         previous.some((turn) => turn.id === body.messageId)
@@ -196,6 +226,7 @@ export function Chat({
               {
                 id: body.messageId,
                 chat_message: payload.message,
+                task_attachments: body.attachment ? [body.attachment] : [],
                 runs: [
                   { status: "queued", result_markdown: null, error: null },
                 ],
@@ -215,6 +246,8 @@ export function Chat({
     router.push("/chat?new=1");
     if (!id) {
       setMessage("");
+      setImage(null);
+      setPreview("");
       setError("");
       pending.current = null;
       textarea.current?.focus();
@@ -374,6 +407,19 @@ export function Chat({
                 <article key={turn.id} className={styles.turn}>
                   <div className={styles.user}>
                     <strong className="sr-only">You</strong>
+                    {turn.task_attachments?.map((attachment) => {
+                      const url = `/api/tasks/${turn.id}/attachments/${attachment.id}`;
+                      return (
+                        <a
+                          key={attachment.id}
+                          href={url}
+                          className={styles.sentImage}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- authenticated image endpoint */}
+                          <img src={url} alt={attachment.file_name} />
+                        </a>
+                      );
+                    })}
                     <p>{turn.chat_message}</p>
                   </div>
                   <div className={styles.reply}>
@@ -447,7 +493,49 @@ export function Chat({
             <label htmlFor="chat-message" className="sr-only">
               Message
             </label>
+            {image && (
+              <div className={styles.imagePreview}>
+                {preview && (
+                  // eslint-disable-next-line @next/next/no-img-element -- local object URL
+                  <img src={preview} alt="" />
+                )}
+                <span>{image.name}</span>
+                <button
+                  type="button"
+                  className={styles.imageButton}
+                  aria-label="Remove image"
+                  disabled={busy}
+                  onClick={() => {
+                    setImage(null);
+                    setPreview("");
+                    setError("");
+                  }}
+                >
+                  <X size={18} aria-hidden="true" />
+                </button>
+              </div>
+            )}
             <div className={styles.input}>
+              <input
+                ref={imageInput}
+                type="file"
+                accept={attachmentMimeTypes.join(",")}
+                hidden
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0];
+                  event.currentTarget.value = "";
+                  if (file) selectImage(file);
+                }}
+              />
+              <button
+                type="button"
+                className={styles.imageButton}
+                aria-label="Attach image"
+                disabled={busy}
+                onClick={() => imageInput.current?.click()}
+              >
+                <Plus size={22} aria-hidden="true" />
+              </button>
               <textarea
                 ref={textarea}
                 id="chat-message"
@@ -470,7 +558,9 @@ export function Chat({
               />
               <button
                 className="primary-button compact"
-                disabled={!loaded || busy || active || !message.trim()}
+                disabled={
+                  !loaded || busy || active || (!message.trim() && !image)
+                }
                 type="submit"
                 aria-label={
                   busy
@@ -508,4 +598,32 @@ export function Chat({
       </section>
     </main>
   );
+}
+
+async function postJson(path: string, payload: object) {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.error || "Could not send message.");
+  return body;
+}
+
+async function uploadChatImage(file: File) {
+  const metadata = {
+    fileName: file.name,
+    mimeType: file.type,
+    byteSize: file.size,
+  };
+  const { uploadId, path, token } = await postJson(
+    "/api/chat/uploads",
+    metadata,
+  );
+  const { error } = await createClient()
+    .storage.from(ATTACHMENT_BUCKET)
+    .uploadToSignedUrl(path, token, file, { contentType: file.type });
+  if (error) throw error;
+  return { ...metadata, uploadId };
 }

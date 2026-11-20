@@ -344,3 +344,53 @@
     animation: none;
   }
 }
+
+.imageButton {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+}
+.imageButton:hover:not(:disabled) {
+  background: var(--forest-soft);
+}
+.imagePreview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 8px;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+}
+.imagePreview img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.imagePreview span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sentImage {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 8px;
+}
+.sentImage img {
+  display: block;
+  max-width: 100%;
+  max-height: 280px;
+  border-radius: 10px;
+}

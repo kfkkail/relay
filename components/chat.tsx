@@ -27,6 +27,9 @@ import { createClient } from "@/lib/supabase/client";
 import type { ResultDocument } from "@/lib/types";
 import styles from "./chat.module.css";
 
+const KEYBOARD_PULL_SLOP = 12;
+const KEYBOARD_DISMISS_DISTANCE = 100;
+
 type Conversation = { id: string; title: string };
 type ChatAttachment = { id: string; file_name: string };
 type Turn = {
@@ -70,7 +73,12 @@ export function Chat({
   const thread = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const keyboardDismissTouch = useRef<{ x: number; y: number } | null>(null);
+  const composer = useRef<HTMLFormElement>(null);
+  const keyboardPull = useRef<{
+    x: number;
+    y: number;
+    tracking: boolean;
+  } | null>(null);
   const followLatest = useRef(true);
   const refreshVersion = useRef(0);
   // Reuse IDs on network failure so retrying cannot enqueue a duplicate turn.
@@ -329,6 +337,12 @@ export function Chat({
     );
   }
 
+  function resetKeyboardPull() {
+    keyboardPull.current = null;
+    composer.current?.removeAttribute("data-keyboard-pull");
+    composer.current?.style.removeProperty("--keyboard-pull");
+  }
+
   return (
     <main className={styles.shell} ref={shell}>
       <header className={styles.conversationHeader}>
@@ -359,33 +373,64 @@ export function Chat({
           className={styles.messages}
           ref={messages}
           onTouchStart={(event) => {
+            resetKeyboardPull();
+            const viewport = window.visualViewport;
+            if (
+              event.touches.length !== 1 ||
+              textarea.current !== document.activeElement ||
+              !viewport ||
+              Math.abs(viewport.scale - 1) > 0.01 ||
+              document.documentElement.clientHeight - viewport.height < 100
+            ) {
+              return;
+            }
             const touch = event.touches[0];
-            keyboardDismissTouch.current =
-              event.touches.length === 1 &&
-              textarea.current === document.activeElement
-                ? { x: touch.clientX, y: touch.clientY }
-                : null;
+            keyboardPull.current = {
+              x: touch.screenX,
+              y: touch.screenY,
+              tracking: false,
+            };
           }}
           onTouchMove={(event) => {
-            const start = keyboardDismissTouch.current;
-            if (!start || event.touches.length !== 1) return;
-            const touch = event.touches[0];
-            const downwardDistance = touch.clientY - start.y;
-            const horizontalDistance = Math.abs(touch.clientX - start.x);
-            if (
-              downwardDistance >= 20 &&
-              downwardDistance > horizontalDistance
-            ) {
-              keyboardDismissTouch.current = null;
-              textarea.current?.blur();
+            const start = keyboardPull.current;
+            if (!start) return;
+            if (event.touches.length !== 1) {
+              resetKeyboardPull();
+              return;
             }
+            const touch = event.touches[0];
+            const downward = touch.screenY - start.y;
+            const sideways = Math.abs(touch.screenX - start.x);
+            if (!start.tracking) {
+              if (Math.max(Math.abs(downward), sideways) < KEYBOARD_PULL_SLOP)
+                return;
+              if (downward <= sideways * 1.5) {
+                resetKeyboardPull();
+                return;
+              }
+              start.tracking = true;
+              composer.current?.setAttribute("data-keyboard-pull", "");
+            }
+            const offset = Math.min(48, Math.max(0, downward) * 0.4);
+            composer.current?.style.setProperty(
+              "--keyboard-pull",
+              `${offset}px`,
+            );
           }}
-          onTouchEnd={() => {
-            keyboardDismissTouch.current = null;
+          onTouchEnd={(event) => {
+            const start = keyboardPull.current;
+            const touch = event.changedTouches[0];
+            resetKeyboardPull();
+            if (!start?.tracking || !touch || event.touches.length) return;
+            const downward = touch.screenY - start.y;
+            const sideways = Math.abs(touch.screenX - start.x);
+            if (
+              downward >= KEYBOARD_DISMISS_DISTANCE &&
+              downward > sideways * 1.5
+            )
+              textarea.current?.blur();
           }}
-          onTouchCancel={() => {
-            keyboardDismissTouch.current = null;
-          }}
+          onTouchCancel={resetKeyboardPull}
           onScroll={(event) => {
             const element = event.currentTarget;
             followLatest.current =
@@ -508,6 +553,7 @@ export function Chat({
         </div>
         <form
           className={styles.composer}
+          ref={composer}
           onSubmit={(event) => {
             event.preventDefault();
             void send();
@@ -567,6 +613,7 @@ export function Chat({
               </button>
               <textarea
                 ref={textarea}
+                onBlur={resetKeyboardPull}
                 id="chat-message"
                 value={message}
                 onChange={(event) => setMessage(event.target.value)}

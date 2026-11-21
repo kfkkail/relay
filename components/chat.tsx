@@ -70,6 +70,7 @@ export function Chat({
   const thread = useRef<HTMLDivElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const keyboardDismissTouch = useRef<{ x: number; y: number } | null>(null);
   const followLatest = useRef(true);
   const refreshVersion = useRef(0);
   // Reuse IDs on network failure so retrying cannot enqueue a duplicate turn.
@@ -357,6 +358,34 @@ export function Chat({
         <div
           className={styles.messages}
           ref={messages}
+          onTouchStart={(event) => {
+            const touch = event.touches[0];
+            keyboardDismissTouch.current =
+              event.touches.length === 1 &&
+              textarea.current === document.activeElement
+                ? { x: touch.clientX, y: touch.clientY }
+                : null;
+          }}
+          onTouchMove={(event) => {
+            const start = keyboardDismissTouch.current;
+            if (!start || event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            const verticalDistance = Math.abs(touch.clientY - start.y);
+            const horizontalDistance = Math.abs(touch.clientX - start.x);
+            if (
+              verticalDistance >= 20 &&
+              verticalDistance > horizontalDistance
+            ) {
+              keyboardDismissTouch.current = null;
+              textarea.current?.blur();
+            }
+          }}
+          onTouchEnd={() => {
+            keyboardDismissTouch.current = null;
+          }}
+          onTouchCancel={() => {
+            keyboardDismissTouch.current = null;
+          }}
           onScroll={(event) => {
             const element = event.currentTarget;
             followLatest.current =
@@ -582,17 +611,6 @@ export function Chat({
                 <span>{busy ? "Sending…" : active ? "Waiting…" : "Send"}</span>
               </button>
             </div>
-            <details className={styles.replyInfo}>
-              <summary>How replies work</summary>
-              <p>
-                Replies use your local worker, recent Relay tasks and open
-                actions. Available connections depend on that worker; the API
-                backend only sees supplied context. Chat can carry out the same
-                work as tasks, including requested actions and documents, using
-                your worker’s permissions. It does not continuously monitor your
-                connections.
-              </p>
-            </details>
           </div>
         </form>
       </section>

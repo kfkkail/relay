@@ -370,11 +370,11 @@ export function Chat({
             const start = keyboardDismissTouch.current;
             if (!start || event.touches.length !== 1) return;
             const touch = event.touches[0];
-            const verticalDistance = Math.abs(touch.clientY - start.y);
+            const downwardDistance = touch.clientY - start.y;
             const horizontalDistance = Math.abs(touch.clientX - start.x);
             if (
-              verticalDistance >= 20 &&
-              verticalDistance > horizontalDistance
+              downwardDistance >= 20 &&
+              downwardDistance > horizontalDistance
             ) {
               keyboardDismissTouch.current = null;
               textarea.current?.blur();

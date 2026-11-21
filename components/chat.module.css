@@ -285,22 +285,6 @@
 .input button {
   flex-shrink: 0;
 }
-.replyInfo {
-  margin-top: 10px;
-  color: var(--ink-soft);
-  font-size: 14px;
-  line-height: 1.5;
-}
-.replyInfo summary {
-  width: fit-content;
-  cursor: pointer;
-}
-.replyInfo p {
-  margin: 8px 0 0;
-}
-.replyInfo a {
-  color: var(--blue);
-}
 .error {
   margin: 0 0 12px;
   border: 1px solid var(--error-border);

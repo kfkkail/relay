@@ -240,10 +240,15 @@
 }
 .composer {
   flex-shrink: 0;
+  transform: translateY(var(--keyboard-pull, 0px));
+  transition: transform 180ms ease-out;
   border-top: 1px solid var(--border-soft);
   padding: 14px max(18px, env(safe-area-inset-right))
     max(12px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
   background: var(--surface);
+}
+.composer[data-keyboard-pull] {
+  transition: none;
 }
 .composerContent {
   max-width: 800px;
@@ -324,6 +329,10 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .composer {
+    transform: none;
+    transition: none;
+  }
   .spinner {
     animation: none;
   }

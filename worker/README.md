@@ -56,6 +56,29 @@ a model-access error, clear that setting in the managed checkout's `.env.worker`
 and restart the service to return to the CLI default. Use `worker:doctor` to
 verify the running user's access before selecting another explicit model.
 
+### Choosing a model
+
+For routine Relay coding and document tasks, start by evaluating GPT-6.2 Sol
+(`gpt-6.2-sol`). For difficult debugging across services or larger changes,
+evaluate GPT-6.2 Astra (`gpt-6.2-astra`). This follows the
+[official OpenAI model guidance](https://developers.openai.com/codex/models/)
+reviewed on November 18, 2026. Availability depends on the account and client;
+these recommendations do not establish access for this worker.
+
+Next, confirm the candidate is available to the worker's authenticated Codex
+client and compare a few representative tasks for correctness, completion time,
+and usage. Start with the client's default reasoning effort. After a successful
+trial, explicitly set `RELAY_CODEX_MODEL=gpt-6.2-sol` in the worker environment
+and restart the worker at a suitable time. Keep the previous setting for rollback.
+This is a recommendation, not a change to the running worker.
+
+An empty `RELAY_CODEX_MODEL` omits `--model`, leaving selection to Codex. It does
+not guarantee a particular GPT version over time. Pinning a tested model makes
+selection explicit, although it does not freeze the model's implementation.
+Recheck availability and quality before future upgrades. The current worker
+setting applies to every task; automatic routing between Sol and Astra would
+require a separate change.
+
 The OpenAI Responses API remains available by choosing it during setup or by
 setting `RELAY_WORKER_BACKEND=openai`; that backend still requires
 `OPENAI_API_KEY`.

@@ -37,6 +37,15 @@ import {
   ResultDocuments,
 } from "@/components/result-documents";
 import ReactMarkdown from "react-markdown";
+import {
+  OwnerActionNotes,
+  OwnerActionNotesEditor,
+} from "@/components/owner-action-notes";
+import {
+  encodeDraftNoteImages,
+  splitNoteImages,
+  type DraftNoteImage,
+} from "@/lib/owner-action-note-media";
 import { SettingsMenu } from "@/components/settings-menu";
 import remarkGfm from "remark-gfm";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -82,7 +91,9 @@ const emptyDraft: Draft = {
 function taskDraftFromOwnerAction(action: OwnerAction): Draft {
   return {
     title: action.title,
-    instructions: action.notes || `Complete the owner action: ${action.title}`,
+    instructions:
+      splitNoteImages(action.notes).text ||
+      `Complete the owner action: ${action.title}`,
     deliverable: defaultDeliverable,
     parentTaskId: null,
     ownerActionId: action.id,
@@ -153,6 +164,9 @@ export function Dashboard({
   const [editingOwnerAction, setEditingOwnerAction] = useState(false);
   const [ownerActionTitle, setOwnerActionTitle] = useState("");
   const [ownerActionNotes, setOwnerActionNotes] = useState("");
+  const [ownerActionImages, setOwnerActionImages] = useState<DraftNoteImage[]>(
+    [],
+  );
   const [ownerActionDueAt, setOwnerActionDueAt] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
@@ -251,6 +265,7 @@ export function Dashboard({
   async function createOwnerAction(input: {
     title: string;
     notes?: string;
+    noteImages?: Awaited<ReturnType<typeof encodeDraftNoteImages>>;
     dueAt?: string | null;
     taskId?: string;
   }) {
@@ -427,6 +442,7 @@ export function Dashboard({
     if (!selectedOwnerAction) return;
     setOwnerActionTitle(selectedOwnerAction.title);
     setOwnerActionNotes(selectedOwnerAction.notes);
+    setOwnerActionImages([]);
     setOwnerActionDueAt(utcToLocalDateTime(selectedOwnerAction.due_at));
     setEditingOwnerAction(true);
   }
@@ -438,6 +454,10 @@ export function Dashboard({
       await updateOwnerAction(selectedOwnerAction.id, {
         title: ownerActionTitle,
         notes: ownerActionNotes,
+        noteImages: await encodeDraftNoteImages(
+          ownerActionNotes,
+          ownerActionImages,
+        ),
         dueAt: ownerActionDueAt ? localDateTimeToUtc(ownerActionDueAt) : null,
       });
       setEditingOwnerAction(false);
@@ -985,15 +1005,13 @@ export function Dashboard({
                   maxLength={160}
                   autoFocus
                 />
-                <label htmlFor="detail-owner-action-notes">
-                  Notes (optional)
-                </label>
-                <textarea
+                <OwnerActionNotesEditor
                   id="detail-owner-action-notes"
-                  value={ownerActionNotes}
-                  onChange={(event) => setOwnerActionNotes(event.target.value)}
-                  maxLength={20000}
-                  rows={5}
+                  notes={ownerActionNotes}
+                  onChange={setOwnerActionNotes}
+                  images={ownerActionImages}
+                  onImagesChange={setOwnerActionImages}
+                  disabled={busy}
                 />
                 <label htmlFor="detail-owner-action-due">
                   Due date (optional)
@@ -1035,7 +1053,14 @@ export function Dashboard({
                 </div>
                 <section>
                   <h3>Notes</h3>
-                  <p>{selectedOwnerAction.notes || "No notes added."}</p>
+                  {selectedOwnerAction.notes ? (
+                    <OwnerActionNotes
+                      notes={selectedOwnerAction.notes}
+                      actionId={selectedOwnerAction.id}
+                    />
+                  ) : (
+                    <p>No notes added.</p>
+                  )}
                 </section>
                 <section>
                   <h3>Linked tasks</h3>
@@ -1222,6 +1247,7 @@ function MyWork({
   onCreate: (input: {
     title: string;
     notes?: string;
+    noteImages?: Awaited<ReturnType<typeof encodeDraftNoteImages>>;
     dueAt?: string | null;
   }) => Promise<void>;
   onUpdate: (
@@ -1239,6 +1265,7 @@ function MyWork({
   const [composerOpen, setComposerOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [noteImages, setNoteImages] = useState<DraftNoteImage[]>([]);
   const [dueAt, setDueAt] = useState("");
   const [query, setQuery] = useState("");
   const [snoozing, setSnoozing] = useState<OwnerAction | null>(null);
@@ -1272,10 +1299,12 @@ function MyWork({
       await onCreate({
         title,
         notes,
+        noteImages: await encodeDraftNoteImages(notes, noteImages),
         dueAt: dueAt ? localDateTimeToUtc(dueAt) : null,
       });
       setTitle("");
       setNotes("");
+      setNoteImages([]);
       setDueAt("");
       setComposerOpen(false);
     });
@@ -1313,6 +1342,7 @@ function MyWork({
           onClick={() => {
             setTitle("");
             setNotes("");
+            setNoteImages([]);
             setDueAt("");
             setComposerOpen(true);
           }}
@@ -1388,7 +1418,13 @@ function MyWork({
                     <LoaderCircle className="navigation-spinner" size={16} />
                   )}
                 </button>
-                {action.notes && <p>{action.notes}</p>}
+                {action.notes && (
+                  <OwnerActionNotes
+                    notes={action.notes}
+                    actionId={action.id}
+                    compact
+                  />
+                )}
                 <div className="action-meta">
                   <span className={`owner-status ${action.status}`}>
                     {ownerActionStatusLabel(action)}
@@ -1540,13 +1576,13 @@ function MyWork({
                 maxLength={160}
                 autoFocus
               />
-              <label htmlFor="owner-action-notes">Notes (optional)</label>
-              <textarea
+              <OwnerActionNotesEditor
                 id="owner-action-notes"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                maxLength={20000}
-                rows={5}
+                notes={notes}
+                onChange={setNotes}
+                images={noteImages}
+                onImagesChange={setNoteImages}
+                disabled={busy}
               />
               <label htmlFor="owner-action-due">Due date (optional)</label>
               <input

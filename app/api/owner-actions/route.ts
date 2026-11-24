@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prepareNoteImages } from "@/lib/owner-action-note-images";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { optionalDate, ownerActionSelect } from "@/lib/owner-actions";
 
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
         user_id: user.id,
         title,
         notes,
+        note_images: await prepareNoteImages(notes, body.noteImages),
         due_at: optionalDate(body.dueAt, "Due date"),
       })
       .select(ownerActionSelect)

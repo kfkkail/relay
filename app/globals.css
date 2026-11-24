@@ -1456,13 +1456,6 @@ textarea {
   color: var(--blue);
   text-decoration: underline;
 }
-.owner-action-copy > p {
-  margin: 0 0 9px;
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
 .action-meta {
   display: flex;
   flex-wrap: wrap;
@@ -2196,4 +2189,60 @@ textarea {
 }
 .schedule-card a {
   color: var(--accent-text);
+}
+
+.owner-note-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.owner-note-link {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.owner-note-link button {
+  justify-self: start;
+}
+
+.owner-note-content {
+  min-width: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+.owner-note-content.compact {
+  margin-bottom: 9px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.owner-note-content.compact p {
+  white-space: pre-wrap;
+}
+
+.owner-note-files {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.owner-note-files li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.owner-note-gallery {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-top: 8px;
 }

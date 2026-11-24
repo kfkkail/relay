@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prepareNoteImages } from "@/lib/owner-action-note-images";
 import { ApiError, apiErrorResponse, requireUser } from "@/lib/http";
 import { ownerActionDateUpdates, ownerActionSelect } from "@/lib/owner-actions";
 import { ownerActionStatuses } from "@/lib/types";
@@ -30,6 +31,10 @@ export async function PATCH(
       if (typeof body.notes !== "string" || body.notes.length > 20000)
         throw new ApiError("Notes must be 20,000 characters or fewer.");
       updates.notes = body.notes.trim();
+      updates.note_images = await prepareNoteImages(
+        body.notes,
+        body.noteImages,
+      );
     }
     if ("status" in body) {
       if (!ownerActionStatuses.includes(body.status))
@@ -53,6 +58,7 @@ export async function PATCH(
       .eq("id", actionId)
       .select(ownerActionSelect)
       .single();
+    if (error?.code === "PT400") throw new ApiError(error.message);
     if (error || !data) throw new ApiError("Action not found.", 404);
     return NextResponse.json({ action: data });
   } catch (error) {
